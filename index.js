@@ -128,18 +128,22 @@ function isModerator(member) {
 // Helper to parse duration for timeouts (e.g. 10m, 2h, 1d)
 function parseDuration(str) {
   if (!str) return { ms: 10 * 60 * 1000, label: "10 minutes" };
-  const match = str.match(/^(\d+)([mhdw])$/i);
+  const match = str.match(/^(\d+)\s*(m|min|minute|h|hour|d|day|w|week)s?$/i);
   if (!match) return { ms: 10 * 60 * 1000, label: "10 minutes" };
   
   const val = parseInt(match[1]);
   const unit = match[2].toLowerCase();
-  switch (unit) {
-    case 'm': return { ms: val * 60 * 1000, label: `${val} minute(s)` };
-    case 'h': return { ms: val * 60 * 60 * 1000, label: `${val} hour(s)` };
-    case 'd': return { ms: val * 24 * 60 * 60 * 1000, label: `${val} day(s)` };
-    case 'w': return { ms: val * 7 * 24 * 60 * 60 * 1000, label: `${val} week(s)` };
-    default: return { ms: 10 * 60 * 1000, label: "10 minutes" };
+  
+  if (unit.startsWith('m')) {
+    return { ms: val * 60 * 1000, label: `${val} minute(s)` };
+  } else if (unit.startsWith('h')) {
+    return { ms: val * 60 * 60 * 1000, label: `${val} hour(s)` };
+  } else if (unit.startsWith('d')) {
+    return { ms: val * 24 * 60 * 60 * 1000, label: `${val} day(s)` };
+  } else if (unit.startsWith('w')) {
+    return { ms: val * 7 * 24 * 60 * 60 * 1000, label: `${val} week(s)` };
   }
+  return { ms: 10 * 60 * 1000, label: "10 minutes" };
 }
 
 // Helper to clean mentions and keywords from reason
@@ -564,7 +568,7 @@ client.on('messageCreate', async (message) => {
           return;
         }
 
-        const durationMatch = cleanQuery.match(/\b(\d+)([mhdw])\b/i);
+        const durationMatch = cleanQuery.match(/\b(\d+)\s*(m|min|minute|h|hour|d|day|w|week)s?\b/i);
         let durationInfo = { ms: 10 * 60 * 1000, label: "10 minutes" };
         let reasonQuery = cleanQuery;
         
@@ -829,22 +833,50 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     // 3. UTILITY COMMANDS (HELP, PING, RESET, PROFILE)
     // ==========================================
+    if (words.includes('warnings') || words.includes('warns')) {
+      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
+      const targetUsername = targetMember.user.username;
+
+      let warningsCount = 0;
+      const cached = preloadedMemories.get(targetUsername);
+      if (cached) {
+        warningsCount = cached.warnings || 0;
+      }
+
+      const warningsEmbed = new EmbedBuilder()
+        .setColor(0xFFA500)
+        .setTitle('📋 User Warnings')
+        .setDescription(`**${targetMember.user.tag}** has **${warningsCount}** warning(s).`)
+        .setTimestamp()
+        .setFooter({ text: 'Emillia Moderation' });
+      await message.reply({ embeds: [warningsEmbed] });
+      return;
+    }
+
     if (lowerQuery === 'help') {
       const helpMessage = `🌸 **Emilia Server Manager & Chat Guide** 🌸
 I am here to help manage the server and chat with all of you! ❄️
 
-**Moderator Commands (Shogun/Royale Hands only):**
+⚠️ *Note: Only members with **"Shogun"** or **"Royale Hands"** roles (or Admin/Owner) can use moderation and rules commands!*
+
+**Moderation Commands:**
 • \`@Emillia warn @user <reason>\` - Warn a user.
-• \`@Emillia timeout @user [duration] <reason>\` - Timeout a user (e.g. 30m, 1h, 1d).
+• \`@Emillia unwarn @user\` - Remove a warning from a user.
+• \`@Emillia warnings @user\` - View warning count of a user (or leave empty for your own).
+• \`@Emillia timeout @user [duration] <reason>\` - Timeout a user (e.g., \`10m\`, \`30 mins\`, \`2 hours\`).
+• \`@Emillia untimeout @user\` - Remove timeout from a user.
 • \`@Emillia kick @user <reason>\` - Kick a user from the server.
 • \`@Emillia ban @user <reason>\` - Ban a user from the server.
+• \`@Emillia unban <user_id>\` - Unban a user using their Discord User ID.
+
+**Rules Commands:**
 • \`@Emillia setrule <number> <text>\` - Set or edit a server rule.
 • \`@Emillia delrule <number>\` - Delete a rule.
+• \`@Emillia rules\` - Lists all the server rules.
 
 **General Commands:**
-• \`@Emillia rules\` - Lists all the server rules.
 • \`@Emillia profile\` - Shows the details I remember about you.
-• \`@Emillia reset\` - Resets our chat logs and my memory of you.
+• \`@Emillia reset\` - Resets our chat logs and my memory of you *(Only Aerion-sama can do this!)*.
 • \`@Emillia ping\` - Checks my response speed!
 • Ask me about rules: \`@Emillia is self-promotion allowed here?\` or tag me and ask if a behavior is valid. I will reply using our saved server rules! ✨`;
       await message.reply(helpMessage);
@@ -954,14 +986,29 @@ Formatting & Style:
     }
 
     // Inject server rules context from cache
+    const defaultRules = [
+      "Keep the chat clean, respectful, and family-friendly.",
+      "No spamming, flooding, or advertising of other servers/products.",
+      "No NSFW, inappropriate, or explicit content.",
+      "Follow Discord Terms of Service and Guidelines."
+    ];
+
+    systemPromptContent += `\n\n[ANIPEDIA SERVER RULES - Use these rules to answer the user's questions about what is allowed or if a rule is valid. Cites the exact rule number when answering. If they ask if something is valid/allowed, cross reference with these rules and reply in character as Emilia whether it is allowed or not:]\n`;
+
+    const finalRules = new Map();
+    defaultRules.forEach((rule, index) => {
+      finalRules.set((index + 1).toString(), rule);
+    });
+
     if (serverRulesCache.size > 0) {
-      systemPromptContent += `\n\n[ANIPEDIA SERVER RULES - Use these rules to answer the user's questions about what is allowed or if a rule is valid. Cites the exact rule number when answering. If they ask if something is valid/allowed, cross reference with these rules and reply in character as Emilia whether it is allowed or not:]\n`;
-      const sortedRules = [...serverRulesCache.entries()].sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
-      for (const [num, text] of sortedRules) {
-        systemPromptContent += `Rule ${num}: ${text}\n`;
+      for (const [num, text] of serverRulesCache) {
+        finalRules.set(num, text);
       }
-    } else {
-      systemPromptContent += `\n\n[No server rules have been registered yet. If they ask about rules, tell them a moderator needs to register them first using @Emillia setrule.]`;
+    }
+
+    const sortedRules = [...finalRules.entries()].sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+    for (const [num, text] of sortedRules) {
+      systemPromptContent += `Rule ${num}: ${text}\n`;
     }
 
     systemPromptContent += moodHint + antiRepetitionHint;
