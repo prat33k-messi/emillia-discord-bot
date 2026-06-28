@@ -528,6 +528,43 @@ client.on('messageCreate', async (message) => {
           }
         }
 
+        // Auto-moderation check based on warning count
+        let autoTimeoutApplied = false;
+        let autoTimeoutLabel = "";
+        let autoTimeoutMs = 0;
+
+        if (warningsCount === 3) {
+          autoTimeoutMs = 5 * 60 * 1000; // 5 minutes
+          autoTimeoutLabel = "5 minutes (Reached 3 warnings)";
+          autoTimeoutApplied = true;
+        } else if (warningsCount >= 5) {
+          autoTimeoutMs = 60 * 60 * 1000; // 1 hour
+          autoTimeoutLabel = "1 hour (Reached 5+ warnings)";
+          autoTimeoutApplied = true;
+        }
+
+        if (autoTimeoutApplied && targetMember.moderatable) {
+          try {
+            await targetMember.timeout(autoTimeoutMs, `Auto-timeout: Reached ${warningsCount} warnings.`);
+            
+            if (db) {
+              await db.collection('moderation_logs').add({
+                action: 'timeout',
+                duration: autoTimeoutLabel,
+                targetId: targetMember.id,
+                targetTag: targetMember.user.tag,
+                moderatorId: client.user.id,
+                moderatorTag: client.user.tag,
+                reason: `Auto-timeout: Reached ${warningsCount} warnings.`,
+                timestamp: FieldValue.serverTimestamp()
+              });
+            }
+          } catch (timeoutErr) {
+            console.error("Auto-timeout execution error:", timeoutErr);
+            autoTimeoutApplied = false; // reset flag if API call failed
+          }
+        }
+
         // Try to DM the user
         let dmSent = true;
         try {
@@ -539,8 +576,13 @@ client.on('messageCreate', async (message) => {
               { name: 'Reason', value: reason, inline: false },
               { name: 'Warning Count', value: `#${warningsCount}`, inline: true },
               { name: 'Warned By', value: `${message.author.tag}`, inline: true }
-            )
-            .setTimestamp()
+            );
+
+          if (autoTimeoutApplied) {
+            dmEmbed.addFields({ name: '⚡ Auto-Timeout Applied', value: autoTimeoutLabel, inline: false });
+          }
+
+          dmEmbed.setTimestamp()
             .setFooter({ text: `Emillia Moderation • ${guildName}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
@@ -556,8 +598,13 @@ client.on('messageCreate', async (message) => {
             { name: 'Reason', value: reason, inline: false },
             { name: 'Warning Count', value: `#${warningsCount}`, inline: true },
             { name: 'Moderator', value: `${message.author.tag}`, inline: true }
-          )
-          .setTimestamp()
+          );
+
+        if (autoTimeoutApplied) {
+          warnEmbed.addFields({ name: '⚡ Auto-Timeout Applied', value: autoTimeoutLabel, inline: false });
+        }
+
+        warnEmbed.setTimestamp()
           .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
         await message.reply({ embeds: [warnEmbed] });
         return;
