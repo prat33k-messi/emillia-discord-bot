@@ -50,6 +50,19 @@ const client = new Client({
   ],
 });
 
+// Crash-prevention global error listeners (keeps bot online on network/API glitches)
+client.on('error', (err) => console.error('[Discord Client Error]', err));
+client.on('warn', (warning) => console.warn('[Discord Client Warning]', warning));
+client.on('shardError', (err) => console.error('[Discord Shard Error]', err));
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Unhandled Rejection] Reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[Uncaught Exception] Error:', err);
+});
+
 // Cache for server rules to avoid Firestore lookups on every message
 const serverRulesCache = new Map();
 
