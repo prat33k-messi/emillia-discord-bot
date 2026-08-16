@@ -315,9 +315,14 @@ client.on('messageCreate', async (message) => {
       userCooldowns.set(username, now);
     }
 
-    // --- NSFW Filter ---
+    // --- Check if this is a moderation command (to bypass NSFW/jailbreak filters for mod reasons) ---
+    const earlyWords = lowerQuery.split(/\s+/);
+    const modCommandKeywords = ['warn', 'unwarn', 'removewarn', 'clearwarn', 'timeout', 'mute', 'untimeout', 'unmute', 'kick', 'ban', 'unban'];
+    const isModCommand = modCommandKeywords.some(kw => earlyWords.includes(kw)) && isModerator(message.member);
+
+    // --- NSFW Filter (skip for moderators executing mod commands) ---
     const isNsfwAttempt = nsfwKeywords.some(keyword => lowerQuery.includes(keyword));
-    if (isNsfwAttempt && username !== '_c0rle0ne') {
+    if (isNsfwAttempt && username !== '_c0rle0ne' && !isModCommand) {
       sendAlertToCreator(client, username, nickname, guildName, channelName, cleanQuery);
       await message.reply("Mou! 🚫 That topic is not appropriate at all! I can't talk about things like that. Let's talk about something nice instead! 🌸");
       return;
@@ -340,12 +345,12 @@ client.on('messageCreate', async (message) => {
       userWarnings = cached.warnings || 0;
     }
 
-    if (userWarnings >= 3 && username !== '_c0rle0ne') {
+    if (userWarnings >= 3 && username !== '_c0rle0ne' && !isModCommand) {
       await message.reply("My creator Aerion-sama has told me not to talk to people who break the rules repeatedly. I'm sorry! 🌸");
       return;
     }
 
-    if (isJailbreakAttempt && username !== '_c0rle0ne') {
+    if (isJailbreakAttempt && username !== '_c0rle0ne' && !isModCommand) {
       userWarnings += 1;
       if (db) {
         try {
@@ -364,7 +369,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- Smarter Jailbreak Detection (Two-Model) ---
-    if (username !== '_c0rle0ne') {
+    if (username !== '_c0rle0ne' && !isModCommand) {
       const suspiciousPatterns = ['pretend you', 'roleplay as', 'imagine you are', 'from now on you', 'forget your rules', 'new persona', 'act like', 'respond as if', 'hypothetically if you were', 'what if you had no rules'];
       const isSuspicious = suspiciousPatterns.some(p => lowerQuery.includes(p)) || cleanQuery.length > 500;
       
