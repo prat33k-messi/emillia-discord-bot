@@ -1032,8 +1032,25 @@ client.on('messageCreate', async (message) => {
     }
 
     // ==========================================
-    // 4. CHIT-CHAT & RULE VALIDATION VIA GROQ API
+    // 4. RULE VALIDATION VIA GROQ API (STRICTLY RULE INQUIRIES ONLY)
     // ==========================================
+    // Emillia only responds if the query is a rule inquiry as advertised in her guide:
+    // "Ask me anything about the rules! e.g. @Emillia is self-promotion allowed?"
+    const ruleInquiryKeywords = [
+      'rule', 'rules', 'allow', 'allowed', 'allowing', 'permit', 'permitted', 'permission',
+      'forbid', 'forbidden', 'prohibit', 'prohibited', 'ban', 'banned', 'punish', 'punishment',
+      'violate', 'violation', 'can i', 'can we', 'am i allowed', 'are we allowed', 'is it allowed',
+      'does the server allow', 'do you allow', 'self-promotion', 'self promotion', 'advertising',
+      'advertise', 'promote', 'promotion', 'spam', 'spamming', 'nsfw', 'tos', 'policy',
+      'policies', 'guideline', 'guidelines', 'legal', 'illegal', 'disobey', 'break rule', 'breaking rule'
+    ];
+
+    const isRuleInquiry = ruleInquiryKeywords.some(k => lowerQuery.includes(k));
+    if (!isRuleInquiry) {
+      // General casual talk is handled by her big sister Tessia! Emillia strictly replies only to her guide commands & rule questions.
+      return;
+    }
+
     if (!memory.has(username)) {
       memory.set(username, []);
     }
