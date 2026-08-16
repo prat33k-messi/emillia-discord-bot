@@ -192,6 +192,34 @@ I have automatically incremented their warning count.`;
   }
 }
 
+// Helper function to log moderation actions to #emillia-log channel
+async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag, reason, extraFields = []) {
+  try {
+    const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
+    if (!logChannel) return;
+
+    const colorMap = { 'warn': 0xFFA500, 'unwarn': 0x00FF00, 'timeout': 0xFF8C00, 'untimeout': 0x00FF00, 'kick': 0xFF4500, 'ban': 0xFF0000, 'unban': 0x00FF00 };
+    const emojiMap = { 'warn': '⚠️', 'unwarn': '✅', 'timeout': '🔇', 'untimeout': '🔊', 'kick': '👢', 'ban': '🔨', 'unban': '🔓' };
+    const titleMap = { 'warn': 'User Warned', 'unwarn': 'Warning Removed', 'timeout': 'User Timed Out', 'untimeout': 'Timeout Removed', 'kick': 'User Kicked', 'ban': 'User Banned', 'unban': 'User Unbanned' };
+
+    const logEmbed = new EmbedBuilder()
+      .setColor(colorMap[action] || 0x9b59b6)
+      .setTitle(`${emojiMap[action] || '📋'} ${titleMap[action] || action}`)
+      .addFields(
+        { name: 'User', value: `${targetTag} (${targetId})`, inline: false },
+        { name: 'Moderator', value: moderatorTag, inline: true },
+        { name: 'Reason', value: reason || 'No reason specified', inline: false },
+        ...extraFields
+      )
+      .setTimestamp()
+      .setFooter({ text: 'Emillia Moderation Log' });
+
+    await logChannel.send({ embeds: [logEmbed] });
+  } catch (err) {
+    console.error('Error sending to emillia-log channel:', err);
+  }
+}
+
 client.on('messageCreate', async (message) => {
   // Ignore messages from bots
   if (message.author.bot) return;
@@ -217,8 +245,6 @@ client.on('messageCreate', async (message) => {
   if (!isMentioned && !isReplyToBot) return;
 
   try {
-    await message.channel.sendTyping();
-
     const username = message.author.username;
     const nickname = message.member?.displayName || message.author.displayName || username;
     const channelId = message.channel.id;
@@ -231,6 +257,44 @@ client.on('messageCreate', async (message) => {
       .replace(botNicknameMention, '')
       .trim();
 
+    const lowerQuery = cleanQuery.toLowerCase();
+
+    // ==========================================
+    // PRE-CHECK: Only respond to Command Guide keywords
+    // Emillia ignores casual chit-chat — that's Tessia's job!
+    // ==========================================
+    if (cleanQuery) {
+      const preCheckWords = lowerQuery.split(/\s+/);
+      const commandKeywords = [
+        'warn', 'unwarn', 'removewarn', 'clearwarn', 'warnings', 'warns',
+        'timeout', 'mute', 'untimeout', 'unmute',
+        'kick', 'ban', 'unban',
+        'setrule', 'delrule', 'rules', 'listrules',
+        'introduce', 'profile', 'ping', 'reset', 'help', 'commands'
+      ];
+      const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw));
+
+      const introTriggers = ['introduce yourself', 'who are you', 'what are you', 'whats your name', "what's your name", 'who r u', 'tell me about yourself', 'introduce urself', 'what can you do'];
+      const hasIntroTrigger = introTriggers.some(t => lowerQuery.includes(t));
+
+      const ruleInquiryKeywords = [
+        'rule', 'rules', 'allow', 'allowed', 'allowing', 'permit', 'permitted', 'permission',
+        'forbid', 'forbidden', 'prohibit', 'prohibited', 'punish', 'punishment',
+        'violate', 'violation', 'can i', 'can we', 'am i allowed', 'are we allowed', 'is it allowed',
+        'does the server allow', 'do you allow', 'self-promotion', 'self promotion', 'advertising',
+        'advertise', 'promote', 'promotion', 'spam', 'spamming', 'nsfw', 'tos', 'policy',
+        'policies', 'guideline', 'guidelines'
+      ];
+      const hasRuleInquiry = ruleInquiryKeywords.some(k => lowerQuery.includes(k));
+
+      if (!hasCommandWord && !hasIntroTrigger && !hasRuleInquiry) {
+        return; // Silently ignore — no typing, no response
+      }
+    }
+
+    // Show typing animation only when Emillia will actually respond
+    await message.channel.sendTyping();
+
     if (!cleanQuery) {
       if (username === '_c0rle0ne') {
         await message.reply("Hello, Aerion-sama! 🌸 I am here! What can I do for you today? ✨");
@@ -239,8 +303,6 @@ client.on('messageCreate', async (message) => {
       }
       return;
     }
-
-    const lowerQuery = cleanQuery.toLowerCase();
 
     // --- Cooldown check ---
     if (username !== '_c0rle0ne') {
@@ -438,6 +500,9 @@ client.on('messageCreate', async (message) => {
           .setTimestamp()
           .setFooter({ text: 'Emillia Moderation' });
         await message.reply({ embeds: [unwarnEmbed] });
+        logToEmilliaLog(message.guild, 'unwarn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
+          { name: 'Remaining Warnings', value: `${warningsCount}`, inline: true }
+        ]);
         return;
 
       } else if (actionKeyword === 'untimeout') {
@@ -465,6 +530,7 @@ client.on('messageCreate', async (message) => {
             .setTimestamp()
             .setFooter({ text: 'Emillia Moderation' });
           await message.reply({ embeds: [untimeoutEmbed] });
+          logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
         } catch (err) {
           console.error("Untimeout execution error:", err);
           await message.reply("I couldn't remove the timeout from this user! 😰");
@@ -502,6 +568,7 @@ client.on('messageCreate', async (message) => {
             .setTimestamp()
             .setFooter({ text: 'Emillia Moderation' });
           await message.reply({ embeds: [unbanEmbed] });
+          logToEmilliaLog(message.guild, 'unban', targetId, targetId, message.author.tag, `Unbanned by ${message.author.tag}`);
         } catch (err) {
           console.error("Unban execution error:", err);
           await message.reply("I couldn't unban this user! Make sure the ID is correct and they are actually banned! 😰");
@@ -620,6 +687,9 @@ client.on('messageCreate', async (message) => {
         warnEmbed.setTimestamp()
           .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
         await message.reply({ embeds: [warnEmbed] });
+        logToEmilliaLog(message.guild, 'warn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
+          { name: 'Warning Count', value: `#${warningsCount}`, inline: true }
+        ]);
         return;
 
       } else if (actionKeyword === 'timeout' || actionKeyword === 'mute') {
@@ -686,6 +756,9 @@ client.on('messageCreate', async (message) => {
             .setTimestamp()
             .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
           await message.reply({ embeds: [timeoutEmbed] });
+          logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
+            { name: 'Duration', value: durationInfo.label, inline: true }
+          ]);
         } catch (err) {
           console.error("Timeout execution error:", err);
           await message.reply("Oh no, something went wrong while trying to put them in timeout! Let me try again later. 😰");
@@ -746,6 +819,7 @@ client.on('messageCreate', async (message) => {
             .setTimestamp()
             .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
           await message.reply({ embeds: [kickEmbed] });
+          logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason);
         } catch (err) {
           console.error("Kick execution error:", err);
           await message.reply("I couldn't kick them! There was a problem. 😰");
@@ -806,6 +880,7 @@ client.on('messageCreate', async (message) => {
             .setTimestamp()
             .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
           await message.reply({ embeds: [banEmbed] });
+          logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason);
         } catch (err) {
           console.error("Ban execution error:", err);
           await message.reply("I failed to ban them. Something went wrong! 😰");
@@ -906,7 +981,37 @@ client.on('messageCreate', async (message) => {
       const warningsEmbed = new EmbedBuilder()
         .setColor(0xFFA500)
         .setTitle('📋 User Warnings')
-        .setDescription(`**${targetMember.user.tag}** has **${warningsCount}** warning(s).`)
+        .setDescription(`**${targetMember.user.tag}** has **${warningsCount}** warning(s).`);
+
+      // Fetch warning history with reasons and moderators from Firestore
+      if (db && warningsCount > 0) {
+        try {
+          const logsSnapshot = await db.collection('moderation_logs')
+            .where('action', '==', 'warn')
+            .where('targetId', '==', targetMember.id)
+            .orderBy('timestamp', 'desc')
+            .limit(10)
+            .get();
+
+          if (!logsSnapshot.empty) {
+            let historyText = '';
+            let i = 1;
+            logsSnapshot.forEach(doc => {
+              const log = doc.data();
+              const reason = log.reason || 'No reason specified';
+              const moderator = log.moderatorTag || 'Unknown';
+              const time = log.timestamp ? log.timestamp.toDate().toLocaleDateString() : 'Unknown date';
+              historyText += `**${i}.** ${reason}\n   ↳ By: ${moderator} • ${time}\n`;
+              i++;
+            });
+            warningsEmbed.addFields({ name: '📜 Warning History', value: historyText || 'No history found', inline: false });
+          }
+        } catch (err) {
+          console.error('Error fetching warning history:', err);
+        }
+      }
+
+      warningsEmbed
         .setTimestamp()
         .setFooter({ text: 'Emillia Moderation' });
       await message.reply({ embeds: [warningsEmbed] });
@@ -1032,25 +1137,8 @@ client.on('messageCreate', async (message) => {
     }
 
     // ==========================================
-    // 4. RULE VALIDATION VIA GROQ API (STRICTLY RULE INQUIRIES ONLY)
+    // 4. RULE VALIDATION VIA GROQ API
     // ==========================================
-    // Emillia only responds if the query is a rule inquiry as advertised in her guide:
-    // "Ask me anything about the rules! e.g. @Emillia is self-promotion allowed?"
-    const ruleInquiryKeywords = [
-      'rule', 'rules', 'allow', 'allowed', 'allowing', 'permit', 'permitted', 'permission',
-      'forbid', 'forbidden', 'prohibit', 'prohibited', 'ban', 'banned', 'punish', 'punishment',
-      'violate', 'violation', 'can i', 'can we', 'am i allowed', 'are we allowed', 'is it allowed',
-      'does the server allow', 'do you allow', 'self-promotion', 'self promotion', 'advertising',
-      'advertise', 'promote', 'promotion', 'spam', 'spamming', 'nsfw', 'tos', 'policy',
-      'policies', 'guideline', 'guidelines', 'legal', 'illegal', 'disobey', 'break rule', 'breaking rule'
-    ];
-
-    const isRuleInquiry = ruleInquiryKeywords.some(k => lowerQuery.includes(k));
-    if (!isRuleInquiry) {
-      // General casual talk is handled by her big sister Tessia! Emillia strictly replies only to her guide commands & rule questions.
-      return;
-    }
-
     if (!memory.has(username)) {
       memory.set(username, []);
     }
