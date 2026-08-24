@@ -192,27 +192,72 @@ I have automatically incremented their warning count.`;
   }
 }
 
+// Helper to delete recent messages of a user in a channel (e.g. last 15 messages)
+async function deleteUserRecentMessages(channel, userId, count = 15) {
+  if (!channel || !channel.messages) return 0;
+  try {
+    const fetched = await channel.messages.fetch({ limit: 100 });
+    const userMessages = fetched.filter(m => m.author.id === userId);
+    const toDelete = Array.from(userMessages.values()).slice(0, count);
+    if (toDelete.length > 0) {
+      if (toDelete.length === 1) {
+        await toDelete[0].delete().catch(() => {});
+        return 1;
+      }
+      const deleted = await channel.bulkDelete(toDelete, true);
+      return deleted.size;
+    }
+  } catch (err) {
+    console.error("Error deleting recent messages for user:", err);
+  }
+  return 0;
+}
+
 // Helper function to log moderation actions to #emillia-log channel
 async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag, reason, extraFields = []) {
   try {
     const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
     if (!logChannel) return;
 
-    const colorMap = { 'warn': 0xFFA500, 'unwarn': 0x00FF00, 'timeout': 0xFF8C00, 'untimeout': 0x00FF00, 'kick': 0xFF4500, 'ban': 0xFF0000, 'unban': 0x00FF00 };
-    const emojiMap = { 'warn': '⚠️', 'unwarn': '✅', 'timeout': '🔇', 'untimeout': '🔊', 'kick': '👢', 'ban': '🔨', 'unban': '🔓' };
-    const titleMap = { 'warn': 'User Warned', 'unwarn': 'Warning Removed', 'timeout': 'User Timed Out', 'untimeout': 'Timeout Removed', 'kick': 'User Kicked', 'ban': 'User Banned', 'unban': 'User Unbanned' };
+    const colorMap = { 
+      'warn': 0xF1C40F, 
+      'unwarn': 0x2ECC71, 
+      'timeout': 0x3498DB, 
+      'untimeout': 0x2ECC71, 
+      'kick': 0xE67E22, 
+      'ban': 0x992D22, 
+      'unban': 0x2ECC71 
+    };
+    const emojiMap = { 
+      'warn': '⚠️', 
+      'unwarn': '✅', 
+      'timeout': '🔇', 
+      'untimeout': '🔊', 
+      'kick': '👢', 
+      'ban': '🔨', 
+      'unban': '🔓' 
+    };
+    const titleMap = { 
+      'warn': 'Moderation Log • User Warned', 
+      'unwarn': 'Moderation Log • Warning Removed', 
+      'timeout': 'Moderation Log • User Timed Out', 
+      'untimeout': 'Moderation Log • Timeout Removed', 
+      'kick': 'Moderation Log • User Kicked', 
+      'ban': 'Moderation Log • User Banned', 
+      'unban': 'Moderation Log • User Unbanned' 
+    };
 
     const logEmbed = new EmbedBuilder()
-      .setColor(colorMap[action] || 0x9b59b6)
+      .setColor(colorMap[action] || 0x9B59B6)
       .setTitle(`${emojiMap[action] || '📋'} ${titleMap[action] || action}`)
       .addFields(
-        { name: 'User', value: `${targetTag} (${targetId})`, inline: false },
-        { name: 'Moderator', value: moderatorTag, inline: true },
-        { name: 'Reason', value: reason || 'No reason specified', inline: false },
-        ...extraFields
+        { name: '👤 Target User', value: `**${targetTag}** \`(${targetId})\``, inline: false },
+        { name: '⚖️ Moderator', value: `**${moderatorTag}**`, inline: true },
+        ...extraFields,
+        { name: '📜 Reason', value: `>>> ${reason || 'No reason specified'}`, inline: false }
       )
       .setTimestamp()
-      .setFooter({ text: 'Emillia Moderation Log' });
+      .setFooter({ text: 'Emillia Audit Log • Sanctuary Guardian ✨' });
 
     await logChannel.send({ embeds: [logEmbed] });
   } catch (err) {
@@ -495,18 +540,20 @@ client.on('messageCreate', async (message) => {
         }
 
         const unwarnEmbed = new EmbedBuilder()
-          .setColor(0x00FF00)
-          .setTitle('✅ Warning Removed')
+          .setColor(0x2ECC71)
+          .setTitle('🌸 Emilia\'s Grace • Warning Lifted ✅')
+          .setDescription(`*"A fresh start begins today! I have happily cleared one of your warnings. Keep trying your best to protect the peace of our haven!"* 🌸✨\n\n🕊️ **Warning Cleared from Server Records**`)
           .addFields(
-            { name: 'User', value: `${targetMember.user.tag} (${targetMember.id})`, inline: false },
-            { name: 'Remaining Warnings', value: `#${warningsCount}`, inline: true },
-            { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+            { name: '👤 Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+            { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true },
+            { name: '⚖️ Moderator', value: `**${message.author.tag}**`, inline: true },
+            { name: '📜 Reason', value: `>>> ${reason}`, inline: false }
           )
           .setTimestamp()
-          .setFooter({ text: 'Emillia Moderation' });
+          .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
         await message.reply({ embeds: [unwarnEmbed] });
         logToEmilliaLog(message.guild, 'unwarn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: 'Remaining Warnings', value: `${warningsCount}`, inline: true }
+          { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true }
         ]);
         return;
 
@@ -526,14 +573,15 @@ client.on('messageCreate', async (message) => {
           }
 
           const untimeoutEmbed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('🔊 Timeout Removed')
+            .setColor(0x2ECC71)
+            .setTitle('🌸 Emilia\'s Spring Thaw • Voice Restored 🔊')
+            .setDescription(`*"The frost has melted away! Your voice is restored to our sanctuary — please chat kindly and respectfully with everyone!"* 🌸✨\n\n🕊️ **Timeout Lifted by Moderation**`)
             .addFields(
-              { name: 'User', value: `${targetMember.user.tag} (${targetMember.id})`, inline: false },
-              { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+              { name: '👤 Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+              { name: '⚖️ Moderator', value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: 'Emillia Moderation' });
+            .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
           await message.reply({ embeds: [untimeoutEmbed] });
           logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
         } catch (err) {
@@ -564,14 +612,15 @@ client.on('messageCreate', async (message) => {
           }
 
           const unbanEmbed = new EmbedBuilder()
-            .setColor(0x00FF00)
-            .setTitle('🔓 User Unbanned')
+            .setColor(0x2ECC71)
+            .setTitle('🌸 Emilia\'s Pardon • Seal Lifted 🔓')
+            .setDescription(`*"The exile has ended! May this second chance be cherished with honor and goodwill across Anipedia."* ✨🌸\n\n🕊️ **Ban Revoked by Moderation**`)
             .addFields(
-              { name: 'User ID', value: targetId, inline: false },
-              { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+              { name: '👤 Member User ID', value: `\`${targetId}\``, inline: false },
+              { name: '⚖️ Moderator', value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: 'Emillia Moderation' });
+            .setFooter({ text: 'Emillia — Guardian of Anipedia • Sanctuary Restored ✨' });
           await message.reply({ embeds: [unbanEmbed] });
           logToEmilliaLog(message.guild, 'unban', targetId, targetId, message.author.tag, `Unbanned by ${message.author.tag}`);
         } catch (err) {
@@ -654,21 +703,21 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0xFFA500)
-            .setTitle('⚠️ You have been warned')
-            .setDescription(`You received a warning in **${guildName}**.`)
+            .setColor(0xF1C40F)
+            .setTitle('🌸 Emilia\'s Official Warning Notice ⚠️')
+            .setDescription(`*"You received a formal warning in **${guildName}**. Please be mindful of our server rules so everyone can have a wonderful time together!"* 🌸`)
             .addFields(
-              { name: 'Reason', value: reason, inline: false },
-              { name: 'Warning Count', value: `#${warningsCount}`, inline: true },
-              { name: 'Warned By', value: `${message.author.tag}`, inline: true }
+              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
+              { name: '📊 Total Warnings', value: `\`#${warningsCount}\``, inline: true },
+              { name: '⚖️ Issued By', value: `**${message.author.tag}**`, inline: true }
             );
 
           if (autoTimeoutApplied) {
-            dmEmbed.addFields({ name: '⚡ Auto-Timeout Applied', value: autoTimeoutLabel, inline: false });
+            dmEmbed.addFields({ name: '⚡ Auto-Timeout Activated', value: `\`${autoTimeoutLabel}\``, inline: false });
           }
 
           dmEmbed.setTimestamp()
-            .setFooter({ text: `Emillia Moderation • ${guildName}` });
+            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
@@ -676,24 +725,25 @@ client.on('messageCreate', async (message) => {
 
         // Send embed in channel
         const warnEmbed = new EmbedBuilder()
-          .setColor(0xFFA500)
-          .setTitle('⚠️ User Warned')
+          .setColor(0xF1C40F)
+          .setTitle('🌸 Emilia\'s Notice • Warning Issued ⚠️')
+          .setDescription(`*"Please take this warning seriously! We want Anipedia to be a kind, safe home for all anime fans, so please follow our rules, mou!"* 🌸✨\n\n📜 **Server Rule Infraction Recorded**`)
           .addFields(
-            { name: 'User', value: `${targetMember.user.tag} (${targetMember.id})`, inline: false },
-            { name: 'Reason', value: reason, inline: false },
-            { name: 'Warning Count', value: `#${warningsCount}`, inline: true },
-            { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+            { name: '👤 Warned Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+            { name: '📊 Warning Level', value: `\`#${warningsCount}\``, inline: true },
+            { name: '⚖️ Issued By', value: `**${message.author.tag}**`, inline: true },
+            { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
           );
 
         if (autoTimeoutApplied) {
-          warnEmbed.addFields({ name: '⚡ Auto-Timeout Applied', value: autoTimeoutLabel, inline: false });
+          warnEmbed.addFields({ name: '⚡ Auto-Timeout Activated', value: `\`${autoTimeoutLabel}\``, inline: false });
         }
 
         warnEmbed.setTimestamp()
-          .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
+          .setFooter({ text: `Emillia — Guardian of Anipedia • ${dmSent ? 'Notice sent via DM ✨' : 'Could not DM notice ⚠️'}` });
         await message.reply({ embeds: [warnEmbed] });
         logToEmilliaLog(message.guild, 'warn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: 'Warning Count', value: `#${warningsCount}`, inline: true }
+          { name: '📊 Warning Level', value: `\`#${warningsCount}\``, inline: true }
         ]);
         return;
 
@@ -734,35 +784,36 @@ client.on('messageCreate', async (message) => {
           let dmSent = true;
           try {
             const dmEmbed = new EmbedBuilder()
-              .setColor(0xFF8C00)
-              .setTitle('🔇 You have been timed out')
-              .setDescription(`You were timed out in **${guildName}**.`)
+              .setColor(0x3498DB)
+              .setTitle('🌸 Emilia\'s Frost Seal • Timeout Notice 🔇')
+              .setDescription(`*"You were placed in timeout in **${guildName}**. Please use this cooling-down period to reflect upon our server rules."* ❄️`)
               .addFields(
-                { name: 'Duration', value: durationInfo.label, inline: true },
-                { name: 'Reason', value: reason, inline: false },
-                { name: 'Timed Out By', value: `${message.author.tag}`, inline: true }
+                { name: '⏳ Freeze Duration', value: `\`${durationInfo.label}\``, inline: true },
+                { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true },
+                { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
               )
               .setTimestamp()
-              .setFooter({ text: `Emillia Moderation • ${guildName}` });
+              .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
             await targetMember.send({ embeds: [dmEmbed] });
           } catch (err) {
             dmSent = false;
           }
 
           const timeoutEmbed = new EmbedBuilder()
-            .setColor(0xFF8C00)
-            .setTitle('🔇 User Timed Out')
+            .setColor(0x3498DB)
+            .setTitle('🌸 Emilia\'s Frost Seal • User Timed Out 🔇')
+            .setDescription(`*"Shh... silence has fallen upon the realm! Let the cold frost calm your spirit until your reflection time is complete, mou!"* ❄️⏳\n\n⏳ **Cooling-Down Protocol Active**`)
             .addFields(
-              { name: 'User', value: `${targetMember.user.tag} (${targetMember.id})`, inline: false },
-              { name: 'Duration', value: durationInfo.label, inline: true },
-              { name: 'Reason', value: reason, inline: false },
-              { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+              { name: '👤 Frozen Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+              { name: '⏳ Freeze Duration', value: `\`${durationInfo.label}\``, inline: true },
+              { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true },
+              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
             )
             .setTimestamp()
-            .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
+            .setFooter({ text: `Emillia — Guardian of Anipedia • ${dmSent ? 'Notice sent via DM ✨' : 'Could not DM notice ⚠️'}` });
           await message.reply({ embeds: [timeoutEmbed] });
           logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-            { name: 'Duration', value: durationInfo.label, inline: true }
+            { name: '⏳ Duration', value: `\`${durationInfo.label}\``, inline: true }
           ]);
         } catch (err) {
           console.error("Timeout execution error:", err);
@@ -784,21 +835,24 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0xFF4500)
-            .setTitle('👢 You have been kicked')
-            .setDescription(`You were kicked from **${guildName}**.`)
+            .setColor(0xE67E22)
+            .setTitle('🌸 Emilia\'s Expulsion Decree • Kicked from Server 👢')
+            .setDescription(`*"You were expelled from **${guildName}**. Please reflect upon your actions before considering returning to our community."* 🌸🚪`)
             .addFields(
-              { name: 'Reason', value: reason, inline: false },
-              { name: 'Kicked By', value: `${message.author.tag}`, inline: true }
+              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
+              { name: '⚖️ Expelled By', value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: `Emillia Moderation • ${guildName}` });
+            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
         }
 
         try {
+          // Delete recent 15 messages of target member in this channel
+          const deletedCount = await deleteUserRecentMessages(message.channel, targetId, 15);
+
           await targetMember.kick(reason);
           
           if (db) {
@@ -809,22 +863,27 @@ client.on('messageCreate', async (message) => {
               moderatorId: message.author.id,
               moderatorTag: message.author.tag,
               reason: reason,
+              deletedMessages: deletedCount,
               timestamp: FieldValue.serverTimestamp()
             });
           }
 
           const kickEmbed = new EmbedBuilder()
-            .setColor(0xFF4500)
-            .setTitle('👢 User Kicked')
+            .setColor(0xE67E22)
+            .setTitle('🌸 Emilia\'s Decree • User Expulsion 👢')
+            .setDescription(`*"I must ask you to step outside our gates for now. Please reflect upon your actions before you consider returning to Anipedia, mou!"* 🌸🚪\n\n🛡️ **Sanctuary Protection Protocol Activated**`)
             .addFields(
-              { name: 'User', value: `${targetTag} (${targetId})`, inline: false },
-              { name: 'Reason', value: reason, inline: false },
-              { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+              { name: '👤 Expelled Member', value: `**${targetTag}** \`(${targetId})\``, inline: false },
+              { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true },
+              { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true },
+              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
             )
             .setTimestamp()
-            .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
+            .setFooter({ text: `Emillia — Guardian of Anipedia • ${dmSent ? 'Notice sent to user ✨' : 'Could not DM user ⚠️'}` });
           await message.reply({ embeds: [kickEmbed] });
-          logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason);
+          logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason, [
+            { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+          ]);
         } catch (err) {
           console.error("Kick execution error:", err);
           await message.reply("I couldn't kick them! There was a problem. 😰");
@@ -845,22 +904,25 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🔨 You have been banned')
-            .setDescription(`You were banned from **${guildName}**.`)
+            .setColor(0x992D22)
+            .setTitle('🌸 Emilia\'s Judgment • Permanent Exile Notice 🔨')
+            .setDescription(`*"You have been permanently banished from **${guildName}** by royal decree of our moderation team. Disruption to our sanctuary cannot be tolerated."* ❄️⚔️`)
             .addFields(
-              { name: 'Reason', value: reason, inline: false },
-              { name: 'Banned By', value: `${message.author.tag}`, inline: true }
+              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
+              { name: '⚖️ Banned By', value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: `Emillia Moderation • ${guildName}` });
+            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
         }
 
         try {
-          await targetMember.ban({ reason });
+          // Delete recent 15 messages of target member in this channel
+          const deletedCount = await deleteUserRecentMessages(message.channel, targetId, 15);
+
+          await targetMember.ban({ reason, deleteMessageSeconds: 86400 });
           
           if (db) {
             await db.collection('moderation_logs').add({
@@ -870,22 +932,27 @@ client.on('messageCreate', async (message) => {
               moderatorId: message.author.id,
               moderatorTag: message.author.tag,
               reason: reason,
+              deletedMessages: deletedCount,
               timestamp: FieldValue.serverTimestamp()
             });
           }
 
           const banEmbed = new EmbedBuilder()
-            .setColor(0xFF0000)
-            .setTitle('🔨 User Banned')
+            .setColor(0x992D22)
+            .setTitle('🌸 Emilia\'s Judgment • Absolute Ban 🔨')
+            .setDescription(`*"As the Guardian of Anipedia and Royal Selection candidate, I must protect the harmony of our server. Such disruption will not be tolerated in our realm!"* ❄️⚔️\n\n🛡️ **Severe Infraction • Permanent Exile Enforced**`)
             .addFields(
-              { name: 'User', value: `${targetTag} (${targetId})`, inline: false },
-              { name: 'Reason', value: reason, inline: false },
-              { name: 'Moderator', value: `${message.author.tag}`, inline: true }
+              { name: '👤 Exiled Member', value: `**${targetTag}** \`(${targetId})\``, inline: false },
+              { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true },
+              { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true },
+              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
             )
             .setTimestamp()
-            .setFooter({ text: dmSent ? 'Emillia Moderation • User was DM\'d' : 'Emillia Moderation • Could not DM user' });
+            .setFooter({ text: `Emillia — Guardian of Anipedia • ${dmSent ? 'Notice sent to user ✨' : 'Could not DM user ⚠️'}` });
           await message.reply({ embeds: [banEmbed] });
-          logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason);
+          logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, [
+            { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+          ]);
         } catch (err) {
           console.error("Ban execution error:", err);
           await message.reply("I failed to ban them. Something went wrong! 😰");
