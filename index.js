@@ -128,13 +128,13 @@ client.once('ready', async () => {
   }
 });
 
-// Helper to check if a user is a moderator (Shogun, Royale Hands, Owner, or Admin)
+// Helper to check if a user is a moderator (Shogun, Royale Hands, Crowns, Owner, or Admin)
 function isModerator(member) {
   if (!member) return false;
   if (member.guild.ownerId === member.id) return true;
   if (member.permissions.has('Administrator')) return true;
   
-  const allowedRoles = ['Shogun', 'Royale Hands'];
+  const allowedRoles = ['Shogun', 'Royale Hands', 'Royal Hand', 'Royal Hands', 'Crowns', 'Crown'];
   return member.roles.cache.some(role => allowedRoles.includes(role.name));
 }
 
@@ -486,7 +486,7 @@ client.on('messageCreate', async (message) => {
     if (isModAction) {
       // Role Authorization Check
       if (!isModerator(message.member)) {
-        await message.reply("Mou! 🌸 You can't ask me to do that! Only people with roles like 'Shogun' or 'Royale Hands' can tell me to perform moderation actions! ❄️");
+        await message.reply("Mou! 🌸 You can't ask me to do that! Only people with roles like 'Shogun', 'Royale Hands', or 'Crowns' can tell me to perform moderation actions! ❄️");
         return;
       }
 
@@ -499,9 +499,9 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      // Protect Shogun and Royale Hands roles from being moderated
+      // Protect Shogun, Royale Hands, and Crowns roles from being moderated
       if (targetMember && isModerator(targetMember)) {
-        await message.reply("Mou! 🌸 I cannot perform moderation actions on a member of the Shogun or Royale Hands! They have my utmost respect! ❄️");
+        await message.reply("Mou! 🌸 I cannot perform moderation actions on a member of the Shogun, Royale Hands, or Crowns! They have my utmost respect! ❄️");
         return;
       }
 
@@ -966,7 +966,7 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     if (words.includes('setrule')) {
       if (!isModerator(message.member)) {
-        await message.reply("Mou! 🌸 Only 'Shogun' or 'Royale Hands' can set server rules! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royale Hands', or 'Crowns' can set server rules! ❄️");
         return;
       }
       const setruleMatch = cleanQuery.match(/setrule\s+(\d+)\s+(.+)/i);
@@ -999,7 +999,7 @@ client.on('messageCreate', async (message) => {
 
     if (words.includes('delrule')) {
       if (!isModerator(message.member)) {
-        await message.reply("Mou! 🌸 Only 'Shogun' or 'Royale Hands' can delete rules! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royale Hands', or 'Crowns' can delete rules! ❄️");
         return;
       }
       const delruleMatch = cleanQuery.match(/delrule\s+(\d+)/i);
@@ -1108,7 +1108,7 @@ client.on('messageCreate', async (message) => {
           { name: '🌸 Me (Emillia)', value: 'Moderation & Server Safety', inline: true },
           { name: '\u200b', value: '\u200b', inline: false },
           { name: '⚔️ My Abilities', value: '`Warn` • `Timeout` • `Kick` • `Ban` • `Rules`', inline: false },
-          { name: '🔒 Who Can Use Moderation?', value: '**Shogun** and **Royale Hands** roles only!', inline: false }
+          { name: '🔒 Who Can Use Moderation?', value: '**Shogun**, **Royale Hands**, and **Crowns** roles only!', inline: false }
         )
         .setThumbnail('https://i.imgur.com/emillia_thumb.png')
         .setFooter({ text: 'Type @Emillia help to see all my commands! ✨' })
@@ -1125,7 +1125,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(
           `*I am here to protect Anipedia and keep everyone safe!* ❄️\n` +
           `*(My big sister **Tessia** 💜 handles fun chatting — I handle the serious stuff!)*\n\n` +
-          `⚠️ **Moderation commands are only for \'Shogun\' or \'Royale Hands\' roles!**`
+          `⚠️ **Moderation commands are only for \'Shogun\', \'Royale Hands\', or \'Crowns\' roles!**`
         )
         .addFields(
           {
