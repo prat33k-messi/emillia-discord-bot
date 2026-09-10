@@ -540,6 +540,23 @@ client.on('messageCreate', async (message) => {
         let previousWarningsCount = 0;
         if (db) {
           try {
+            // Delete all previous 'warn' logs for this user from moderation_logs
+            const logsSnapshot = await db.collection('moderation_logs')
+              .where('targetId', '==', targetMember.id)
+              .get();
+
+            const batch = db.batch();
+            let deletedWarnDocsCount = 0;
+            logsSnapshot.forEach(doc => {
+              if (doc.data().action === 'warn') {
+                batch.delete(doc.ref);
+                deletedWarnDocsCount++;
+              }
+            });
+            if (deletedWarnDocsCount > 0) {
+              await batch.commit();
+            }
+
             const userRef = db.collection('memories').doc(targetUsername);
             await db.runTransaction(async (t) => {
               const doc = await t.get(userRef);
@@ -556,7 +573,7 @@ client.on('messageCreate', async (message) => {
               moderatorId: message.author.id,
               moderatorTag: message.author.tag,
               reason: reason,
-              clearedWarnings: previousWarningsCount,
+              clearedWarnings: previousWarningsCount || deletedWarnDocsCount,
               timestamp: FieldValue.serverTimestamp()
             });
 
@@ -565,6 +582,10 @@ client.on('messageCreate', async (message) => {
           } catch (err) {
             console.error("Firestore clearwarns error:", err);
           }
+        } else {
+          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+          previousWarningsCount = cachedMem.warnings || 0;
+          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
         }
 
         const clearWarnEmbed = new EmbedBuilder()
@@ -583,6 +604,7 @@ client.on('messageCreate', async (message) => {
         logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
           { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
         ]);
+        return;
         return;
 
       } else if (actionKeyword === 'purge') {
@@ -664,6 +686,12 @@ client.on('messageCreate', async (message) => {
         const warnNumMatch = cleanQuery.match(/\b([1-9]\d?)\b/);
         const requestedWarnNum = warnNumMatch ? parseInt(warnNumMatch[1], 10) : null;
         
+        let warningsCount = 0;
+        const cached = preloadedMemories.get(targetUsername);
+        if (cached) {
+          warningsCount = cached.warnings || 0;
+        }
+
         let warnDocs = [];
         if (db) {
           try {
@@ -684,21 +712,26 @@ client.on('messageCreate', async (message) => {
               const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
               return timeB - timeA;
             });
+
+            // If there are stale excess warn logs beyond active warningsCount, prune the excess from Firestore
+            if (warningsCount > 0 && warnDocs.length > warningsCount) {
+              const excessDocs = warnDocs.slice(warningsCount);
+              const batch = db.batch();
+              excessDocs.forEach(d => batch.delete(d.ref));
+              await batch.commit().catch(e => console.error("Error pruning excess warn docs:", e));
+              warnDocs = warnDocs.slice(0, warningsCount);
+            }
           } catch (err) {
             console.error("Error fetching warnDocs for deletion:", err);
           }
-        }
-
-        let warningsCount = 0;
-        const cached = preloadedMemories.get(targetUsername);
-        if (cached) {
-          warningsCount = cached.warnings || 0;
         }
 
         if (warningsCount === 0 && warnDocs.length === 0) {
           await message.reply(`**${targetMember.user.tag}** has no active warnings to delete! 🌸`);
           return;
         }
+
+        const effectiveCount = Math.max(warningsCount, warnDocs.length);
 
         let deletedWarnDoc = null;
         let deletedIndexLabel = "";
@@ -733,10 +766,26 @@ client.on('messageCreate', async (message) => {
               if (doc.exists) {
                 warningsCount = Math.max(0, (doc.data().warnings || 0) - 1);
               } else {
-                warningsCount = Math.max(0, warningsCount - 1);
+                warningsCount = Math.max(0, effectiveCount - 1);
               }
               t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
             });
+
+            // If warningsCount is now 0, clean up any remaining warn docs
+            if (warningsCount === 0) {
+              const remainingLogs = await db.collection('moderation_logs')
+                .where('targetId', '==', targetMember.id)
+                .get();
+              const batch = db.batch();
+              let count = 0;
+              remainingLogs.forEach(doc => {
+                if (doc.data().action === 'warn') {
+                  batch.delete(doc.ref);
+                  count++;
+                }
+              });
+              if (count > 0) await batch.commit().catch(() => {});
+            }
 
             await db.collection('moderation_logs').add({
               action: 'deletewarn',
@@ -1334,6 +1383,25 @@ client.on('messageCreate', async (message) => {
       }
 
       if (warningsCount === 0) {
+        // As a precaution, purge any orphaned/stale warn docs in Firestore
+        if (db) {
+          db.collection('moderation_logs')
+            .where('targetId', '==', targetMember.id)
+            .get()
+            .then(snapshot => {
+              const batch = db.batch();
+              let count = 0;
+              snapshot.forEach(doc => {
+                if (doc.data().action === 'warn') {
+                  batch.delete(doc.ref);
+                  count++;
+                }
+              });
+              if (count > 0) batch.commit().catch(() => {});
+            })
+            .catch(() => {});
+        }
+
         const cleanEmbed = new EmbedBuilder()
           .setColor(0x2ECC71)
           .setTitle('🌸 Emilia\'s Record • Clean Standing ✨')
@@ -1374,7 +1442,7 @@ client.on('messageCreate', async (message) => {
           logsSnapshot.forEach(doc => {
             const data = doc.data();
             if (data.action === 'warn') {
-              warnLogs.push(data);
+              warnLogs.push({ id: doc.id, ref: doc.ref, ...data });
             }
           });
 
@@ -1385,10 +1453,20 @@ client.on('messageCreate', async (message) => {
             return timeB - timeA;
           });
 
-          if (warnLogs.length > 0) {
+          // Only keep active warnings up to warningsCount and prune any historical excess from Firestore
+          let activeWarnLogs = warnLogs;
+          if (warnLogs.length > warningsCount) {
+            activeWarnLogs = warnLogs.slice(0, warningsCount);
+            const excessDocs = warnLogs.slice(warningsCount);
+            const batch = db.batch();
+            excessDocs.forEach(d => batch.delete(d.ref));
+            batch.commit().catch(e => console.error("Error pruning excess warn docs in warns view:", e));
+          }
+
+          if (activeWarnLogs.length > 0) {
             let historyText = '';
-            for (let i = 0; i < warnLogs.length; i++) {
-              const log = warnLogs[i];
+            for (let i = 0; i < activeWarnLogs.length; i++) {
+              const log = activeWarnLogs[i];
               const reason = log.reason || 'No reason provided';
               const moderator = log.moderatorTag || 'Unknown Moderator';
               let timeFormatted = 'Unknown date';
