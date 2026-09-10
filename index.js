@@ -222,6 +222,8 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const colorMap = { 
       'warn': 0xF1C40F, 
       'unwarn': 0x2ECC71, 
+      'clearwarns': 0x2ECC71,
+      'purge': 0x3498DB,
       'timeout': 0x3498DB, 
       'untimeout': 0x2ECC71, 
       'kick': 0xE67E22, 
@@ -231,6 +233,8 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const emojiMap = { 
       'warn': '⚠️', 
       'unwarn': '✅', 
+      'clearwarns': '🕊️',
+      'purge': '🧹',
       'timeout': '🔇', 
       'untimeout': '🔊', 
       'kick': '👢', 
@@ -240,6 +244,8 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const titleMap = { 
       'warn': 'Moderation Log • User Warned', 
       'unwarn': 'Moderation Log • Warning Removed', 
+      'clearwarns': 'Moderation Log • All Warnings Cleared',
+      'purge': 'Moderation Log • Messages Purged',
       'timeout': 'Moderation Log • User Timed Out', 
       'untimeout': 'Moderation Log • Timeout Removed', 
       'kick': 'Moderation Log • User Kicked', 
@@ -311,9 +317,10 @@ client.on('messageCreate', async (message) => {
     if (cleanQuery) {
       const preCheckWords = lowerQuery.split(/\s+/);
       const commandKeywords = [
-        'warn', 'unwarn', 'removewarn', 'clearwarn', 'warnings', 'warns',
+        'warn', 'unwarn', 'removewarn', 'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
+        'warnings', 'warns', 'leaderboard', 'top',
         'timeout', 'mute', 'untimeout', 'unmute',
-        'kick', 'ban', 'unban',
+        'kick', 'ban', 'unban', 'purge', 'clean',
         'setrule', 'delrule', 'rules', 'listrules',
         'introduce', 'profile', 'ping', 'reset', 'help', 'commands'
       ];
@@ -362,7 +369,11 @@ client.on('messageCreate', async (message) => {
 
     // --- Check if this is a moderation command (to bypass NSFW/jailbreak filters for mod reasons) ---
     const earlyWords = lowerQuery.split(/\s+/);
-    const modCommandKeywords = ['warn', 'unwarn', 'removewarn', 'clearwarn', 'timeout', 'mute', 'untimeout', 'unmute', 'kick', 'ban', 'unban'];
+    const modCommandKeywords = [
+      'warn', 'unwarn', 'removewarn', 'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
+      'timeout', 'mute', 'untimeout', 'unmute',
+      'kick', 'ban', 'unban', 'purge', 'clean'
+    ];
     const isModCommand = modCommandKeywords.some(kw => earlyWords.includes(kw)) && isModerator(message.member);
 
     // --- NSFW Filter (skip for moderators executing mod commands) ---
@@ -460,7 +471,13 @@ client.on('messageCreate', async (message) => {
     let isModAction = false;
     let actionKeyword = null;
 
-    if (words.includes('unwarn') || words.includes('removewarn') || words.includes('clearwarn')) {
+    if (words.includes('clearwarns') || words.includes('resetwarns') || words.includes('clearwarnings')) {
+      isModAction = true;
+      actionKeyword = 'clearwarns';
+    } else if (words.includes('purge') || words.includes('clean')) {
+      isModAction = true;
+      actionKeyword = 'purge';
+    } else if (words.includes('unwarn') || words.includes('removewarn') || words.includes('clearwarn')) {
       isModAction = true;
       actionKeyword = 'unwarn';
     } else if (words.includes('untimeout') || words.includes('unmute')) {
@@ -493,8 +510,8 @@ client.on('messageCreate', async (message) => {
       // Identify Target Member (excluding the bot itself)
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       
-      // We need a target member for everything except unban
-      if (actionKeyword !== 'unban' && !targetMember) {
+      // We need a target member for everything except unban and purge
+      if (actionKeyword !== 'unban' && actionKeyword !== 'purge' && !targetMember) {
         await message.reply(`Who should I perform this action on? Please mention the user, like this: \`@Emillia ${actionKeyword} @user <reason>\`! 🌸`);
         return;
       }
@@ -508,7 +525,132 @@ client.on('messageCreate', async (message) => {
       const targetUsername = targetMember ? targetMember.user.username : null;
 
       // Executing Actions
-      if (actionKeyword === 'unwarn') {
+      if (actionKeyword === 'clearwarns') {
+        const reason = getReason(cleanQuery, 'clearwarns', targetMember);
+        let previousWarningsCount = 0;
+        if (db) {
+          try {
+            const userRef = db.collection('memories').doc(targetUsername);
+            await db.runTransaction(async (t) => {
+              const doc = await t.get(userRef);
+              if (doc.exists) {
+                previousWarningsCount = doc.data().warnings || 0;
+              }
+              t.set(userRef, { warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
+            });
+
+            await db.collection('moderation_logs').add({
+              action: 'clearwarns',
+              targetId: targetMember.id,
+              targetTag: targetMember.user.tag,
+              moderatorId: message.author.id,
+              moderatorTag: message.author.tag,
+              reason: reason,
+              clearedWarnings: previousWarningsCount,
+              timestamp: FieldValue.serverTimestamp()
+            });
+
+            const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+            preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
+          } catch (err) {
+            console.error("Firestore clearwarns error:", err);
+          }
+        }
+
+        const clearWarnEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle('🌸 Emilia\'s Purification • All Warnings Cleared 🕊️')
+          .setDescription(`*"A completely clean slate! All previous warnings have been cleansed from the server records for **${targetMember.user.tag}**. Please continue to cherish our sanctuary!"* 🌸✨\n\n🛡️ **Complete Record Purification**`)
+          .addFields(
+            { name: '👤 Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+            { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warning(s) reset to 0\``, inline: true },
+            { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true },
+            { name: '📜 Reason', value: `>>> ${reason}`, inline: false }
+          )
+          .setTimestamp()
+          .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
+        await message.reply({ embeds: [clearWarnEmbed] });
+        logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
+          { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
+        ]);
+        return;
+
+      } else if (actionKeyword === 'purge') {
+        const numMatch = cleanQuery.match(/\b([1-9]\d?|100)\b/);
+        if (!numMatch) {
+          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `@Emillia purge 20` or `@Emillia purge @user 15`! 🌸");
+          return;
+        }
+        const purgeAmount = parseInt(numMatch[1], 10);
+
+        try {
+          const fetchLimit = Math.min(100, purgeAmount + 10);
+          const fetched = await message.channel.messages.fetch({ limit: fetchLimit });
+          
+          let messagesToDelete;
+          if (targetMember) {
+            messagesToDelete = fetched.filter(m => m.author.id === targetMember.id && m.id !== message.id).first(purgeAmount);
+          } else {
+            messagesToDelete = fetched.filter(m => m.id !== message.id).first(purgeAmount);
+          }
+
+          let deletedCount = 0;
+          if (messagesToDelete && messagesToDelete.length > 0) {
+            if (messagesToDelete.length === 1) {
+              await messagesToDelete[0].delete().catch(() => {});
+              deletedCount = 1;
+            } else {
+              const deleted = await message.channel.bulkDelete(messagesToDelete, true);
+              deletedCount = deleted.size;
+            }
+          }
+
+          // Delete the command invocation message
+          await message.delete().catch(() => {});
+
+          const purgeEmbed = new EmbedBuilder()
+            .setColor(0x3498DB)
+            .setTitle('❄️ Emilia\'s Frost Cleansing • Chat Purged 🧹')
+            .setDescription(`*"I have swept the frost away! **${deletedCount}** message(s) have been cleanly purged from the channel!"* ❄️✨\n\n🧹 **Chat Purification Complete**`)
+            .addFields(
+              { name: '🧹 Messages Purged', value: `\`${deletedCount} message(s)\``, inline: true },
+              { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true }
+            );
+
+          if (targetMember) {
+            purgeEmbed.addFields({ name: '👤 Filtered Member', value: `**${targetMember.user.tag}**`, inline: true });
+          }
+
+          purgeEmbed.setTimestamp()
+            .setFooter({ text: 'Emillia — Guardian of Anipedia • Clean Chat Restored ✨' });
+
+          const confMsg = await message.channel.send({ embeds: [purgeEmbed] });
+          setTimeout(() => confMsg.delete().catch(() => {}), 5000);
+
+          if (db) {
+            await db.collection('moderation_logs').add({
+              action: 'purge',
+              channelId: message.channel.id,
+              channelName: message.channel.name || 'Unknown',
+              deletedCount: deletedCount,
+              targetId: targetMember ? targetMember.id : null,
+              targetTag: targetMember ? targetMember.user.tag : null,
+              moderatorId: message.author.id,
+              moderatorTag: message.author.tag,
+              timestamp: FieldValue.serverTimestamp()
+            });
+          }
+
+          logToEmilliaLog(message.guild, 'purge', targetMember ? targetMember.user.tag : `#${message.channel.name}`, targetMember ? targetMember.id : message.channel.id, message.author.tag, `Purged ${deletedCount} message(s) in #${message.channel.name}`, [
+            { name: '🧹 Messages Purged', value: `\`${deletedCount}\``, inline: true }
+          ]);
+        } catch (err) {
+          console.error("Purge error:", err);
+          await message.channel.send("M-mou! 😰 Something went wrong while trying to clean messages! (Messages older than 14 days cannot be bulk deleted).");
+        }
+        return;
+
+      } else if (actionKeyword === 'unwarn') {
         const reason = getReason(cleanQuery, 'unwarn', targetMember);
         let warningsCount = 0;
         if (db) {
@@ -1040,7 +1182,67 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     // 3. UTILITY COMMANDS (HELP, PING, RESET, PROFILE)
     // ==========================================
-    if (words.includes('warnings') || words.includes('warns')) {
+    if (words.includes('warnings') || words.includes('warns') || words.includes('leaderboard') || words.includes('top')) {
+      // Check if user specifically asked for the leaderboard
+      const isLeaderboard = words.includes('leaderboard') || 
+                            words.includes('top') || 
+                            words.includes('ranking') || 
+                            words.includes('ranks') ||
+                            ((words.includes('warns') || words.includes('warnings')) && message.mentions.members.filter(m => m.id !== client.user.id).size === 0 && !cleanQuery.match(/\b\d{17,19}\b/) && (lowerQuery === 'warns' || lowerQuery === 'warnings' || lowerQuery.includes('top') || lowerQuery.includes('leaderboard')));
+
+      if (isLeaderboard) {
+        // Collect all users with warnings > 0
+        const usersWithWarnings = [];
+        for (const [uname, udata] of preloadedMemories.entries()) {
+          if (udata && udata.warnings && udata.warnings > 0) {
+            usersWithWarnings.push({
+              username: uname,
+              warnings: udata.warnings
+            });
+          }
+        }
+
+        // Sort descending by warnings count
+        usersWithWarnings.sort((a, b) => b.warnings - a.warnings);
+        const top5 = usersWithWarnings.slice(0, 5);
+
+        if (top5.length === 0) {
+          const emptyLbEmbed = new EmbedBuilder()
+            .setColor(0x2ECC71)
+            .setTitle('🏆 Emilia\'s Warning Registry • Clean Sanctuary ✨')
+            .setDescription(`*"Such wonderful news! Anipedia is completely peaceful right now — nobody has any active warnings! Let's keep up the harmony, everyone!"* 🌸🕊️\n\n🛡️ **Server Disciplinary Status: 100% Peaceful**`)
+            .setTimestamp()
+            .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
+          await message.reply({ embeds: [emptyLbEmbed] });
+          return;
+        }
+
+        const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+        let lbText = '';
+        for (let i = 0; i < top5.length; i++) {
+          const entry = top5[i];
+          const medal = medals[i] || '▫️';
+          const foundMember = message.guild?.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
+          const displayTag = foundMember ? `${foundMember.displayName} (\`@${foundMember.user.username}\`)` : `\`@${entry.username}\``;
+          
+          let statusBadge = '';
+          if (entry.warnings >= 5) statusBadge = ' • 🚨 *1h Freeze Threshold*';
+          else if (entry.warnings >= 3) statusBadge = ' • ⚠️ *Auto-Timeout Active*';
+
+          lbText += `${medal} **Rank ${i + 1}:** ${displayTag}\n   ↳ **Warnings:** \`#${entry.warnings}\`${statusBadge}\n\n`;
+        }
+
+        const lbEmbed = new EmbedBuilder()
+          .setColor(0xF1C40F)
+          .setTitle('🏆 Emilia\'s Registry • Top 5 Most Warned Users')
+          .setDescription(`*"Here is our current leaderboard of members with the most recorded warnings in Anipedia. Remember, 3 warnings trigger an auto-timeout, and 5 warnings result in a 1-hour freeze!"* ❄️⚠️\n\n${lbText.trim()}`)
+          .setTimestamp()
+          .setFooter({ text: 'Emillia — Guardian of Anipedia • Server Disciplinary Registry ✨' });
+        await message.reply({ embeds: [lbEmbed] });
+        return;
+      }
+
+      // Specific user warning query
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
       const targetUsername = targetMember.user.username;
 
@@ -1050,10 +1252,35 @@ client.on('messageCreate', async (message) => {
         warningsCount = cached.warnings || 0;
       }
 
+      if (warningsCount === 0) {
+        const cleanEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle('🌸 Emilia\'s Record • Clean Standing ✨')
+          .setDescription(`*"Wonderful news! **${targetMember.user.tag}** has **0 warnings**! Thank you for being such a wonderful and respectful member of Anipedia!"* 🌸🕊️\n\n🛡️ **Disciplinary Record: Spotless**`)
+          .addFields(
+            { name: '👤 Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+            { name: '📊 Warning Count', value: '`0 warnings`', inline: true },
+            { name: '🌟 Status', value: '`Clean Record • In Good Standing`', inline: true }
+          )
+          .setTimestamp()
+          .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
+        await message.reply({ embeds: [cleanEmbed] });
+        return;
+      }
+
       const warningsEmbed = new EmbedBuilder()
-        .setColor(0xFFA500)
-        .setTitle('📋 User Warnings')
-        .setDescription(`**${targetMember.user.tag}** has **${warningsCount}** warning(s).`);
+        .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
+        .setTitle('📋 Emilia\'s Registry • User Warnings ⚠️')
+        .setDescription(`*"Here is the disciplinary record for **${targetMember.user.tag}** in Anipedia:"* ❄️`)
+        .addFields(
+          { name: '👤 Warned Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+          { name: '📊 Total Warnings', value: `\`#${warningsCount}\``, inline: true },
+          { 
+            name: '⚡ Status', 
+            value: warningsCount >= 5 ? '`🚨 High Risk (5+ Warnings)`' : warningsCount >= 3 ? '`⚡ Auto-Timeout Threshold Reached`' : '`⚠️ Active Warnings`', 
+            inline: true 
+          }
+        );
 
       // Fetch warning history with reasons and moderators from Firestore
       if (db && warningsCount > 0) {
@@ -1062,7 +1289,7 @@ client.on('messageCreate', async (message) => {
             .where('action', '==', 'warn')
             .where('targetId', '==', targetMember.id)
             .orderBy('timestamp', 'desc')
-            .limit(10)
+            .limit(15)
             .get();
 
           if (!logsSnapshot.empty) {
@@ -1070,13 +1297,17 @@ client.on('messageCreate', async (message) => {
             let i = 1;
             logsSnapshot.forEach(doc => {
               const log = doc.data();
-              const reason = log.reason || 'No reason specified';
-              const moderator = log.moderatorTag || 'Unknown';
-              const time = log.timestamp ? log.timestamp.toDate().toLocaleDateString() : 'Unknown date';
-              historyText += `**${i}.** ${reason}\n   ↳ By: ${moderator} • ${time}\n`;
+              const reason = log.reason || 'No reason provided';
+              const moderator = log.moderatorTag || 'Unknown Moderator';
+              let timeFormatted = 'Unknown date';
+              if (log.timestamp && typeof log.timestamp.toDate === 'function') {
+                const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
+                timeFormatted = `<t:${unixSec}:f> (<t:${unixSec}:R>)`;
+              }
+              historyText += `**#${i}.** ${reason}\n   ↳ **Issued by:** \`${moderator}\` • ${timeFormatted}\n`;
               i++;
             });
-            warningsEmbed.addFields({ name: '📜 Warning History', value: historyText || 'No history found', inline: false });
+            warningsEmbed.addFields({ name: '📜 Warning History', value: historyText || 'No history logs found', inline: false });
           }
         } catch (err) {
           console.error('Error fetching warning history:', err);
@@ -1085,7 +1316,7 @@ client.on('messageCreate', async (message) => {
 
       warningsEmbed
         .setTimestamp()
-        .setFooter({ text: 'Emillia Moderation' });
+        .setFooter({ text: 'Emillia — Guardian of Anipedia • Disciplinary Audit Active ✨' });
       await message.reply({ embeds: [warningsEmbed] });
       return;
     }
@@ -1133,7 +1364,10 @@ client.on('messageCreate', async (message) => {
             value: [
               '`@Emillia warn @user <reason>` — Warn a user',
               '`@Emillia unwarn @user` — Remove one warning',
-              '`@Emillia warnings @user` — View warning count',
+              '`@Emillia clearwarns @user` — Clear all warnings for a user',
+              '`@Emillia warns @user` — View warning history & count',
+              '`@Emillia warns leaderboard` — Top 5 most warned users',
+              '`@Emillia purge <1-100> [@user]` — Purge messages in channel',
               '`@Emillia timeout @user [10m/2h/1d] <reason>` — Timeout a user',
               '`@Emillia untimeout @user` — Remove a timeout',
               '`@Emillia kick @user <reason>` — Kick a user',
