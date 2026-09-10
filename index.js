@@ -222,6 +222,7 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const colorMap = { 
       'warn': 0xF1C40F, 
       'unwarn': 0x2ECC71, 
+      'deletewarn': 0x2ECC71,
       'clearwarns': 0x2ECC71,
       'purge': 0x3498DB,
       'timeout': 0x3498DB, 
@@ -233,6 +234,7 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const emojiMap = { 
       'warn': '⚠️', 
       'unwarn': '✅', 
+      'deletewarn': '🗑️',
       'clearwarns': '🕊️',
       'purge': '🧹',
       'timeout': '🔇', 
@@ -244,6 +246,7 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const titleMap = { 
       'warn': 'Moderation Log • User Warned', 
       'unwarn': 'Moderation Log • Warning Removed', 
+      'deletewarn': 'Moderation Log • Warning Deleted',
       'clearwarns': 'Moderation Log • All Warnings Cleared',
       'purge': 'Moderation Log • Messages Purged',
       'timeout': 'Moderation Log • User Timed Out', 
@@ -317,14 +320,15 @@ client.on('messageCreate', async (message) => {
     if (cleanQuery) {
       const preCheckWords = lowerQuery.split(/\s+/);
       const commandKeywords = [
-        'warn', 'unwarn', 'removewarn', 'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
+        'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
+        'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
         'warnings', 'warns', 'leaderboard', 'top',
         'timeout', 'mute', 'untimeout', 'unmute',
         'kick', 'ban', 'unban', 'purge', 'clean',
         'setrule', 'delrule', 'rules', 'listrules',
         'introduce', 'profile', 'ping', 'reset', 'help', 'commands'
       ];
-      const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw));
+      const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
       const introTriggers = ['introduce yourself', 'who are you', 'what are you', 'whats your name', "what's your name", 'who r u', 'tell me about yourself', 'introduce urself', 'what can you do'];
       const hasIntroTrigger = introTriggers.some(t => lowerQuery.includes(t));
@@ -370,11 +374,12 @@ client.on('messageCreate', async (message) => {
     // --- Check if this is a moderation command (to bypass NSFW/jailbreak filters for mod reasons) ---
     const earlyWords = lowerQuery.split(/\s+/);
     const modCommandKeywords = [
-      'warn', 'unwarn', 'removewarn', 'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
+      'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
+      'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean'
     ];
-    const isModCommand = modCommandKeywords.some(kw => earlyWords.includes(kw)) && isModerator(message.member);
+    const isModCommand = (modCommandKeywords.some(kw => earlyWords.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning')) && isModerator(message.member);
 
     // --- NSFW Filter (skip for moderators executing mod commands) ---
     const isNsfwAttempt = nsfwKeywords.some(keyword => lowerQuery.includes(keyword));
@@ -477,9 +482,14 @@ client.on('messageCreate', async (message) => {
     } else if (words.includes('purge') || words.includes('clean')) {
       isModAction = true;
       actionKeyword = 'purge';
-    } else if (words.includes('unwarn') || words.includes('removewarn') || words.includes('clearwarn')) {
+    } else if (
+      words.includes('deletewarn') || words.includes('deletewarning') || words.includes('deletewarns') ||
+      words.includes('delwarn') || words.includes('delwarning') || words.includes('delwarns') ||
+      words.includes('unwarn') || words.includes('removewarn') || words.includes('clearwarn') ||
+      lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn') || lowerQuery.includes('del warning')
+    ) {
       isModAction = true;
-      actionKeyword = 'unwarn';
+      actionKeyword = 'deletewarn';
     } else if (words.includes('untimeout') || words.includes('unmute')) {
       isModAction = true;
       actionKeyword = 'untimeout';
@@ -650,51 +660,122 @@ client.on('messageCreate', async (message) => {
         }
         return;
 
-      } else if (actionKeyword === 'unwarn') {
-        const reason = getReason(cleanQuery, 'unwarn', targetMember);
-        let warningsCount = 0;
+      } else if (actionKeyword === 'deletewarn') {
+        const warnNumMatch = cleanQuery.match(/\b([1-9]\d?)\b/);
+        const requestedWarnNum = warnNumMatch ? parseInt(warnNumMatch[1], 10) : null;
+        
+        let warnDocs = [];
         if (db) {
           try {
+            const logsSnapshot = await db.collection('moderation_logs')
+              .where('targetId', '==', targetMember.id)
+              .get();
+
+            logsSnapshot.forEach(doc => {
+              const data = doc.data();
+              if (data.action === 'warn') {
+                warnDocs.push({ id: doc.id, ref: doc.ref, ...data });
+              }
+            });
+
+            // Sort newest first (same order as warns command)
+            warnDocs.sort((a, b) => {
+              const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+              const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+              return timeB - timeA;
+            });
+          } catch (err) {
+            console.error("Error fetching warnDocs for deletion:", err);
+          }
+        }
+
+        let warningsCount = 0;
+        const cached = preloadedMemories.get(targetUsername);
+        if (cached) {
+          warningsCount = cached.warnings || 0;
+        }
+
+        if (warningsCount === 0 && warnDocs.length === 0) {
+          await message.reply(`**${targetMember.user.tag}** has no active warnings to delete! 🌸`);
+          return;
+        }
+
+        let deletedWarnDoc = null;
+        let deletedIndexLabel = "";
+
+        if (requestedWarnNum !== null) {
+          const targetIndex = requestedWarnNum - 1;
+          if (targetIndex < 0 || targetIndex >= warnDocs.length) {
+            await message.reply(`Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). Use \`@Emillia warns @user\` to see them! ❄️`);
+            return;
+          }
+          deletedWarnDoc = warnDocs[targetIndex];
+          deletedIndexLabel = `#${requestedWarnNum}`;
+        } else {
+          // If no number provided, delete the latest warning (#1)
+          if (warnDocs.length > 0) {
+            deletedWarnDoc = warnDocs[0];
+            deletedIndexLabel = `#1 (Latest)`;
+          }
+        }
+
+        if (db) {
+          try {
+            // Delete the specific warning document from Firestore
+            if (deletedWarnDoc && deletedWarnDoc.ref) {
+              await deletedWarnDoc.ref.delete();
+            }
+
+            // Decrement warnings count in memories
             const userRef = db.collection('memories').doc(targetUsername);
             await db.runTransaction(async (t) => {
               const doc = await t.get(userRef);
               if (doc.exists) {
                 warningsCount = Math.max(0, (doc.data().warnings || 0) - 1);
+              } else {
+                warningsCount = Math.max(0, warningsCount - 1);
               }
               t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
             });
 
             await db.collection('moderation_logs').add({
-              action: 'unwarn',
+              action: 'deletewarn',
               targetId: targetMember.id,
               targetTag: targetMember.user.tag,
               moderatorId: message.author.id,
               moderatorTag: message.author.tag,
-              reason: reason,
+              deletedWarningNumber: requestedWarnNum || 1,
+              deletedReason: deletedWarnDoc ? (deletedWarnDoc.reason || 'No reason provided') : 'Unknown',
               timestamp: FieldValue.serverTimestamp()
             });
 
             const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
             preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
           } catch (err) {
-            console.error("Firestore unwarn error:", err);
+            console.error("Firestore deletewarn error:", err);
           }
+        } else {
+          warningsCount = Math.max(0, warningsCount - 1);
+          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
         }
 
-        const unwarnEmbed = new EmbedBuilder()
+        const warnReason = deletedWarnDoc?.reason || 'No reason provided';
+        const deleteEmbed = new EmbedBuilder()
           .setColor(0x2ECC71)
-          .setTitle('🌸 Emilia\'s Grace • Warning Lifted ✅')
-          .setDescription(`*"A fresh start begins today! I have happily cleared one of your warnings. Keep trying your best to protect the peace of our haven!"* 🌸✨\n\n🕊️ **Warning Cleared from Server Records**`)
+          .setTitle('🌸 Emilia\'s Grace • Warning Deleted ✅')
+          .setDescription(`*"I have removed Warning ${deletedIndexLabel} from **${targetMember.user.tag}**'s record as requested by the moderation team!"* 🌸✨\n\n🕊️ **Disciplinary Record Updated**`)
           .addFields(
             { name: '👤 Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
+            { name: '🗑️ Deleted Warning', value: `**${deletedIndexLabel}** — *"${warnReason}"*`, inline: false },
             { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true },
-            { name: '⚖️ Moderator', value: `**${message.author.tag}**`, inline: true },
-            { name: '📜 Reason', value: `>>> ${reason}`, inline: false }
+            { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true }
           )
           .setTimestamp()
           .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
-        await message.reply({ embeds: [unwarnEmbed] });
-        logToEmilliaLog(message.guild, 'unwarn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
+
+        await message.reply({ embeds: [deleteEmbed] });
+        logToEmilliaLog(message.guild, 'deletewarn', targetMember.user.tag, targetMember.id, message.author.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
           { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true }
         ]);
         return;
@@ -1282,21 +1363,32 @@ client.on('messageCreate', async (message) => {
           }
         );
 
-      // Fetch warning history with reasons and moderators from Firestore
+      // Fetch warning history with reasons and moderators from Firestore (in-memory sort avoids composite index errors)
       if (db && warningsCount > 0) {
         try {
           const logsSnapshot = await db.collection('moderation_logs')
-            .where('action', '==', 'warn')
             .where('targetId', '==', targetMember.id)
-            .orderBy('timestamp', 'desc')
-            .limit(15)
             .get();
 
-          if (!logsSnapshot.empty) {
+          const warnLogs = [];
+          logsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.action === 'warn') {
+              warnLogs.push(data);
+            }
+          });
+
+          // Sort descending by timestamp (newest first)
+          warnLogs.sort((a, b) => {
+            const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+            const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+            return timeB - timeA;
+          });
+
+          if (warnLogs.length > 0) {
             let historyText = '';
-            let i = 1;
-            logsSnapshot.forEach(doc => {
-              const log = doc.data();
+            for (let i = 0; i < warnLogs.length; i++) {
+              const log = warnLogs[i];
               const reason = log.reason || 'No reason provided';
               const moderator = log.moderatorTag || 'Unknown Moderator';
               let timeFormatted = 'Unknown date';
@@ -1304,19 +1396,26 @@ client.on('messageCreate', async (message) => {
                 const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
                 timeFormatted = `<t:${unixSec}:f> (<t:${unixSec}:R>)`;
               }
-              historyText += `**#${i}.** ${reason}\n   ↳ **Issued by:** \`${moderator}\` • ${timeFormatted}\n`;
-              i++;
+              historyText += `**Warning #${i + 1}**: ${reason}\n   ↳ **Issued by:** \`${moderator}\` • ${timeFormatted}\n`;
+            }
+            warningsEmbed.addFields({ 
+              name: '📜 Warning History', 
+              value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
+              inline: false 
             });
-            warningsEmbed.addFields({ name: '📜 Warning History', value: historyText || 'No history logs found', inline: false });
+            warningsEmbed.setFooter({ text: 'Emillia — Tip: Use @Emillia deletewarn @user <number> to delete a specific warning ✨' });
+          } else {
+            warningsEmbed.addFields({ 
+              name: '📜 Warning History', 
+              value: `*This user has ${warningsCount} active warning(s) recorded in memory.*`, 
+              inline: false 
+            });
           }
         } catch (err) {
           console.error('Error fetching warning history:', err);
         }
       }
 
-      warningsEmbed
-        .setTimestamp()
-        .setFooter({ text: 'Emillia — Guardian of Anipedia • Disciplinary Audit Active ✨' });
       await message.reply({ embeds: [warningsEmbed] });
       return;
     }
@@ -1363,7 +1462,7 @@ client.on('messageCreate', async (message) => {
             name: '⚔️ Moderation Commands',
             value: [
               '`@Emillia warn @user <reason>` — Warn a user',
-              '`@Emillia unwarn @user` — Remove one warning',
+              '`@Emillia deletewarn @user [number]` — Delete specific or latest warning',
               '`@Emillia clearwarns @user` — Clear all warnings for a user',
               '`@Emillia warns @user` — View warning history & count',
               '`@Emillia warns leaderboard` — Top 5 most warned users',
