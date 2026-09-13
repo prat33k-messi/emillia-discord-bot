@@ -126,6 +126,16 @@ client.once('ready', async () => {
       console.error("Error preloading memories from Firestore:", err);
     }
   }
+
+  // Preload emojis from all connected guilds
+  try {
+    for (const guild of client.guilds.cache.values()) {
+      await guild.emojis.fetch().catch(() => {});
+    }
+    console.log("Preloaded emojis from all guilds.");
+  } catch (err) {
+    console.error("Error preloading guild emojis:", err);
+  }
 });
 
 // Helper to check if a user is a moderator (Shogun, Royale Hands, Overseer, Owner, or Admin)
@@ -171,36 +181,45 @@ function getReason(text, actionKeyword, targetMember) {
   return reason || "No reason specified";
 }
 
-// Helper to get custom animated/static moderation emojis (:announce~1: and :azureverify:)
-function getModEmojis(guild) {
+// Helper to get custom animated/static moderation emojis (:announce-1: and :azureverify:)
+async function getModEmojis(guild) {
   let announce = '📢';
   let verify = '✅';
 
-  const checkCollection = (col) => {
+  const searchCollection = (col) => {
     if (!col) return;
     if (announce === '📢') {
       const foundA = col.find(e => 
-        e.name.toLowerCase() === 'announce~1' || 
-        e.name.toLowerCase() === 'announce' || 
         e.name.toLowerCase().includes('announce')
       );
       if (foundA) announce = foundA.toString();
     }
     if (verify === '✅') {
       const foundV = col.find(e => 
-        e.name.toLowerCase() === 'azureverify' || 
         e.name.toLowerCase().includes('azureverify') || 
+        e.name.toLowerCase().includes('azure_verify') || 
         e.name.toLowerCase().includes('verify')
       );
       if (foundV) verify = foundV.toString();
     }
   };
 
-  if (guild && guild.emojis && guild.emojis.cache) {
-    checkCollection(guild.emojis.cache);
+  if (guild && guild.emojis) {
+    try {
+      if (guild.emojis.cache.size === 0) {
+        await guild.emojis.fetch();
+      }
+    } catch (e) {}
+    searchCollection(guild.emojis.cache);
   }
-  if ((announce === '📢' || verify === '✅') && client && client.emojis && client.emojis.cache) {
-    checkCollection(client.emojis.cache);
+
+  if ((announce === '📢' || verify === '✅') && client && client.emojis) {
+    try {
+      if (client.emojis.cache.size === 0) {
+        await client.emojis.fetch().catch(() => {});
+      }
+    } catch (e) {}
+    searchCollection(client.emojis.cache);
   }
 
   return { announce, verify };
@@ -623,7 +642,7 @@ client.on('messageCreate', async (message) => {
           preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
         }
 
-        const { announce, verify } = getModEmojis(message.guild);
+        const { announce, verify } = await getModEmojis(message.guild);
         const reasonText = (reason && reason !== 'No reason specified') ? ` ${reason}` : '';
         const singleLineMsg = `<@${targetMember.id}> ${announce} 𝕨𝕒𝕣𝕟𝕚𝕟𝕘𝕤 𝕔𝕝𝕖𝕒𝕣𝕖𝕕 𝕓𝕪 <@${message.author.id}>${reasonText} ${verify}`;
         await message.reply(singleLineMsg);
@@ -835,7 +854,7 @@ client.on('messageCreate', async (message) => {
         }
 
         const warnReason = deletedWarnDoc?.reason || 'No reason provided';
-        const { announce, verify } = getModEmojis(message.guild);
+        const { announce, verify } = await getModEmojis(message.guild);
         const singleLineMsg = `<@${targetMember.id}> ${announce} 𝕨𝕒𝕣𝕟𝕚𝕟𝕘 ${deletedIndexLabel} 𝕕𝕖𝕝𝕖𝕥𝕖𝕕 𝕓𝕪 <@${message.author.id}> [#${warningsCount}] ${verify}`;
         await message.reply(singleLineMsg);
         logToEmilliaLog(message.guild, 'deletewarn', targetMember.user.tag, targetMember.id, message.author.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
@@ -858,7 +877,7 @@ client.on('messageCreate', async (message) => {
             });
           }
 
-          const { announce, verify } = getModEmojis(message.guild);
+          const { announce, verify } = await getModEmojis(message.guild);
           const singleLineMsg = `<@${targetMember.id}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕦𝕟𝕥𝕚𝕞𝕖𝕕 𝕠𝕦𝕥 𝕓𝕪 <@${message.author.id}> ${verify}`;
           await message.reply(singleLineMsg);
           logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
@@ -889,7 +908,7 @@ client.on('messageCreate', async (message) => {
             });
           }
 
-          const { announce, verify } = getModEmojis(message.guild);
+          const { announce, verify } = await getModEmojis(message.guild);
           const singleLineMsg = `<@${targetId}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕦𝕟𝕓𝕒𝕟𝕟𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${verify}`;
           await message.reply(singleLineMsg);
           logToEmilliaLog(message.guild, 'unban', targetId, targetId, message.author.tag, `Unbanned by ${message.author.tag}`);
@@ -994,7 +1013,7 @@ client.on('messageCreate', async (message) => {
         }
 
         // Send single-line response in channel
-        const { announce, verify } = getModEmojis(message.guild);
+        const { announce, verify } = await getModEmojis(message.guild);
         let warnMsg = `<@${targetMember.id}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕨𝕒𝕣𝕟𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${reason} [#${warningsCount}] ${verify}`;
         if (autoTimeoutApplied) {
           warnMsg += `\n⚡ Auto-Timeout: \`${autoTimeoutLabel}\``;
@@ -1057,7 +1076,7 @@ client.on('messageCreate', async (message) => {
             dmSent = false;
           }
 
-          const { announce, verify } = getModEmojis(message.guild);
+          const { announce, verify } = await getModEmojis(message.guild);
           const timeoutMsg = `<@${targetMember.id}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕥𝕚𝕞𝕖𝕕 𝕠𝕦𝕥 𝕓𝕪 <@${message.author.id}> ${reason} [${durationInfo.label}] ${verify}`;
           await message.reply(timeoutMsg);
           logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
@@ -1116,7 +1135,7 @@ client.on('messageCreate', async (message) => {
             });
           }
 
-          const { announce, verify } = getModEmojis(message.guild);
+          const { announce, verify } = await getModEmojis(message.guild);
           const kickMsg = `<@${targetId}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕜𝕚𝕔𝕜𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${reason} ${verify}`;
           await message.reply(kickMsg);
           logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason, [
@@ -1175,7 +1194,7 @@ client.on('messageCreate', async (message) => {
             });
           }
 
-          const { announce, verify } = getModEmojis(message.guild);
+          const { announce, verify } = await getModEmojis(message.guild);
           const banMsg = `<@${targetId}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕓𝕒𝕟𝕟𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${reason} ${verify}`;
           await message.reply(banMsg);
           logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, [
