@@ -619,7 +619,7 @@ client.on('messageCreate', async (message) => {
 
         const { announce, verify } = await getModEmojis(message.guild);
         const reasonText = (reason && reason !== 'No reason specified') ? ` ${reason}` : '';
-        const singleLineMsg = `<@${targetMember.id}> ${announce} 𝕨𝕒𝕣𝕟𝕚𝕟𝕘𝕤 𝕔𝕝𝕖𝕒𝕣𝕖𝕕 𝕓𝕪 <@${message.author.id}>${reasonText} ${verify}`;
+        const singleLineMsg = `<@${targetMember.id}> ${announce} 𝙬𝙖𝙧𝙣𝙞𝙣𝙜𝙨 𝙘𝙡𝙚𝙖𝙧𝙚𝙙 𝙗𝙮 <@${message.author.id}>${reasonText} ${verify}`;
         await message.channel.send(singleLineMsg);
         logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
           { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
@@ -830,7 +830,7 @@ client.on('messageCreate', async (message) => {
 
         const warnReason = deletedWarnDoc?.reason || 'No reason provided';
         const { announce, verify } = await getModEmojis(message.guild);
-        const singleLineMsg = `<@${targetMember.id}> ${announce} 𝕨𝕒𝕣𝕟𝕚𝕟𝕘 ${deletedIndexLabel} 𝕕𝕖𝕝𝕖𝕥𝕖𝕕 𝕓𝕪 <@${message.author.id}> [#${warningsCount}] ${verify}`;
+        const singleLineMsg = `<@${targetMember.id}> ${announce} 𝙬𝙖𝙧𝙣𝙞𝙣𝙜 ${deletedIndexLabel} 𝙙𝙚𝙡𝙚𝙩𝙚𝙙 𝙗𝙮 <@${message.author.id}> [#${warningsCount}] ${verify}`;
         await message.channel.send(singleLineMsg);
         logToEmilliaLog(message.guild, 'deletewarn', targetMember.user.tag, targetMember.id, message.author.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
           { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true }
@@ -853,7 +853,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const singleLineMsg = `<@${targetMember.id}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕦𝕟𝕥𝕚𝕞𝕖𝕕 𝕠𝕦𝕥 𝕓𝕪 <@${message.author.id}> ${verify}`;
+          const singleLineMsg = `<@${targetMember.id}> ${announce} 𝙝𝙖𝙨 𝙗𝙚𝙚𝙣 𝙪𝙣𝙩𝙞𝙢𝙚𝙙 𝙤𝙪𝙩 𝙗𝙮 <@${message.author.id}> ${verify}`;
           await message.channel.send(singleLineMsg);
           logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
         } catch (err) {
@@ -884,7 +884,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const singleLineMsg = `<@${targetId}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕦𝕟𝕓𝕒𝕟𝕟𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${verify}`;
+          const singleLineMsg = `<@${targetId}> ${announce} 𝙝𝙖𝙨 𝙗𝙚𝙚𝙣 𝙪𝙣𝙗𝕒𝙣𝙣𝙚𝙙 𝙗𝙮 <@${message.author.id}> ${verify}`;
           await message.channel.send(singleLineMsg);
           logToEmilliaLog(message.guild, 'unban', targetId, targetId, message.author.tag, `Unbanned by ${message.author.tag}`);
         } catch (err) {
@@ -989,7 +989,7 @@ client.on('messageCreate', async (message) => {
 
         // Send single-line response in channel
         const { announce, verify } = await getModEmojis(message.guild);
-        let warnMsg = `<@${targetMember.id}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕨𝕒𝕣𝕟𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${reason} [#${warningsCount}] ${verify}`;
+        let warnMsg = `<@${targetMember.id}> ${announce} 𝙝𝙖𝙨 𝙗𝙚𝙚𝙣 𝙬𝙖𝙧𝙣𝙚𝙙 𝙗𝙮 <@${message.author.id}> ${reason} [#${warningsCount}] ${verify}`;
         if (autoTimeoutApplied) {
           warnMsg += `\n⚡ Auto-Timeout: \`${autoTimeoutLabel}\``;
         }
@@ -1052,7 +1052,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const timeoutMsg = `<@${targetMember.id}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕥𝕚𝕞𝕖𝕕 𝕠𝕦𝕥 𝕓𝕪 <@${message.author.id}> ${reason} [${durationInfo.label}] ${verify}`;
+          const timeoutMsg = `<@${targetMember.id}> ${announce} 𝙝𝙖𝙨 𝙗𝙚𝙚𝙣 𝙩𝙞𝙢𝙚𝙙 𝙤𝙪𝙩 𝙗𝙮 <@${message.author.id}> ${reason} [${durationInfo.label}] ${verify}`;
           await message.channel.send(timeoutMsg);
           logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
             { name: '⏳ Duration', value: `\`${durationInfo.label}\``, inline: true }
@@ -1111,7 +1111,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const kickMsg = `<@${targetId}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕜𝕚𝕔𝕜𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${reason} ${verify}`;
+          const kickMsg = `<@${targetId}> ${announce} 𝙝𝙖𝙨 𝙗𝙚𝙚𝙣 𝙠𝙞𝙘𝙠𝙚𝙙 𝙗𝙮 <@${message.author.id}> ${reason} ${verify}`;
           await message.channel.send(kickMsg);
           logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason, [
             { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
@@ -1170,7 +1170,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const banMsg = `<@${targetId}> ${announce} 𝕙𝕒𝕤 𝕓𝕖𝕖𝕟 𝕓𝕒𝕟𝕟𝕖𝕕 𝕓𝕪 <@${message.author.id}> ${reason} ${verify}`;
+          const banMsg = `<@${targetId}> ${announce} 𝙝𝙖𝙨 𝙗𝙚𝙚𝙣 𝙗𝕒𝙣𝙣𝙚𝙙 𝙗𝙮 <@${message.author.id}> ${reason} ${verify}`;
           await message.channel.send(banMsg);
           logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, [
             { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
