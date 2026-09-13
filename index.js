@@ -181,29 +181,20 @@ function getReason(text, actionKeyword, targetMember) {
   return reason || "No reason specified";
 }
 
-const MOD_EMOJI_ANNOUNCE = '<a:announce:1488561124247867533>';
-const MOD_EMOJI_VERIFY = '<a:azureverify:996146086978793552>';
+const MOD_EMOJI_ANNOUNCE = '<a:1488561124247867533:1548626343657349170>';
+const MOD_EMOJI_VERIFY = '<a:996146086978793552:1548626318399373342>';
 
-// Helper to get custom animated/static moderation emojis (:announce: and :azureverify:)
+// Helper to get custom animated/static moderation emojis
 async function getModEmojis(guild) {
   let announce = MOD_EMOJI_ANNOUNCE;
   let verify = MOD_EMOJI_VERIFY;
 
-  const searchCollection = (col) => {
-    if (!col) return;
-    const foundA = col.find(e => e.name.toLowerCase().includes('announce'));
+  if (guild && guild.emojis && guild.emojis.cache) {
+    const foundA = guild.emojis.cache.get('1548626343657349170') || guild.emojis.cache.find(e => e.name.includes('1488561124247867533') || e.name.toLowerCase().includes('announce'));
     if (foundA) announce = foundA.toString();
 
-    const foundV = col.find(e => 
-      e.name.toLowerCase().includes('azureverify') || 
-      e.name.toLowerCase().includes('azure_verify') || 
-      e.name.toLowerCase().includes('verify')
-    );
+    const foundV = guild.emojis.cache.get('1548626318399373342') || guild.emojis.cache.find(e => e.name.includes('996146086978793552') || e.name.toLowerCase().includes('verify'));
     if (foundV) verify = foundV.toString();
-  };
-
-  if (guild && guild.emojis && guild.emojis.cache.size > 0) {
-    searchCollection(guild.emojis.cache);
   }
 
   return { announce, verify };
