@@ -1562,14 +1562,20 @@ client.on('messageCreate', async (message) => {
         )
         .addFields(
           {
-            name: `${announce} **Moderation Commands**`,
+            name: `${announce} **Disciplinary & Warnings**`,
             value: [
               `${sparkle} \`@Emillia warn @user <reason>\` — **Warn User** ${verify}`,
               `${sparkle} \`@Emillia deletewarn @user [number]\` — **Delete Warning** ${verify}`,
               `${sparkle} \`@Emillia clearwarns @user\` — **Clear All Warnings** ${verify}`,
               `${sparkle} \`@Emillia warns @user\` — **View Warning History** ${verify}`,
               `${sparkle} \`@Emillia warns leaderboard\` — **Top 5 Most Warned** ${verify}`,
-              `${sparkle} \`@Emillia purge <1-100> [@user]\` — **Purge Channel Messages** ${verify}`,
+              `${sparkle} \`@Emillia purge <1-100> [@user]\` — **Purge Channel Messages** ${verify}`
+            ].join('\n'),
+            inline: false
+          },
+          {
+            name: `${announce} **Punishments & Restrictions**`,
+            value: [
               `${sparkle} \`@Emillia timeout @user [10m/2h/1d] <reason>\` — **Timeout Member** ${verify}`,
               `${sparkle} \`@Emillia untimeout @user\` — **Remove Timeout** ${verify}`,
               `${sparkle} \`@Emillia kick @user <reason>\` — **Kick Member** ${verify}`,
