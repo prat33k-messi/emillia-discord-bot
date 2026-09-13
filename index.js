@@ -204,11 +204,13 @@ function getReason(text, actionKeyword, targetMember) {
 
 const MOD_EMOJI_ANNOUNCE = '<a:1488561124247867533:1548626343657349170>';
 const MOD_EMOJI_VERIFY = '<a:996146086978793552:1548626318399373342>';
+const MOD_EMOJI_SPARKLE = '<a:ani_sparkle:1540685302811861073>';
 
 // Helper to get custom animated/static moderation emojis
 async function getModEmojis(guild) {
   let announce = MOD_EMOJI_ANNOUNCE;
   let verify = MOD_EMOJI_VERIFY;
+  let sparkle = MOD_EMOJI_SPARKLE;
 
   if (guild && guild.emojis && guild.emojis.cache) {
     const foundA = guild.emojis.cache.get('1548626343657349170') || guild.emojis.cache.find(e => e.name.includes('1488561124247867533') || e.name.toLowerCase().includes('announce'));
@@ -216,9 +218,12 @@ async function getModEmojis(guild) {
 
     const foundV = guild.emojis.cache.get('1548626318399373342') || guild.emojis.cache.find(e => e.name.includes('996146086978793552') || e.name.toLowerCase().includes('verify'));
     if (foundV) verify = foundV.toString();
+
+    const foundS = guild.emojis.cache.get('1540685302811861073') || guild.emojis.cache.find(e => e.name.toLowerCase().includes('ani_sparkle') || e.name.toLowerCase().includes('sparkle'));
+    if (foundS) sparkle = foundS.toString();
   }
 
-  return { announce, verify };
+  return { announce, verify, sparkle };
 }
 
 // Helper function to send security DMs to the creator
@@ -1505,22 +1510,35 @@ client.on('messageCreate', async (message) => {
     // --- Introduction Command (beautiful embed) ---
     const introTriggers = ['introduce yourself', 'who are you', 'what are you', 'introduce', 'whats your name', "what's your name", 'who r u', 'tell me about yourself', 'introduce urself'];
     if (introTriggers.some(t => lowerQuery.includes(t))) {
+      const { announce, verify, sparkle } = await getModEmojis(message.guild);
+
       const introEmbed = new EmbedBuilder()
-        .setColor(0x9b59b6)
-        .setTitle('🌸 Emillia — Moderation & Guardian of Anipedia')
+        .setColor(0x9B59B6)
+        .setTitle(`${announce} **Emillia — Guardian of Anipedia** ${verify}`)
         .setDescription(
-          `*"I am Emilia! I may not be perfect, but I\'ll do my absolute best to keep everyone here safe!"* ❄️\n\n` +
-          `I\'m a silver-haired half-elf and Royal Selection candidate from Re:Zero, brought to life here in **Anipedia** as your dedicated **moderation bot**! 🌟\n\n` +
-          `My beloved big sister **Tessia** 💜 is your companion for fun chats, anime discussions, and all things lively! She\'s warm, witty, and loves talking with everyone.\n\n` +
-          `While Tessia handles the heart of this server, **I protect it**. ⚔️ Rule enforcement, warnings, timeouts, bans — that\'s my domain, and I take it very seriously!\n\n` +
-          `Together, Tessia and I were created by **Aerion-sama** 👑 to make Anipedia the best anime community it can be! 🌸`
+          `*${sparkle} "I am Emilia! I will do my absolute best to keep everyone safe!"* ❄️\n\n` +
+          `${sparkle} Silver-haired half-elf and Royal Selection candidate from Re:Zero, serving as your **guardian and moderation bot** in **Anipedia**! 🌟\n\n` +
+          `${sparkle} My beloved big sister **Tessia** 💜 handles friendly conversations and anime chats, while **I protect the realm** with rule enforcement, warnings, timeouts, and bans! ⚔️\n\n` +
+          `${sparkle} Created by **Aerion-sama** 👑 to keep Anipedia peaceful and orderly!`
         )
         .addFields(
-          { name: '💜 Big Sister', value: 'Tessia — Chatbot & Companion', inline: true },
-          { name: '🌸 Me (Emillia)', value: 'Moderation & Server Safety', inline: true },
-          { name: '\u200b', value: '\u200b', inline: false },
-          { name: '⚔️ My Abilities', value: '`Warn` • `Timeout` • `Kick` • `Ban` • `Rules`', inline: false },
-          { name: '🔒 Staff Hierarchy', value: '👑 **Shogun** & **Royal Hand**: All powers (Ban, Kick, Timeout, Warn)\n🛡️ **Overseer**: Kick, Timeout, Warn, Clear/Delete Warn\n⚔️ **Moderator**: Timeout, Warn, Purge, Warn History', inline: false }
+          { 
+            name: `${announce} **Companions**`, 
+            value: [
+              `${sparkle} **Tessia**: Chatbot & Companion ${verify}`,
+              `${sparkle} **Emillia**: Moderation & Server Guardian ${verify}`
+            ].join('\n'), 
+            inline: false 
+          },
+          { 
+            name: `${announce} **Staff Hierarchy**`, 
+            value: [
+              `${sparkle} 👑 **Shogun** & **Royal Hand**: All powers (Ban, Kick, Timeout, Warn) ${verify}`,
+              `${sparkle} 🛡️ **Overseer**: Kick, Timeout, Warn, Clear/Delete Warn ${verify}`,
+              `${sparkle} ⚔️ **Moderator**: Timeout, Warn, Purge, Warn History ${verify}`
+            ].join('\n'), 
+            inline: false 
+          }
         )
         .setThumbnail('https://i.imgur.com/emillia_thumb.png')
         .setFooter({ text: 'Type @Emillia help to see all my commands! ✨' })
@@ -1531,49 +1549,51 @@ client.on('messageCreate', async (message) => {
 
     // --- Help Command (rich embed) ---
     if (lowerQuery === 'help' || lowerQuery.includes('what can you do') || lowerQuery.includes('commands')) {
+      const { announce, verify, sparkle } = await getModEmojis(message.guild);
+
       const helpEmbed = new EmbedBuilder()
-        .setColor(0xe91e8c)
-        .setTitle('🌸 Emillia — Command Guide')
+        .setColor(0x9B59B6)
+        .setTitle(`${announce} **Emillia — Command Guide** ${verify}`)
         .setDescription(
-          `*I am here to protect Anipedia and keep everyone safe!* ❄️\n` +
-          `*(My big sister **Tessia** 💜 handles fun chatting — I handle the serious stuff!)*\n\n` +
-          `🛡️ **Staff Hierarchy:** **Shogun** > **Royal Hand** > **Overseer** > **Moderator**`
+          `*${sparkle} I am here to protect **Anipedia** and keep everyone safe!* ❄️\n` +
+          `*${sparkle} My big sister **Tessia** 💜 handles fun chatting — I handle the serious moderation!* ⚔️\n\n` +
+          `👑 **Staff Hierarchy & Permissions**\n` +
+          `\`Shogun\` > \`Royal Hand\` > \`Overseer\` > \`Moderator\``
         )
         .addFields(
           {
-            name: '⚔️ Moderation Commands',
+            name: `${announce} **Moderation Commands**`,
             value: [
-              '`@Emillia warn @user <reason>` — Warn a user',
-              '`@Emillia deletewarn @user [number]` — Delete specific or latest warning',
-              '`@Emillia clearwarns @user` — Clear all warnings for a user',
-              '`@Emillia warns @user` — View warning history & count',
-              '`@Emillia warns leaderboard` — Top 5 most warned users',
-              '`@Emillia purge <1-100> [@user]` — Purge messages in channel',
-              '`@Emillia timeout @user [10m/2h/1d] <reason>` — Timeout a user',
-              '`@Emillia untimeout @user` — Remove a timeout',
-              '`@Emillia kick @user <reason>` — Kick a user',
-              '`@Emillia ban @user <reason>` — Ban a user',
-              '`@Emillia unban <user_id>` — Unban by Discord ID',
+              `${sparkle} \`@Emillia warn @user <reason>\` — **Warn User** ${verify}`,
+              `${sparkle} \`@Emillia deletewarn @user [number]\` — **Delete Warning** ${verify}`,
+              `${sparkle} \`@Emillia clearwarns @user\` — **Clear All Warnings** ${verify}`,
+              `${sparkle} \`@Emillia warns @user\` — **View Warning History** ${verify}`,
+              `${sparkle} \`@Emillia warns leaderboard\` — **Top 5 Most Warned** ${verify}`,
+              `${sparkle} \`@Emillia purge <1-100> [@user]\` — **Purge Channel Messages** ${verify}`,
+              `${sparkle} \`@Emillia timeout @user [10m/2h/1d] <reason>\` — **Timeout Member** ${verify}`,
+              `${sparkle} \`@Emillia untimeout @user\` — **Remove Timeout** ${verify}`,
+              `${sparkle} \`@Emillia kick @user <reason>\` — **Kick Member** ${verify}`,
+              `${sparkle} \`@Emillia ban @user <reason>\` — **Ban Member** ${verify}`,
+              `${sparkle} \`@Emillia unban <user_id>\` — **Unban by ID** ${verify}`
             ].join('\n'),
             inline: false
           },
           {
-            name: '📜 Rules Commands',
+            name: `${announce} **Rules Commands**`,
             value: [
-              '`@Emillia setrule <number> <text>` — Add or edit a rule',
-              '`@Emillia delrule <number>` — Delete a rule',
-              '`@Emillia rules` — List all server rules',
+              `${sparkle} \`@Emillia setrule <number> <text>\` — **Add or Edit Rule** ${verify}`,
+              `${sparkle} \`@Emillia delrule <number>\` — **Delete Rule** ${verify}`,
+              `${sparkle} \`@Emillia rules\` — **List All Server Rules** ${verify}`
             ].join('\n'),
             inline: false
           },
           {
-            name: '💬 General Commands',
+            name: `${announce} **General Commands**`,
             value: [
-              '`@Emillia introduce` — Learn about me!',
-              '`@Emillia profile` — See what I remember about you',
-              '`@Emillia ping` — Check my response speed',
-              '`@Emillia reset` — Clear my memory *(Aerion-sama only!)*',
-              'Ask me anything about the rules! e.g. `@Emillia is self-promotion allowed?`',
+              `${sparkle} \`@Emillia introduce\` — **Learn About Me** ${verify}`,
+              `${sparkle} \`@Emillia profile\` — **View User Profile** ${verify}`,
+              `${sparkle} \`@Emillia ping\` — **Check Bot Latency** ${verify}`,
+              `${sparkle} \`@Emillia reset\` — **Reset Memory *(Aerion-sama)* ** ${verify}`
             ].join('\n'),
             inline: false
           }
