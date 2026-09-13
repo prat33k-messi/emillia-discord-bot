@@ -181,45 +181,29 @@ function getReason(text, actionKeyword, targetMember) {
   return reason || "No reason specified";
 }
 
-// Helper to get custom animated/static moderation emojis (:announce-1: and :azureverify:)
+const MOD_EMOJI_ANNOUNCE = '<a:announce:1488561124247867533>';
+const MOD_EMOJI_VERIFY = '<a:azureverify:996146086978793552>';
+
+// Helper to get custom animated/static moderation emojis (:announce: and :azureverify:)
 async function getModEmojis(guild) {
-  let announce = '📢';
-  let verify = '✅';
+  let announce = MOD_EMOJI_ANNOUNCE;
+  let verify = MOD_EMOJI_VERIFY;
 
   const searchCollection = (col) => {
     if (!col) return;
-    if (announce === '📢') {
-      const foundA = col.find(e => 
-        e.name.toLowerCase().includes('announce')
-      );
-      if (foundA) announce = foundA.toString();
-    }
-    if (verify === '✅') {
-      const foundV = col.find(e => 
-        e.name.toLowerCase().includes('azureverify') || 
-        e.name.toLowerCase().includes('azure_verify') || 
-        e.name.toLowerCase().includes('verify')
-      );
-      if (foundV) verify = foundV.toString();
-    }
+    const foundA = col.find(e => e.name.toLowerCase().includes('announce'));
+    if (foundA) announce = foundA.toString();
+
+    const foundV = col.find(e => 
+      e.name.toLowerCase().includes('azureverify') || 
+      e.name.toLowerCase().includes('azure_verify') || 
+      e.name.toLowerCase().includes('verify')
+    );
+    if (foundV) verify = foundV.toString();
   };
 
-  if (guild && guild.emojis) {
-    try {
-      if (guild.emojis.cache.size === 0) {
-        await guild.emojis.fetch();
-      }
-    } catch (e) {}
+  if (guild && guild.emojis && guild.emojis.cache.size > 0) {
     searchCollection(guild.emojis.cache);
-  }
-
-  if ((announce === '📢' || verify === '✅') && client && client.emojis) {
-    try {
-      if (client.emojis.cache.size === 0) {
-        await client.emojis.fetch().catch(() => {});
-      }
-    } catch (e) {}
-    searchCollection(client.emojis.cache);
   }
 
   return { announce, verify };
