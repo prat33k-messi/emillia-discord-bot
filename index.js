@@ -138,14 +138,35 @@ client.once('ready', async () => {
   }
 });
 
-// Helper to check if a user is a moderator (Shogun, Royale Hands, Overseer, Owner, or Admin)
-function isModerator(member) {
-  if (!member) return false;
-  if (member.guild.ownerId === member.id) return true;
-  if (member.permissions.has('Administrator')) return true;
+// Staff Role Rankings & Hierarchy (Tier 4: Shogun -> Tier 3: Royal Hand -> Tier 2: Overseer -> Tier 1: Moderator -> Tier 0: Member)
+function getMemberTier(member) {
+  if (!member) return 0;
+  if (member.guild && member.guild.ownerId === member.id) return 4;
+  if (member.permissions && member.permissions.has('Administrator')) return 4;
+
+  const roleNames = member.roles.cache.map(r => r.name.toLowerCase().trim());
   
-  const allowedRoles = ['Shogun', 'Royale Hands', 'Royal Hand', 'Royal Hands', 'Overseer', 'Overseers'];
-  return member.roles.cache.some(role => allowedRoles.includes(role.name));
+  if (roleNames.some(name => name === 'shogun')) return 4;
+  if (roleNames.some(name => name === 'royal hand' || name === 'royale hands' || name === 'royal hands')) return 3;
+  if (roleNames.some(name => name === 'overseer' || name === 'overseers')) return 2;
+  if (roleNames.some(name => name === 'moderator' || name === 'moderators')) return 1;
+
+  return 0;
+}
+
+function getTierName(tier) {
+  switch (tier) {
+    case 4: return 'Shogun';
+    case 3: return 'Royal Hand';
+    case 2: return 'Overseer';
+    case 1: return 'Moderator';
+    default: return 'Member';
+  }
+}
+
+// Helper to check if a user is any staff tier (Shogun, Royal Hand, Overseer, Moderator, Owner, or Admin)
+function isModerator(member) {
+  return getMemberTier(member) >= 1;
 }
 
 // Helper to parse duration for timeouts (e.g. 10m, 2h, 1d)
@@ -540,9 +561,27 @@ client.on('messageCreate', async (message) => {
     }
 
     if (isModAction) {
-      // Role Authorization Check
-      if (!isModerator(message.member)) {
-        await message.reply("Mou! 🌸 You can't ask me to do that! Only people with roles like 'Shogun', 'Royale Hands', or 'Overseer' can tell me to perform moderation actions! ❄️");
+      const modTier = getMemberTier(message.member);
+
+      // 1. Staff Authorization Check
+      if (modTier === 0) {
+        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Royal Hand, Overseer, Moderator) can use moderation commands! ❄️");
+        return;
+      }
+
+      // 2. Action-Specific Role Hierarchy & Permission Checks
+      if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 3) {
+        await message.reply("Mou! 🌸 Only 'Shogun' and 'Royal Hand' have permission to banish members from Anipedia! ❄️");
+        return;
+      }
+
+      if (actionKeyword === 'kick' && modTier < 2) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Overseer' have permission to kick members! ❄️");
+        return;
+      }
+
+      if ((actionKeyword === 'clearwarns' || actionKeyword === 'deletewarn') && modTier < 2) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Overseer' have permission to delete or clear warnings! ❄️");
         return;
       }
 
@@ -555,10 +594,24 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      // Protect Shogun, Royale Hands, and Overseer roles from being moderated
-      if (targetMember && isModerator(targetMember)) {
-        await message.reply("Mou! 🌸 I cannot perform moderation actions on a member of the Shogun, Royale Hands, or Overseer! They have my utmost respect! ❄️");
-        return;
+      // 3. Target Hierarchy Validation
+      if (targetMember) {
+        if (targetMember.id === message.author.id) {
+          await message.reply("Mou! 🌸 You cannot perform moderation actions on yourself! ❄️");
+          return;
+        }
+
+        const targetTier = getMemberTier(targetMember);
+        if (targetTier >= modTier) {
+          const targetRankName = getTierName(targetTier);
+          const modRankName = getTierName(modTier);
+          if (targetTier === modTier) {
+            await message.reply(`Mou! 🌸 You cannot moderate <@${targetMember.id}> because they hold an equal rank (**${targetRankName}**) to you! ❄️`);
+          } else {
+            await message.reply(`Mou! 🌸 You cannot moderate <@${targetMember.id}>! Their rank (**${targetRankName}**) is higher than yours (**${modRankName}**)! ❄️`);
+          }
+          return;
+        }
       }
 
       const targetUsername = targetMember ? targetMember.user.username : null;
@@ -858,7 +911,11 @@ client.on('messageCreate', async (message) => {
           logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
         } catch (err) {
           console.error("Untimeout execution error:", err);
-          await message.reply("I couldn't remove the timeout from this user! 😰");
+          if (err.code === 50013) {
+            await message.reply("Mou! 🌸 I couldn't remove the timeout because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! ❄️");
+          } else {
+            await message.reply("I couldn't remove the timeout from this user! 😰");
+          }
         }
         return;
 
@@ -1000,11 +1057,6 @@ client.on('messageCreate', async (message) => {
         return;
 
       } else if (actionKeyword === 'timeout' || actionKeyword === 'mute') {
-        if (!targetMember.moderatable) {
-          await message.reply("Mou! I can't put them in timeout! They have higher authority or roles than me! ❄️");
-          return;
-        }
-
         const durationMatch = cleanQuery.match(/\b(\d+)\s*(m|min|minute|h|hour|d|day|w|week)s?\b/i);
         let durationInfo = { ms: 10 * 60 * 1000, label: "10 minutes" };
         let reasonQuery = cleanQuery;
@@ -1059,16 +1111,15 @@ client.on('messageCreate', async (message) => {
           ]);
         } catch (err) {
           console.error("Timeout execution error:", err);
-          await message.reply("Oh no, something went wrong while trying to put them in timeout! Let me try again later. 😰");
+          if (err.code === 50013) {
+            await message.reply("Mou! 🌸 I couldn't timeout this member because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! Please drag my role higher up! ❄️");
+          } else {
+            await message.reply("Oh no, something went wrong while trying to put them in timeout! Let me try again later. 😰");
+          }
         }
         return;
 
       } else if (actionKeyword === 'kick') {
-        if (!targetMember.kickable) {
-          await message.reply("Mou! I can't kick them! Their permissions are too high! ❄️");
-          return;
-        }
-
         const reason = getReason(cleanQuery, 'kick', targetMember);
         const targetTag = targetMember.user.tag;
         const targetId = targetMember.id;
@@ -1118,16 +1169,15 @@ client.on('messageCreate', async (message) => {
           ]);
         } catch (err) {
           console.error("Kick execution error:", err);
-          await message.reply("I couldn't kick them! There was a problem. 😰");
+          if (err.code === 50013) {
+            await message.reply("Mou! 🌸 I couldn't kick this member because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! Please drag my role higher up! ❄️");
+          } else {
+            await message.reply("I couldn't kick them! There was a problem. 😰");
+          }
         }
         return;
 
       } else if (actionKeyword === 'ban') {
-        if (!targetMember.bannable) {
-          await message.reply("Mou! I can't ban them! They are too powerful for me to ban! ❄️");
-          return;
-        }
-
         const reason = getReason(cleanQuery, 'ban', targetMember);
         const targetTag = targetMember.user.tag;
         const targetId = targetMember.id;
@@ -1177,7 +1227,11 @@ client.on('messageCreate', async (message) => {
           ]);
         } catch (err) {
           console.error("Ban execution error:", err);
-          await message.reply("I failed to ban them. Something went wrong! 😰");
+          if (err.code === 50013) {
+            await message.reply("Mou! 🌸 I couldn't ban this member because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! Please drag my role higher up! ❄️");
+          } else {
+            await message.reply("I failed to ban them. Something went wrong! 😰");
+          }
         }
         return;
       }
@@ -1187,8 +1241,8 @@ client.on('messageCreate', async (message) => {
     // 2. RULES CONFIGURATION COMMANDS
     // ==========================================
     if (words.includes('setrule')) {
-      if (!isModerator(message.member)) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royale Hands', or 'Overseer' can set server rules! ❄️");
+      if (getMemberTier(message.member) < 2) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Overseer' can set server rules! ❄️");
         return;
       }
       const setruleMatch = cleanQuery.match(/setrule\s+(\d+)\s+(.+)/i);
@@ -1220,8 +1274,8 @@ client.on('messageCreate', async (message) => {
     }
 
     if (words.includes('delrule')) {
-      if (!isModerator(message.member)) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royale Hands', or 'Overseer' can delete rules! ❄️");
+      if (getMemberTier(message.member) < 2) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Overseer' can delete rules! ❄️");
         return;
       }
       const delruleMatch = cleanQuery.match(/delrule\s+(\d+)/i);
@@ -1466,7 +1520,7 @@ client.on('messageCreate', async (message) => {
           { name: '🌸 Me (Emillia)', value: 'Moderation & Server Safety', inline: true },
           { name: '\u200b', value: '\u200b', inline: false },
           { name: '⚔️ My Abilities', value: '`Warn` • `Timeout` • `Kick` • `Ban` • `Rules`', inline: false },
-          { name: '🔒 Who Can Use Moderation?', value: '**Shogun**, **Royale Hands**, and **Overseer** roles only!', inline: false }
+          { name: '🔒 Staff Hierarchy', value: '👑 **Shogun** & **Royal Hand**: All powers (Ban, Kick, Timeout, Warn)\n🛡️ **Overseer**: Kick, Timeout, Warn, Clear/Delete Warn\n⚔️ **Moderator**: Timeout, Warn, Purge, Warn History', inline: false }
         )
         .setThumbnail('https://i.imgur.com/emillia_thumb.png')
         .setFooter({ text: 'Type @Emillia help to see all my commands! ✨' })
@@ -1483,7 +1537,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(
           `*I am here to protect Anipedia and keep everyone safe!* ❄️\n` +
           `*(My big sister **Tessia** 💜 handles fun chatting — I handle the serious stuff!)*\n\n` +
-          `⚠️ **Moderation commands are only for \'Shogun\', \'Royale Hands\', or \'Overseer\' roles!**`
+          `🛡️ **Staff Hierarchy:** **Shogun** > **Royal Hand** > **Overseer** > **Moderator**`
         )
         .addFields(
           {
