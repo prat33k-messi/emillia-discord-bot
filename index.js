@@ -138,7 +138,7 @@ client.once('ready', async () => {
   }
 });
 
-// Staff Role Rankings & Hierarchy (Tier 4: Shogun -> Tier 3: Royal Hand -> Tier 2: Overseer -> Tier 1: Moderator -> Tier 0: Member)
+// Staff Role Rankings & Hierarchy (Tier 4: Shogun -> Tier 3: Royal Hand -> Tier 2: Supervisor -> Tier 1: Moderator -> Tier 0: Member)
 function getMemberTier(member) {
   if (!member) return 0;
   if (member.guild && member.guild.ownerId === member.id) return 4;
@@ -148,7 +148,7 @@ function getMemberTier(member) {
   
   if (roleNames.some(name => name === 'shogun')) return 4;
   if (roleNames.some(name => name === 'royal hand' || name === 'royale hands' || name === 'royal hands')) return 3;
-  if (roleNames.some(name => name === 'overseer' || name === 'overseers')) return 2;
+  if (roleNames.some(name => name === 'supervisor' || name === 'supervisors' || name === 'overseer' || name === 'overseers')) return 2;
   if (roleNames.some(name => name === 'moderator' || name === 'moderators')) return 1;
 
   return 0;
@@ -158,13 +158,13 @@ function getTierName(tier) {
   switch (tier) {
     case 4: return 'Shogun';
     case 3: return 'Royal Hand';
-    case 2: return 'Overseer';
+    case 2: return 'Supervisor';
     case 1: return 'Moderator';
     default: return 'Member';
   }
 }
 
-// Helper to check if a user is any staff tier (Shogun, Royal Hand, Overseer, Moderator, Owner, or Admin)
+// Helper to check if a user is any staff tier (Shogun, Royal Hand, Supervisor, Moderator, Owner, or Admin)
 function isModerator(member) {
   return getMemberTier(member) >= 1;
 }
@@ -570,7 +570,7 @@ client.on('messageCreate', async (message) => {
 
       // 1. Staff Authorization Check
       if (modTier === 0) {
-        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Royal Hand, Overseer, Moderator) can use moderation commands! ❄️");
+        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Royal Hand, Supervisor, Moderator) can use moderation commands! ❄️");
         return;
       }
 
@@ -581,12 +581,12 @@ client.on('messageCreate', async (message) => {
       }
 
       if (actionKeyword === 'kick' && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Overseer' have permission to kick members! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' have permission to kick members! ❄️");
         return;
       }
 
       if ((actionKeyword === 'clearwarns' || actionKeyword === 'deletewarn') && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Overseer' have permission to delete or clear warnings! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' have permission to delete or clear warnings! ❄️");
         return;
       }
 
@@ -1247,7 +1247,7 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     if (words.includes('setrule')) {
       if (getMemberTier(message.member) < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Overseer' can set server rules! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can set server rules! ❄️");
         return;
       }
       const setruleMatch = cleanQuery.match(/setrule\s+(\d+)\s+(.+)/i);
@@ -1280,7 +1280,7 @@ client.on('messageCreate', async (message) => {
 
     if (words.includes('delrule')) {
       if (getMemberTier(message.member) < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Overseer' can delete rules! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can delete rules! ❄️");
         return;
       }
       const delruleMatch = cleanQuery.match(/delrule\s+(\d+)/i);
@@ -1534,7 +1534,7 @@ client.on('messageCreate', async (message) => {
             name: `${announce} **Staff Hierarchy**`, 
             value: [
               `${sparkle} 👑 **Shogun** & **Royal Hand**: All powers (Ban, Kick, Timeout, Warn) ${verify}`,
-              `${sparkle} 🛡️ **Overseer**: Kick, Timeout, Warn, Clear/Delete Warn ${verify}`,
+              `${sparkle} 🛡️ **Supervisor**: Kick, Timeout, Warn, Clear/Delete Warn ${verify}`,
               `${sparkle} ⚔️ **Moderator**: Timeout, Warn, Purge, Warn History ${verify}`
             ].join('\n'), 
             inline: false 
@@ -1558,7 +1558,7 @@ client.on('messageCreate', async (message) => {
           `*${sparkle} I am here to protect **Anipedia** and keep everyone safe!* ❄️\n` +
           `*${sparkle} My big sister **Tessia** 💜 handles fun chatting — I handle the serious moderation!* ⚔️\n\n` +
           `👑 **Staff Hierarchy & Permissions**\n` +
-          `\`Shogun\` > \`Royal Hand\` > \`Overseer\` > \`Moderator\``
+          `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
