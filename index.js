@@ -1444,6 +1444,8 @@ client.on('messageCreate', async (message) => {
                             ((words.includes('warns') || words.includes('warnings')) && message.mentions.members.filter(m => m.id !== client.user.id).size === 0 && !cleanQuery.match(/\b\d{17,19}\b/) && (lowerQuery === 'warns' || lowerQuery === 'warnings' || lowerQuery.includes('top') || lowerQuery.includes('leaderboard')));
 
       if (isLeaderboard) {
+        const { announce, verify, sparkle } = await getModEmojis(message.guild);
+
         // Collect all users with warnings > 0
         const usersWithWarnings = [];
         for (const [uname, udata] of preloadedMemories.entries()) {
@@ -1462,35 +1464,35 @@ client.on('messageCreate', async (message) => {
         if (top5.length === 0) {
           const emptyLbEmbed = new EmbedBuilder()
             .setColor(0x2ECC71)
-            .setTitle('🏆 Emilia\'s Warning Registry • Clean Sanctuary ✨')
-            .setDescription(`*"Such wonderful news! Anipedia is completely peaceful right now — nobody has any active warnings! Let's keep up the harmony, everyone!"* 🌸🕊️\n\n🛡️ **Server Disciplinary Status: 100% Peaceful**`)
+            .setTitle(`${announce} **Warning Leaderboard** ${verify}`)
+            .setDescription(`> ${sparkle} **Status:** \`100% Peaceful\`\n> No members have active warnings in Anipedia!`)
             .setTimestamp()
-            .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
+            .setFooter({ text: 'AniPedia Moderation • Warning Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           await message.reply({ embeds: [emptyLbEmbed] });
           return;
         }
 
         const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-        let lbText = '';
+        const lbEntries = [];
         for (let i = 0; i < top5.length; i++) {
           const entry = top5[i];
           const medal = medals[i] || '▫️';
           const foundMember = message.guild?.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
-          const displayTag = foundMember ? `${foundMember.displayName} (\`@${foundMember.user.username}\`)` : `\`@${entry.username}\``;
+          const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
           
           let statusBadge = '';
-          if (entry.warnings >= 5) statusBadge = ' • 🚨 *1h Freeze Threshold*';
-          else if (entry.warnings >= 3) statusBadge = ' • ⚠️ *Auto-Timeout Active*';
+          if (entry.warnings >= 5) statusBadge = ' • 🚨 `1h Freeze`';
+          else if (entry.warnings >= 3) statusBadge = ' • ⚠️ `Auto-Timeout`';
 
-          lbText += `${medal} **Rank ${i + 1}:** ${displayTag}\n   ↳ **Warnings:** \`#${entry.warnings}\`${statusBadge}\n\n`;
+          lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n↳ \`Warnings: #${entry.warnings}\`${statusBadge}`);
         }
 
         const lbEmbed = new EmbedBuilder()
           .setColor(0xF1C40F)
-          .setTitle('🏆 Emilia\'s Registry • Top 5 Most Warned Users')
-          .setDescription(`*"Here is our current leaderboard of members with the most recorded warnings in Anipedia. Remember, 3 warnings trigger an auto-timeout, and 5 warnings result in a 1-hour freeze!"* ❄️⚠️\n\n${lbText.trim()}`)
+          .setTitle(`${announce} **Warning Leaderboard** ${verify}`)
+          .setDescription(lbEntries.join('\n\n'))
           .setTimestamp()
-          .setFooter({ text: 'Emillia — Guardian of Anipedia • Server Disciplinary Registry ✨' });
+          .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
         await message.reply({ embeds: [lbEmbed] });
         return;
       }
@@ -1498,6 +1500,7 @@ client.on('messageCreate', async (message) => {
       // Specific user warning query
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
       const targetUsername = targetMember.user.username;
+      const { announce, verify, sparkle } = await getModEmojis(message.guild);
 
       let warningsCount = 0;
       const cached = preloadedMemories.get(targetUsername);
@@ -1527,32 +1530,27 @@ client.on('messageCreate', async (message) => {
 
         const cleanEmbed = new EmbedBuilder()
           .setColor(0x2ECC71)
-          .setTitle('🌸 Emilia\'s Record • Clean Standing ✨')
-          .setDescription(`*"Wonderful news! **${targetMember.user.tag}** has **0 warnings**! Thank you for being such a wonderful and respectful member of Anipedia!"* 🌸🕊️\n\n🛡️ **Disciplinary Record: Spotless**`)
-          .addFields(
-            { name: '👤 Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
-            { name: '📊 Warning Count', value: '`0 warnings`', inline: true },
-            { name: '🌟 Status', value: '`Clean Record • In Good Standing`', inline: true }
-          )
+          .setTitle(`${announce} **Disciplinary Record** ${verify}`)
+          .setDescription(`> ${sparkle} **Member:** <@${targetMember.id}> \`(${targetMember.user.tag})\`\n> 📊 **Total Warnings:** \`0\`\n> 🛡️ **Status:** \`Clean Record • Spotless\``)
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setTimestamp()
-          .setFooter({ text: 'Emillia — Guardian of Anipedia • Peace & Order Preserved ✨' });
+          .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
         await message.reply({ embeds: [cleanEmbed] });
         return;
       }
 
+      let statusLabel = '⚠️ Active Warnings';
+      if (warningsCount >= 5) {
+        statusLabel = '🚨 High Risk (5+ Warnings)';
+      } else if (warningsCount >= 3) {
+        statusLabel = '⚠️ Auto-Timeout Active';
+      }
+
       const warningsEmbed = new EmbedBuilder()
-        .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
-        .setTitle('📋 Emilia\'s Registry • User Warnings ⚠️')
-        .setDescription(`*"Here is the disciplinary record for **${targetMember.user.tag}** in Anipedia:"* ❄️`)
-        .addFields(
-          { name: '👤 Warned Member', value: `**${targetMember.user.tag}** \`(${targetMember.id})\``, inline: false },
-          { name: '📊 Total Warnings', value: `\`#${warningsCount}\``, inline: true },
-          { 
-            name: '⚡ Status', 
-            value: warningsCount >= 5 ? '`🚨 High Risk (5+ Warnings)`' : warningsCount >= 3 ? '`⚡ Auto-Timeout Threshold Reached`' : '`⚠️ Active Warnings`', 
-            inline: true 
-          }
-        );
+        .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
+        .setTitle(`${announce} **Disciplinary Record** ${verify}`)
+        .setDescription(`> ${sparkle} **Member:** <@${targetMember.id}> \`(${targetMember.user.tag})\`\n> 📊 **Total Warnings:** \`#${warningsCount}\`\n> ⚡ **Status:** \`${statusLabel}\``)
+        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }));
 
       // Fetch warning history with reasons and moderators from Firestore (in-memory sort avoids composite index errors)
       if (db && warningsCount > 0) {
@@ -1595,27 +1593,32 @@ client.on('messageCreate', async (message) => {
               let timeFormatted = 'Unknown date';
               if (log.timestamp && typeof log.timestamp.toDate === 'function') {
                 const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
-                timeFormatted = `<t:${unixSec}:f> (<t:${unixSec}:R>)`;
+                timeFormatted = `<t:${unixSec}:R>`;
               }
-              historyText += `**Warning #${i + 1}**: ${reason}\n   ↳ **Issued by:** \`${moderator}\` • ${timeFormatted}\n`;
+              historyText += `${sparkle} \`[#${i + 1}]\` **${reason}**\n   ↳ ⚖️ \`${moderator}\` • ${timeFormatted}\n`;
             }
             warningsEmbed.addFields({ 
-              name: '📜 Warning History', 
+              name: '📜 **Warning History**', 
               value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
               inline: false 
             });
-            warningsEmbed.setFooter({ text: 'Emillia — Tip: Use @Emillia deletewarn @user <number> to delete a specific warning ✨' });
+            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use @Emillia deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           } else {
             warningsEmbed.addFields({ 
-              name: '📜 Warning History', 
+              name: '📜 **Warning History**', 
               value: `*This user has ${warningsCount} active warning(s) recorded in memory.*`, 
               inline: false 
             });
+            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           }
         } catch (err) {
           console.error('Error fetching warning history:', err);
+          warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
         }
+      } else {
+        warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
       }
+      warningsEmbed.setTimestamp();
 
       await message.reply({ embeds: [warningsEmbed] });
       return;
