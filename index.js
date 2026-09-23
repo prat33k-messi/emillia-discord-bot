@@ -226,6 +226,11 @@ async function getModEmojis(guild) {
   return { announce, verify, sparkle };
 }
 
+// Helper to generate unique Case ID for moderation embeds
+function generateCaseId() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
 // Helper function to send security DMs to the creator
 async function sendAlertToCreator(client, username, nickname, guildName, channelName, content) {
   try {
@@ -676,9 +681,22 @@ client.on('messageCreate', async (message) => {
         }
 
         const { announce, verify } = await getModEmojis(message.guild);
-        const reasonText = (reason && reason !== 'No reason specified') ? ` ${reason}` : '';
-        const singleLineMsg = `<@${targetMember.id}> ${announce} ᴡᴀʀɴɪɴɢs ᴄʟᴇᴀʀᴇᴅ ʙʏ <@${message.author.id}>${reasonText} ${verify}`;
-        await message.channel.send(singleLineMsg);
+        const caseId = generateCaseId();
+
+        const clearWarnsEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle(`${announce} **Warnings Cleared** ${verify}`)
+          .setDescription(`> <@${targetMember.id}> **all warnings cleared by** <@${message.author.id}>`)
+          .addFields(
+            { name: '📊 Cleared Warnings', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true },
+            { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true },
+            { name: '📜 Reason', value: `>>> ${reason || 'No reason specified'}`, inline: false }
+          )
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await message.channel.send({ embeds: [clearWarnsEmbed] });
         logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
           { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
         ]);
@@ -888,8 +906,22 @@ client.on('messageCreate', async (message) => {
 
         const warnReason = deletedWarnDoc?.reason || 'No reason provided';
         const { announce, verify } = await getModEmojis(message.guild);
-        const singleLineMsg = `<@${targetMember.id}> ${announce} ᴡᴀʀɴɪɴɢ ${deletedIndexLabel} ᴅᴇʟᴇᴛᴇᴅ ʙʏ <@${message.author.id}> [#${warningsCount}] ${verify}`;
-        await message.channel.send(singleLineMsg);
+        const caseId = generateCaseId();
+
+        const deleteWarnEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle(`${announce} **Warning Deleted** ${verify}`)
+          .setDescription(`> <@${targetMember.id}> **warning ${deletedIndexLabel} deleted by** <@${message.author.id}>`)
+          .addFields(
+            { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true },
+            { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true },
+            { name: '📜 Deleted Warning Reason', value: `>>> ${warnReason}`, inline: false }
+          )
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await message.channel.send({ embeds: [deleteWarnEmbed] });
         logToEmilliaLog(message.guild, 'deletewarn', targetMember.user.tag, targetMember.id, message.author.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
           { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true }
         ]);
@@ -911,8 +943,21 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const singleLineMsg = `<@${targetMember.id}> ${announce} ʜᴀs ʙᴇᴇɴ ᴜɴᴛɪᴍᴇᴅ ᴏᴜᴛ ʙʏ <@${message.author.id}> ${verify}`;
-          await message.channel.send(singleLineMsg);
+          const caseId = generateCaseId();
+
+          const untimeoutEmbed = new EmbedBuilder()
+            .setColor(0x2ECC71)
+            .setTitle(`${announce} **Timeout Lifted** ${verify}`)
+            .setDescription(`> <@${targetMember.id}> **has been untimed out by** <@${message.author.id}>`)
+            .addFields(
+              { name: '🕊️ Status', value: '`Timeout Removed`', inline: true },
+              { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true }
+            )
+            .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setTimestamp();
+
+          await message.channel.send({ embeds: [untimeoutEmbed] });
           logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
         } catch (err) {
           console.error("Untimeout execution error:", err);
@@ -946,8 +991,20 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const singleLineMsg = `<@${targetId}> ${announce} ʜᴀs ʙᴇᴇɴ ᴜɴʙᴀɴɴᴇᴅ ʙʏ <@${message.author.id}> ${verify}`;
-          await message.channel.send(singleLineMsg);
+          const caseId = generateCaseId();
+
+          const unbanEmbed = new EmbedBuilder()
+            .setColor(0x2ECC71)
+            .setTitle(`${announce} **Ban Revoked** ${verify}`)
+            .setDescription(`> <@${targetId}> **has been unbanned by** <@${message.author.id}>`)
+            .addFields(
+              { name: '🕊️ Status', value: '`Ban Revoked • Welcome back!`', inline: true },
+              { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true }
+            )
+            .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setTimestamp();
+
+          await message.channel.send({ embeds: [unbanEmbed] });
           logToEmilliaLog(message.guild, 'unban', targetId, targetId, message.author.tag, `Unbanned by ${message.author.tag}`);
         } catch (err) {
           console.error("Unban execution error:", err);
@@ -1049,13 +1106,28 @@ client.on('messageCreate', async (message) => {
           dmSent = false;
         }
 
-        // Send single-line response in channel
+        // Send embed response in channel
         const { announce, verify } = await getModEmojis(message.guild);
-        let warnMsg = `<@${targetMember.id}> ${announce} ʜᴀs ʙᴇᴇɴ ᴡᴀʀɴᴇᴅ ʙʏ <@${message.author.id}> ${reason} [#${warningsCount}] ${verify}`;
+        const caseId = generateCaseId();
+
+        const warnEmbed = new EmbedBuilder()
+          .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
+          .setTitle(`${announce} **Warning Issued** ${verify}`)
+          .setDescription(`> <@${targetMember.id}> **has been warned by** <@${message.author.id}>`)
+          .addFields(
+            { name: '📊 Warning Count', value: `\`#${warningsCount}\``, inline: true },
+            { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true },
+            { name: '📜 Reason', value: `>>> ${reason}`, inline: false }
+          )
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
         if (autoTimeoutApplied) {
-          warnMsg += `\n⚡ Auto-Timeout: \`${autoTimeoutLabel}\``;
+          warnEmbed.addFields({ name: '⚡ Auto-Timeout Activated', value: `\`${autoTimeoutLabel}\``, inline: false });
         }
-        await message.channel.send(warnMsg);
+
+        await message.channel.send({ embeds: [warnEmbed] });
         logToEmilliaLog(message.guild, 'warn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
           { name: '📊 Warning Level', value: `\`#${warningsCount}\``, inline: true }
         ]);
@@ -1109,8 +1181,22 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const timeoutMsg = `<@${targetMember.id}> ${announce} ʜᴀs ʙᴇᴇɴ ᴛɪᴍᴇᴅ ᴏᴜᴛ ʙʏ <@${message.author.id}> ${reason} [${durationInfo.label}] ${verify}`;
-          await message.channel.send(timeoutMsg);
+          const caseId = generateCaseId();
+
+          const timeoutEmbed = new EmbedBuilder()
+            .setColor(0x3498DB)
+            .setTitle(`${announce} **Member Timed Out** ${verify}`)
+            .setDescription(`> <@${targetMember.id}> **has been timed out by** <@${message.author.id}>`)
+            .addFields(
+              { name: '⏳ Freeze Duration', value: `\`${durationInfo.label}\``, inline: true },
+              { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true },
+              { name: '📜 Reason', value: `>>> ${reason}`, inline: false }
+            )
+            .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+            .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setTimestamp();
+
+          await message.channel.send({ embeds: [timeoutEmbed] });
           logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
             { name: '⏳ Duration', value: `\`${durationInfo.label}\``, inline: true }
           ]);
@@ -1167,8 +1253,22 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const kickMsg = `<@${targetId}> ${announce} ʜᴀs ʙᴇᴇɴ ᴋɪᴄᴋᴇᴅ ʙʏ <@${message.author.id}> ${reason} ${verify}`;
-          await message.channel.send(kickMsg);
+          const caseId = generateCaseId();
+
+          const kickEmbed = new EmbedBuilder()
+            .setColor(0xE67E22)
+            .setTitle(`${announce} **Member Kicked** ${verify}`)
+            .setDescription(`> <@${targetId}> **has been kicked by** <@${message.author.id}>`)
+            .addFields(
+              { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true },
+              { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true },
+              { name: '📜 Reason', value: `>>> ${reason}`, inline: false }
+            )
+            .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : null)
+            .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setTimestamp();
+
+          await message.channel.send({ embeds: [kickEmbed] });
           logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason, [
             { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
           ]);
@@ -1225,8 +1325,22 @@ client.on('messageCreate', async (message) => {
           }
 
           const { announce, verify } = await getModEmojis(message.guild);
-          const banMsg = `<@${targetId}> ${announce} ʜᴀs ʙᴇᴇɴ ʙᴀɴɴᴇᴅ ʙʏ <@${message.author.id}> ${reason} ${verify}`;
-          await message.channel.send(banMsg);
+          const caseId = generateCaseId();
+
+          const banEmbed = new EmbedBuilder()
+            .setColor(0x992D22)
+            .setTitle(`${announce} **Member Banned** ${verify}`)
+            .setDescription(`> <@${targetId}> **has been permanently banned by** <@${message.author.id}>`)
+            .addFields(
+              { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true },
+              { name: '⚖️ Enforced By', value: `<@${message.author.id}>`, inline: true },
+              { name: '📜 Reason', value: `>>> ${reason}`, inline: false }
+            )
+            .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : null)
+            .setFooter({ text: `Case ${caseId} • AniPedia Moderation`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setTimestamp();
+
+          await message.channel.send({ embeds: [banEmbed] });
           logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, [
             { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
           ]);
