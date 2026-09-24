@@ -368,52 +368,46 @@ client.on('messageCreate', async (message) => {
 
     const lowerQuery = cleanQuery.toLowerCase();
 
+    // If tagged with nothing else (empty query), do not reply
+    if (!cleanQuery) {
+      return;
+    }
+
     // ==========================================
     // PRE-CHECK: Only respond to Command Guide keywords
     // Emillia ignores casual chit-chat — that's Tessia's job!
     // ==========================================
-    if (cleanQuery) {
-      const preCheckWords = lowerQuery.split(/\s+/);
-      const commandKeywords = [
-        'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
-        'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
-        'warnings', 'warns', 'leaderboard', 'top',
-        'timeout', 'mute', 'untimeout', 'unmute',
-        'kick', 'ban', 'unban', 'purge', 'clean',
-        'setrule', 'delrule', 'rules', 'listrules',
-        'introduce', 'profile', 'ping', 'reset', 'help', 'commands'
-      ];
-      const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
+    const preCheckWords = lowerQuery.split(/\s+/);
+    const commandKeywords = [
+      'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
+      'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
+      'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
+      'timeout', 'mute', 'untimeout', 'unmute',
+      'kick', 'ban', 'unban', 'purge', 'clean',
+      'setrule', 'delrule', 'rules', 'listrules',
+      'introduce', 'profile', 'ping', 'reset', 'help', 'commands'
+    ];
+    const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
-      const introTriggers = ['introduce yourself', 'who are you', 'what are you', 'whats your name', "what's your name", 'who r u', 'tell me about yourself', 'introduce urself', 'what can you do'];
-      const hasIntroTrigger = introTriggers.some(t => lowerQuery.includes(t));
+    const introTriggers = ['introduce yourself', 'who are you', 'what are you', 'whats your name', "what's your name", 'who r u', 'tell me about yourself', 'introduce urself', 'what can you do'];
+    const hasIntroTrigger = introTriggers.some(t => lowerQuery.includes(t));
 
-      const ruleInquiryKeywords = [
-        'rule', 'rules', 'allow', 'allowed', 'allowing', 'permit', 'permitted', 'permission',
-        'forbid', 'forbidden', 'prohibit', 'prohibited', 'punish', 'punishment',
-        'violate', 'violation', 'can i', 'can we', 'am i allowed', 'are we allowed', 'is it allowed',
-        'does the server allow', 'do you allow', 'self-promotion', 'self promotion', 'advertising',
-        'advertise', 'promote', 'promotion', 'spam', 'spamming', 'nsfw', 'tos', 'policy',
-        'policies', 'guideline', 'guidelines'
-      ];
-      const hasRuleInquiry = ruleInquiryKeywords.some(k => lowerQuery.includes(k));
+    const ruleInquiryKeywords = [
+      'rule', 'rules', 'allow', 'allowed', 'allowing', 'permit', 'permitted', 'permission',
+      'forbid', 'forbidden', 'prohibit', 'prohibited', 'punish', 'punishment',
+      'violate', 'violation', 'can i', 'can we', 'am i allowed', 'are we allowed', 'is it allowed',
+      'does the server allow', 'do you allow', 'self-promotion', 'self promotion', 'advertising',
+      'advertise', 'promote', 'promotion', 'spam', 'spamming', 'nsfw', 'tos', 'policy',
+      'policies', 'guideline', 'guidelines'
+    ];
+    const hasRuleInquiry = ruleInquiryKeywords.some(k => lowerQuery.includes(k));
 
-      if (!hasCommandWord && !hasIntroTrigger && !hasRuleInquiry) {
-        return; // Silently ignore — no typing, no response
-      }
+    if (!hasCommandWord && !hasIntroTrigger && !hasRuleInquiry) {
+      return; // Silently ignore — no typing, no response
     }
 
     // Show typing animation only when Emillia will actually respond
     await message.channel.sendTyping();
-
-    if (!cleanQuery) {
-      if (username === '_c0rle0ne') {
-        await message.reply("Hello, Aerion-sama! 🌸 I am here! What can I do for you today? ✨");
-      } else {
-        await message.reply(`Hello, ${nickname}! 🌸 How can I help you? If you need anything, just tag me! ✨`);
-      }
-      return;
-    }
 
     // --- Cooldown check ---
     if (username !== '_c0rle0ne') {
@@ -1438,6 +1432,8 @@ client.on('messageCreate', async (message) => {
                             words.includes('top') || 
                             words.includes('ranking') || 
                             words.includes('ranks') ||
+                            lowerQuery.includes('leaderboard') ||
+                            lowerQuery.includes('ranking') ||
                             ((words.includes('warns') || words.includes('warnings')) && message.mentions.members.filter(m => m.id !== client.user.id).size === 0 && !cleanQuery.match(/\b\d{17,19}\b/) && (lowerQuery === 'warns' || lowerQuery === 'warnings' || lowerQuery.includes('top') || lowerQuery.includes('leaderboard')));
 
       if (isLeaderboard) {
@@ -1622,7 +1618,6 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- Introduction Command (beautiful embed) ---
-    const introTriggers = ['introduce yourself', 'who are you', 'what are you', 'introduce', 'whats your name', "what's your name", 'who r u', 'tell me about yourself', 'introduce urself'];
     if (introTriggers.some(t => lowerQuery.includes(t))) {
       const { verify, dot } = await getModEmojis(message.guild);
 
