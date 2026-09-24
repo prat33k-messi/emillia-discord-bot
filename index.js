@@ -1465,7 +1465,7 @@ client.on('messageCreate', async (message) => {
           if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
           else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
 
-          lbEntries.push(`${dot} **Rank ${i + 1}** • ${userMention}\n└ ${dot} **Warnings:** \`#${entry.warnings}\`${statusBadge}`);
+          lbEntries.push(`${dot} **Rank ${i + 1}** • ${userMention}\n${dot} **Warnings:** \`#${entry.warnings}\`${statusBadge}`);
         }
 
         const lbEmbed = new EmbedBuilder()
@@ -1576,7 +1576,7 @@ client.on('messageCreate', async (message) => {
                 const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
                 timeFormatted = `<t:${unixSec}:R>`;
               }
-              historyText += `  [#${i + 1}] ${reason}\n  └ ${dot} \`${moderator}\` • ${timeFormatted}\n`;
+              historyText += `[#${i + 1}] ${reason}\n${dot} \`${moderator}\` • ${timeFormatted}\n\n`;
             }
             warningsEmbed.addFields({ 
               name: `${dot} **Disciplinary Log**`, 
@@ -2159,7 +2159,7 @@ client.on('interactionCreate', async (interaction) => {
                 const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
                 timeFormatted = `<t:${unixSec}:R>`;
               }
-              historyText += `  [#${i + 1}] ${r}\n  └ ${dot} \`${mod}\` • ${timeFormatted}\n`;
+              historyText += `[#${i + 1}] ${r}\n${dot} \`${mod}\` • ${timeFormatted}\n\n`;
             }
             warningsEmbed.addFields({ 
               name: `${dot} **Disciplinary Log**`, 
@@ -2215,7 +2215,7 @@ client.on('interactionCreate', async (interaction) => {
         if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
         else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
 
-        lbEntries.push(`${dot} **Rank ${i + 1}** • ${userMention}\n└ ${dot} **Warnings:** \`#${entry.warnings}\`${statusBadge}`);
+        lbEntries.push(`${dot} **Rank ${i + 1}** • ${userMention}\n${dot} **Warnings:** \`#${entry.warnings}\`${statusBadge}`);
       }
 
       const lbEmbed = new EmbedBuilder()
