@@ -1,5 +1,5 @@
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder } = require('discord.js');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
 
@@ -104,6 +104,96 @@ const nsfwKeywords = [
 // Preloaded user memory cache (facts and warnings count)
 const preloadedMemories = new Map();
 
+// ==========================================
+// SLASH COMMAND DEFINITIONS (Auto-popup on /)
+// ==========================================
+const slashCommandsData = [
+  new SlashCommandBuilder()
+    .setName('warn')
+    .setDescription('Issue a formal warning to a member')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to warn').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for the warning').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('warns')
+    .setDescription('Check warning record of a member or yourself')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to check (leave empty for yourself)').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('leaderboard')
+    .setDescription('View the top warned members in the server'),
+
+  new SlashCommandBuilder()
+    .setName('timeout')
+    .setDescription('Temporarily timeout (mute) a member')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to timeout').setRequired(true))
+    .addStringOption(opt => opt.setName('duration').setDescription('Duration (e.g. 10m, 1h, 1d)').setRequired(false))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for the timeout').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('untimeout')
+    .setDescription('Remove timeout from a member')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to untimeout').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('kick')
+    .setDescription('Kick a member from the server')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to kick').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for the kick').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('ban')
+    .setDescription('Permanently ban a member from the server')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to ban').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for the ban').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('unban')
+    .setDescription('Unban a user by their User ID')
+    .addStringOption(opt => opt.setName('user_id').setDescription('The User ID to unban').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('clearwarns')
+    .setDescription('Clear all recorded warnings for a member')
+    .addUserOption(opt => opt.setName('user').setDescription('The member whose warnings to clear').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for clearing warnings').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('deletewarn')
+    .setDescription('Delete a specific warning from a member')
+    .addUserOption(opt => opt.setName('user').setDescription('The member').setRequired(true))
+    .addIntegerOption(opt => opt.setName('number').setDescription('Warning # to delete (default: latest #1)').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('purge')
+    .setDescription('Bulk delete messages in the current channel')
+    .addIntegerOption(opt => opt.setName('amount').setDescription('Number of messages to delete (1-100)').setMinValue(1).setMaxValue(100).setRequired(true))
+    .addUserOption(opt => opt.setName('user').setDescription('Filter messages by specific user').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('rules')
+    .setDescription('View the server rules'),
+
+  new SlashCommandBuilder()
+    .setName('setrule')
+    .setDescription('Add or update a server rule')
+    .addIntegerOption(opt => opt.setName('number').setDescription('Rule number').setRequired(true))
+    .addStringOption(opt => opt.setName('text').setDescription('Rule description text').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('delrule')
+    .setDescription('Delete a server rule')
+    .addIntegerOption(opt => opt.setName('number').setDescription('Rule number to delete').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('introduce')
+    .setDescription('Introduce Emillia and her companions'),
+
+  new SlashCommandBuilder()
+    .setName('help')
+    .setDescription('Show help and available commands')
+];
+
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
   
@@ -135,6 +225,30 @@ client.once('ready', async () => {
     console.log("Preloaded emojis from all guilds.");
   } catch (err) {
     console.error("Error preloading guild emojis:", err);
+  }
+
+  // Register slash commands globally and per guild for instantaneous autocomplete
+  try {
+    const commandsJson = slashCommandsData.map(c => c.toJSON());
+    if (client.application) {
+      await client.application.commands.set(commandsJson);
+      console.log("Registered global application slash commands.");
+    }
+    for (const guild of client.guilds.cache.values()) {
+      await guild.commands.set(commandsJson).catch(() => {});
+    }
+    console.log("Synced slash commands to connected guilds.");
+  } catch (err) {
+    console.error("Error setting up slash commands on ready:", err);
+  }
+});
+
+client.on('guildCreate', async (guild) => {
+  try {
+    const commandsJson = slashCommandsData.map(c => c.toJSON());
+    await guild.commands.set(commandsJson).catch(() => {});
+  } catch (err) {
+    console.error("Error syncing commands on guild join:", err);
   }
 });
 
@@ -2010,6 +2124,1110 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
     console.error("Fact extraction background error:", err);
   }
 }
+
+// ==========================================
+// SLASH COMMAND INTERACTION HANDLER
+// ==========================================
+client.on('interactionCreate', async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const { commandName, options, guild, member, user, channel } = interaction;
+  if (!guild) {
+    await interaction.reply({ content: "Commands can only be used in a server! 🌸", ephemeral: true });
+    return;
+  }
+
+  const { verify, dot } = await getModEmojis(guild);
+  const modTier = getMemberTier(member);
+
+  try {
+    // ------------------------------------------
+    // 1. /warn
+    // ------------------------------------------
+    if (commandName === 'warn') {
+      if (modTier === 0) {
+        await interaction.reply({ content: "Mou! 🌸 Only staff (Shogun, Royal Hand, Supervisor, Moderator) can issue warnings! ❄️", ephemeral: true });
+        return;
+      }
+      const targetMember = options.getMember('user');
+      const reason = options.getString('reason') || 'No reason specified';
+
+      if (!targetMember) {
+        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        return;
+      }
+      if (targetMember.id === user.id) {
+        await interaction.reply({ content: "Mou! 🌸 You cannot warn yourself! ❄️", ephemeral: true });
+        return;
+      }
+
+      const targetTier = getMemberTier(targetMember);
+      if (targetTier >= modTier) {
+        const targetRankName = getTierName(targetTier);
+        const modRankName = getTierName(modTier);
+        await interaction.reply({ content: `Mou! 🌸 You cannot warn <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+        return;
+      }
+
+      const targetUsername = targetMember.user.username;
+      let warningsCount = 1;
+
+      if (db) {
+        try {
+          const userRef = db.collection('memories').doc(targetUsername);
+          await db.runTransaction(async (t) => {
+            const doc = await t.get(userRef);
+            if (doc.exists) {
+              warningsCount = (doc.data().warnings || 0) + 1;
+            }
+            t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
+          });
+
+          await db.collection('moderation_logs').add({
+            action: 'warn',
+            targetId: targetMember.id,
+            targetTag: targetMember.user.tag,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            reason: reason,
+            timestamp: FieldValue.serverTimestamp()
+          });
+
+          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
+        } catch (err) {
+          console.error("Firestore warn error in slash command:", err);
+        }
+      }
+
+      let autoTimeoutApplied = false;
+      let autoTimeoutLabel = "";
+      let autoTimeoutMs = 0;
+
+      if (warningsCount === 3) {
+        autoTimeoutMs = 5 * 60 * 1000;
+        autoTimeoutLabel = "5 minutes (Reached 3 warnings)";
+        autoTimeoutApplied = true;
+      } else if (warningsCount >= 5) {
+        autoTimeoutMs = 60 * 60 * 1000;
+        autoTimeoutLabel = "1 hour (Reached 5+ warnings)";
+        autoTimeoutApplied = true;
+      }
+
+      if (autoTimeoutApplied && targetMember.moderatable) {
+        try {
+          await targetMember.timeout(autoTimeoutMs, `Auto-timeout: Reached ${warningsCount} warnings.`);
+          if (db) {
+            await db.collection('moderation_logs').add({
+              action: 'timeout',
+              duration: autoTimeoutLabel,
+              targetId: targetMember.id,
+              targetTag: targetMember.user.tag,
+              moderatorId: client.user.id,
+              moderatorTag: client.user.tag,
+              reason: `Auto-timeout: Reached ${warningsCount} warnings.`,
+              timestamp: FieldValue.serverTimestamp()
+            });
+          }
+        } catch (timeoutErr) {
+          console.error("Auto-timeout error in slash command:", timeoutErr);
+          autoTimeoutApplied = false;
+        }
+      }
+
+      // Try DM
+      try {
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0xF1C40F)
+          .setTitle('🌸 Emilia\'s Official Warning Notice ⚠️')
+          .setDescription(`*"You received a formal warning in **${guild.name}**. Please be mindful of our server rules so everyone can have a wonderful time together!"* 🌸`)
+          .addFields(
+            { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
+            { name: '📊 Total Warnings', value: `\`#${warningsCount}\``, inline: true },
+            { name: '⚖️ Issued By', value: `**${user.tag}**`, inline: true }
+          );
+        if (autoTimeoutApplied) {
+          dmEmbed.addFields({ name: '⚡ Auto-Timeout Activated', value: `\`${autoTimeoutLabel}\``, inline: false });
+        }
+        dmEmbed.setTimestamp().setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+        await targetMember.send({ embeds: [dmEmbed] });
+      } catch (err) {}
+
+      const caseId = generateCaseId();
+      const warnEmbed = new EmbedBuilder()
+        .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
+        .setTitle(`**Warning Issued** ${verify}`)
+        .setDescription(`<@${targetMember.id}> has been **warned** by <@${user.id}>`)
+        .addFields(
+          { name: `${dot} **Warning Count**`, value: `\`#${warningsCount}\``, inline: true },
+          { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+          { name: `${dot} **Reason**`, value: reason, inline: false }
+        )
+        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      if (autoTimeoutApplied) {
+        warnEmbed.addFields({ name: `${dot} **Auto-Timeout**`, value: `\`${autoTimeoutLabel}\``, inline: false });
+      }
+
+      await interaction.reply({ embeds: [warnEmbed] });
+      logToEmilliaLog(guild, 'warn', targetMember.user.tag, targetMember.id, user.tag, reason, [
+        { name: '📊 Warning Level', value: `\`#${warningsCount}\``, inline: true }
+      ]);
+      return;
+    }
+
+    // ------------------------------------------
+    // 2. /warns
+    // ------------------------------------------
+    if (commandName === 'warns') {
+      const targetMember = options.getMember('user') || member;
+      const targetUsername = targetMember.user.username;
+
+      let warningsCount = 0;
+      const cached = preloadedMemories.get(targetUsername);
+      if (cached) {
+        warningsCount = cached.warnings || 0;
+      }
+
+      if (warningsCount === 0) {
+        const cleanEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle(`**Disciplinary Record** ${verify}`)
+          .setDescription(`${dot} **Member:** <@${targetMember.id}> (${targetMember.user.username})\n${dot} **Total Warnings:** **#0**\n${dot} **Status:** \`Clean Record • Spotless\``)
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: '🏷️ AniPedia Moderation • Disciplinary Registry', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+        await interaction.reply({ embeds: [cleanEmbed] });
+        return;
+      }
+
+      let statusLabel = '`⚠️ Active Warnings`';
+      if (warningsCount >= 5) {
+        statusLabel = '`🚨 High Risk (5+ Warnings)`';
+      } else if (warningsCount >= 3) {
+        statusLabel = '`⚠️ Auto-Timeout Active`';
+      }
+
+      const warningsEmbed = new EmbedBuilder()
+        .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
+        .setTitle(`**Disciplinary Record** ${verify}`)
+        .setDescription(`${dot} **Member:** <@${targetMember.id}> (${targetMember.user.username})\n${dot} **Total Warnings:** **#${warningsCount}**\n${dot} **Status:** ${statusLabel}`)
+        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }));
+
+      if (db && warningsCount > 0) {
+        try {
+          const logsSnapshot = await db.collection('moderation_logs')
+            .where('targetId', '==', targetMember.id)
+            .get();
+
+          const warnLogs = [];
+          logsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.action === 'warn') {
+              warnLogs.push({ id: doc.id, ref: doc.ref, ...data });
+            }
+          });
+
+          warnLogs.sort((a, b) => {
+            const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+            const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+            return timeB - timeA;
+          });
+
+          const activeWarnLogs = warnLogs.slice(0, warningsCount);
+          if (activeWarnLogs.length > 0) {
+            let historyText = '';
+            for (let i = 0; i < activeWarnLogs.length; i++) {
+              const log = activeWarnLogs[i];
+              const r = log.reason || 'No reason provided';
+              const mod = log.moderatorTag || 'Unknown Moderator';
+              let timeFormatted = 'Unknown date';
+              if (log.timestamp && typeof log.timestamp.toDate === 'function') {
+                const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
+                timeFormatted = `<t:${unixSec}:R>`;
+              }
+              historyText += `  [#${i + 1}] ${r}\n  └ ${dot} \`${mod}\` • ${timeFormatted}\n`;
+            }
+            warningsEmbed.addFields({ 
+              name: `${dot} **Disciplinary Log**`, 
+              value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
+              inline: false 
+            });
+          }
+        } catch (err) {
+          console.error('Error fetching warning history in slash command:', err);
+        }
+      }
+
+      warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Use /deletewarn to remove', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
+      warningsEmbed.setTimestamp();
+      await interaction.reply({ embeds: [warningsEmbed] });
+      return;
+    }
+
+    // ------------------------------------------
+    // 3. /leaderboard
+    // ------------------------------------------
+    if (commandName === 'leaderboard') {
+      const usersWithWarnings = [];
+      for (const [uname, udata] of preloadedMemories.entries()) {
+        if (udata && udata.warnings && udata.warnings > 0) {
+          usersWithWarnings.push({
+            username: uname,
+            warnings: udata.warnings
+          });
+        }
+      }
+      usersWithWarnings.sort((a, b) => b.warnings - a.warnings);
+      const top5 = usersWithWarnings.slice(0, 5);
+
+      if (top5.length === 0) {
+        const emptyLbEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle(`**Warning Leaderboard** ${verify}`)
+          .setDescription(`> ${dot} **Status:** \`100% Peaceful\`\n> No members have active warnings in Anipedia!`)
+          .setFooter({ text: '🏷️ AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+        await interaction.reply({ embeds: [emptyLbEmbed] });
+        return;
+      }
+
+      const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+      const lbEntries = [];
+      for (let i = 0; i < top5.length; i++) {
+        const entry = top5[i];
+        const medal = medals[i] || '▫️';
+        const foundMember = guild.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
+        const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
+        
+        let statusBadge = '';
+        if (entry.warnings >= 5) statusBadge = ' 🚨 1h Freeze';
+        else if (entry.warnings >= 3) statusBadge = ' ⚠️ Auto-Timeout';
+
+        lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n└ Warnings: **#${entry.warnings}**${statusBadge}`);
+      }
+
+      const lbEmbed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle(`**Warning Leaderboard** ${verify}`)
+        .setDescription(lbEntries.join('\n\n'))
+        .setFooter({ text: '🏷️ AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+      await interaction.reply({ embeds: [lbEmbed] });
+      return;
+    }
+
+    // ------------------------------------------
+    // 4. /timeout
+    // ------------------------------------------
+    if (commandName === 'timeout') {
+      if (modTier === 0) {
+        await interaction.reply({ content: "Mou! 🌸 Only staff can timeout members! ❄️", ephemeral: true });
+        return;
+      }
+      const targetMember = options.getMember('user');
+      const durationStr = options.getString('duration') || '10m';
+      const reason = options.getString('reason') || 'No reason specified';
+
+      if (!targetMember) {
+        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        return;
+      }
+      if (targetMember.id === user.id) {
+        await interaction.reply({ content: "Mou! 🌸 You cannot timeout yourself! ❄️", ephemeral: true });
+        return;
+      }
+
+      const targetTier = getMemberTier(targetMember);
+      if (targetTier >= modTier) {
+        const targetRankName = getTierName(targetTier);
+        const modRankName = getTierName(modTier);
+        await interaction.reply({ content: `Mou! 🌸 You cannot timeout <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+        return;
+      }
+
+      const durationInfo = parseDuration(durationStr);
+
+      try {
+        await targetMember.timeout(durationInfo.ms, reason);
+        if (db) {
+          await db.collection('moderation_logs').add({
+            action: 'timeout',
+            duration: durationInfo.label,
+            targetId: targetMember.id,
+            targetTag: targetMember.user.tag,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            reason: reason,
+            timestamp: FieldValue.serverTimestamp()
+          });
+        }
+
+        try {
+          const dmEmbed = new EmbedBuilder()
+            .setColor(0x3498DB)
+            .setTitle('🌸 Emilia\'s Frost Seal • Timeout Notice 🔇')
+            .setDescription(`*"You were placed in timeout in **${guild.name}**. Please use this cooling-down period to reflect upon our server rules."* ❄️`)
+            .addFields(
+              { name: '⏳ Freeze Duration', value: `\`${durationInfo.label}\``, inline: true },
+              { name: '⚖️ Enforced By', value: `**${user.tag}**`, inline: true },
+              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
+            )
+            .setTimestamp()
+            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+          await targetMember.send({ embeds: [dmEmbed] });
+        } catch (err) {}
+
+        const caseId = generateCaseId();
+        const timeoutEmbed = new EmbedBuilder()
+          .setColor(0x3498DB)
+          .setTitle(`**Timeout Issued** ${verify}`)
+          .setDescription(`<@${targetMember.id}> has been **timed out** by <@${user.id}>`)
+          .addFields(
+            { name: `${dot} **Duration**`, value: `\`${durationInfo.label}\``, inline: true },
+            { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+            { name: `${dot} **Reason**`, value: reason, inline: false }
+          )
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [timeoutEmbed] });
+        logToEmilliaLog(guild, 'timeout', targetMember.user.tag, targetMember.id, user.tag, reason, [
+          { name: '⏳ Duration', value: `\`${durationInfo.label}\``, inline: true }
+        ]);
+      } catch (err) {
+        console.error("Timeout slash command error:", err);
+        if (err.code === 50013) {
+          await interaction.reply({ content: "Mou! 🌸 I couldn't timeout this member because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! ❄️", ephemeral: true });
+        } else {
+          await interaction.reply({ content: "Failed to timeout this member! 😰", ephemeral: true });
+        }
+      }
+      return;
+    }
+
+    // ------------------------------------------
+    // 5. /untimeout
+    // ------------------------------------------
+    if (commandName === 'untimeout') {
+      if (modTier === 0) {
+        await interaction.reply({ content: "Mou! 🌸 Only staff can remove timeouts! ❄️", ephemeral: true });
+        return;
+      }
+      const targetMember = options.getMember('user');
+      if (!targetMember) {
+        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        return;
+      }
+
+      try {
+        await targetMember.timeout(null, `Untimeout by ${user.tag}`);
+        if (db) {
+          await db.collection('moderation_logs').add({
+            action: 'untimeout',
+            targetId: targetMember.id,
+            targetTag: targetMember.user.tag,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            timestamp: FieldValue.serverTimestamp()
+          });
+        }
+
+        const caseId = generateCaseId();
+        const untimeoutEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle(`**Timeout Lifted** ${verify}`)
+          .setDescription(`<@${targetMember.id}> has been **untimed out** by <@${user.id}>`)
+          .addFields(
+            { name: `${dot} **Status**`, value: '`Timeout Removed`', inline: true },
+            { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+            { name: `${dot} **Reason**`, value: 'Disciplinary period completed or manually lifted', inline: false }
+          )
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [untimeoutEmbed] });
+        logToEmilliaLog(guild, 'untimeout', targetMember.user.tag, targetMember.id, user.tag, `Untimeout by ${user.tag}`);
+      } catch (err) {
+        console.error("Untimeout slash command error:", err);
+        await interaction.reply({ content: "Failed to remove timeout from this user! 😰", ephemeral: true });
+      }
+      return;
+    }
+
+    // ------------------------------------------
+    // 6. /kick
+    // ------------------------------------------
+    if (commandName === 'kick') {
+      if (modTier < 2) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' have permission to kick members! ❄️", ephemeral: true });
+        return;
+      }
+      const targetMember = options.getMember('user');
+      const reason = options.getString('reason') || 'No reason specified';
+
+      if (!targetMember) {
+        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        return;
+      }
+      if (targetMember.id === user.id) {
+        await interaction.reply({ content: "Mou! 🌸 You cannot kick yourself! ❄️", ephemeral: true });
+        return;
+      }
+
+      const targetTier = getMemberTier(targetMember);
+      if (targetTier >= modTier) {
+        const targetRankName = getTierName(targetTier);
+        const modRankName = getTierName(modTier);
+        await interaction.reply({ content: `Mou! 🌸 You cannot kick <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+        return;
+      }
+
+      const targetId = targetMember.id;
+      const targetTag = targetMember.user.tag;
+
+      try {
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0xE67E22)
+          .setTitle('🌸 Emilia\'s Expulsion Decree • Kicked from Server 👢')
+          .setDescription(`*"You were expelled from **${guild.name}**. Please reflect upon your actions before considering returning to our community."* 🌸🚪`)
+          .addFields(
+            { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
+            { name: '⚖️ Expelled By', value: `**${user.tag}**`, inline: true }
+          )
+          .setTimestamp()
+          .setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+        await targetMember.send({ embeds: [dmEmbed] });
+      } catch (err) {}
+
+      try {
+        const deletedCount = await deleteUserRecentMessages(channel, targetId, 15);
+        await targetMember.kick(reason);
+
+        if (db) {
+          await db.collection('moderation_logs').add({
+            action: 'kick',
+            targetId: targetId,
+            targetTag: targetTag,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            reason: reason,
+            deletedMessages: deletedCount,
+            timestamp: FieldValue.serverTimestamp()
+          });
+        }
+
+        const caseId = generateCaseId();
+        const kickEmbed = new EmbedBuilder()
+          .setColor(0xE67E22)
+          .setTitle(`**Kick Issued** ${verify}`)
+          .setDescription(`<@${targetId}> has been **kicked** by <@${user.id}>`)
+          .addFields(
+            { name: `${dot} **Cleanup**`, value: `\`${deletedCount} message(s)\``, inline: true },
+            { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+            { name: `${dot} **Reason**`, value: reason, inline: false }
+          )
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [kickEmbed] });
+        logToEmilliaLog(guild, 'kick', targetTag, targetId, user.tag, reason, [
+          { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+        ]);
+      } catch (err) {
+        console.error("Kick slash command error:", err);
+        await interaction.reply({ content: "Failed to kick this member! 😰", ephemeral: true });
+      }
+      return;
+    }
+
+    // ------------------------------------------
+    // 7. /ban
+    // ------------------------------------------
+    if (commandName === 'ban') {
+      if (modTier < 3) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Royal Hand' have permission to ban members! ❄️", ephemeral: true });
+        return;
+      }
+      const targetMember = options.getMember('user');
+      const reason = options.getString('reason') || 'No reason specified';
+
+      if (!targetMember) {
+        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        return;
+      }
+      if (targetMember.id === user.id) {
+        await interaction.reply({ content: "Mou! 🌸 You cannot ban yourself! ❄️", ephemeral: true });
+        return;
+      }
+
+      const targetTier = getMemberTier(targetMember);
+      if (targetTier >= modTier) {
+        const targetRankName = getTierName(targetTier);
+        const modRankName = getTierName(modTier);
+        await interaction.reply({ content: `Mou! 🌸 You cannot ban <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+        return;
+      }
+
+      const targetId = targetMember.id;
+      const targetTag = targetMember.user.tag;
+
+      try {
+        const dmEmbed = new EmbedBuilder()
+          .setColor(0x992D22)
+          .setTitle('🌸 Emilia\'s Judgment • Permanent Exile Notice 🔨')
+          .setDescription(`*"You have been permanently banished from **${guild.name}** by royal decree of our moderation team. Disruption to our sanctuary cannot be tolerated."* ❄️⚔️`)
+          .addFields(
+            { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
+            { name: '⚖️ Banned By', value: `**${user.tag}**`, inline: true }
+          )
+          .setTimestamp()
+          .setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+        await targetMember.send({ embeds: [dmEmbed] });
+      } catch (err) {}
+
+      try {
+        const deletedCount = await deleteUserRecentMessages(channel, targetId, 15);
+        await targetMember.ban({ reason, deleteMessageSeconds: 86400 });
+
+        if (db) {
+          await db.collection('moderation_logs').add({
+            action: 'ban',
+            targetId: targetId,
+            targetTag: targetTag,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            reason: reason,
+            deletedMessages: deletedCount,
+            timestamp: FieldValue.serverTimestamp()
+          });
+        }
+
+        const caseId = generateCaseId();
+        const banEmbed = new EmbedBuilder()
+          .setColor(0x992D22)
+          .setTitle(`**Ban Issued** ${verify}`)
+          .setDescription(`<@${targetId}> has been **permanently banned** by <@${user.id}>`)
+          .addFields(
+            { name: `${dot} **Cleanup**`, value: `\`${deletedCount} message(s)\``, inline: true },
+            { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+            { name: `${dot} **Reason**`, value: reason, inline: false }
+          )
+          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [banEmbed] });
+        logToEmilliaLog(guild, 'ban', targetTag, targetId, user.tag, reason, [
+          { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+        ]);
+      } catch (err) {
+        console.error("Ban slash command error:", err);
+        await interaction.reply({ content: "Failed to ban this member! 😰", ephemeral: true });
+      }
+      return;
+    }
+
+    // ------------------------------------------
+    // 8. /unban
+    // ------------------------------------------
+    if (commandName === 'unban') {
+      if (modTier < 3) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Royal Hand' have permission to unban members! ❄️", ephemeral: true });
+        return;
+      }
+      const targetId = options.getString('user_id').trim();
+
+      try {
+        await guild.members.unban(targetId, `Unbanned by ${user.tag}`);
+        if (db) {
+          await db.collection('moderation_logs').add({
+            action: 'unban',
+            targetId: targetId,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            timestamp: FieldValue.serverTimestamp()
+          });
+        }
+
+        const caseId = generateCaseId();
+        const unbanEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle(`**Ban Revoked** ${verify}`)
+          .setDescription(`<@${targetId}> has been **unbanned** by <@${user.id}>`)
+          .addFields(
+            { name: `${dot} **Status**`, value: '`Ban Revoked`', inline: true },
+            { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+            { name: `${dot} **Reason**`, value: 'Ban restriction lifted', inline: false }
+          )
+          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+
+        await interaction.reply({ embeds: [unbanEmbed] });
+        logToEmilliaLog(guild, 'unban', targetId, targetId, user.tag, `Unbanned by ${user.tag}`);
+      } catch (err) {
+        console.error("Unban slash command error:", err);
+        await interaction.reply({ content: "Failed to unban this user ID! Make sure the ID is correct and they are banned. 😰", ephemeral: true });
+      }
+      return;
+    }
+
+    // ------------------------------------------
+    // 9. /clearwarns
+    // ------------------------------------------
+    if (commandName === 'clearwarns') {
+      if (modTier < 2) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' can clear warnings! ❄️", ephemeral: true });
+        return;
+      }
+      const targetMember = options.getMember('user');
+      const reason = options.getString('reason') || 'No reason specified';
+
+      if (!targetMember) {
+        await interaction.reply({ content: "Could not find that member! 🌸", ephemeral: true });
+        return;
+      }
+
+      const targetUsername = targetMember.user.username;
+      let previousWarningsCount = 0;
+
+      if (db) {
+        try {
+          const logsSnapshot = await db.collection('moderation_logs')
+            .where('targetId', '==', targetMember.id)
+            .get();
+
+          const batch = db.batch();
+          let count = 0;
+          logsSnapshot.forEach(doc => {
+            if (doc.data().action === 'warn') {
+              batch.delete(doc.ref);
+              count++;
+            }
+          });
+          if (count > 0) await batch.commit();
+
+          const userRef = db.collection('memories').doc(targetUsername);
+          await db.runTransaction(async (t) => {
+            const doc = await t.get(userRef);
+            if (doc.exists) {
+              previousWarningsCount = doc.data().warnings || 0;
+            }
+            t.set(userRef, { warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
+          });
+
+          await db.collection('moderation_logs').add({
+            action: 'clearwarns',
+            targetId: targetMember.id,
+            targetTag: targetMember.user.tag,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            reason: reason,
+            clearedWarnings: previousWarningsCount || count,
+            timestamp: FieldValue.serverTimestamp()
+          });
+
+          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
+        } catch (err) {
+          console.error("Firestore clearwarns slash error:", err);
+        }
+      } else {
+        const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+        previousWarningsCount = cachedMem.warnings || 0;
+        preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
+      }
+
+      const caseId = generateCaseId();
+      const clearWarnsEmbed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle(`**Warnings Cleared** ${verify}`)
+        .setDescription(`<@${targetMember.id}> has been **cleared of all warnings** by <@${user.id}>`)
+        .addFields(
+          { name: `${dot} **Cleared**`, value: `\`${previousWarningsCount} warnings reset\``, inline: true },
+          { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+          { name: `${dot} **Reason**`, value: reason, inline: false }
+        )
+        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [clearWarnsEmbed] });
+      logToEmilliaLog(guild, 'clearwarns', targetMember.user.tag, targetMember.id, user.tag, reason, [
+        { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
+      ]);
+      return;
+    }
+
+    // ------------------------------------------
+    // 10. /deletewarn
+    // ------------------------------------------
+    if (commandName === 'deletewarn') {
+      if (modTier < 2) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' can delete warnings! ❄️", ephemeral: true });
+        return;
+      }
+      const targetMember = options.getMember('user');
+      const requestedWarnNum = options.getInteger('number');
+
+      if (!targetMember) {
+        await interaction.reply({ content: "Could not find that member! 🌸", ephemeral: true });
+        return;
+      }
+
+      const targetUsername = targetMember.user.username;
+      let warningsCount = 0;
+      const cached = preloadedMemories.get(targetUsername);
+      if (cached) warningsCount = cached.warnings || 0;
+
+      let warnDocs = [];
+      if (db) {
+        try {
+          const logsSnapshot = await db.collection('moderation_logs')
+            .where('targetId', '==', targetMember.id)
+            .get();
+
+          logsSnapshot.forEach(doc => {
+            const data = doc.data();
+            if (data.action === 'warn') {
+              warnDocs.push({ id: doc.id, ref: doc.ref, ...data });
+            }
+          });
+
+          warnDocs.sort((a, b) => {
+            const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+            const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+            return timeB - timeA;
+          });
+        } catch (err) {}
+      }
+
+      if (warningsCount === 0 && warnDocs.length === 0) {
+        await interaction.reply({ content: `**${targetMember.user.tag}** has no active warnings to delete! 🌸`, ephemeral: true });
+        return;
+      }
+
+      let deletedWarnDoc = null;
+      let deletedIndexLabel = "";
+
+      if (requestedWarnNum !== null && requestedWarnNum !== undefined) {
+        const targetIndex = requestedWarnNum - 1;
+        if (targetIndex < 0 || targetIndex >= warnDocs.length) {
+          await interaction.reply({ content: `Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). ❄️`, ephemeral: true });
+          return;
+        }
+        deletedWarnDoc = warnDocs[targetIndex];
+        deletedIndexLabel = `#${requestedWarnNum}`;
+      } else {
+        if (warnDocs.length > 0) {
+          deletedWarnDoc = warnDocs[0];
+          deletedIndexLabel = `#1 (Latest)`;
+        }
+      }
+
+      if (db) {
+        try {
+          if (deletedWarnDoc && deletedWarnDoc.ref) {
+            await deletedWarnDoc.ref.delete();
+          }
+
+          const userRef = db.collection('memories').doc(targetUsername);
+          await db.runTransaction(async (t) => {
+            const doc = await t.get(userRef);
+            if (doc.exists) {
+              warningsCount = Math.max(0, (doc.data().warnings || 0) - 1);
+            } else {
+              warningsCount = Math.max(0, warningsCount - 1);
+            }
+            t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
+          });
+
+          await db.collection('moderation_logs').add({
+            action: 'deletewarn',
+            targetId: targetMember.id,
+            targetTag: targetMember.user.tag,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            deletedWarningNumber: requestedWarnNum || 1,
+            deletedReason: deletedWarnDoc ? (deletedWarnDoc.reason || 'No reason provided') : 'Unknown',
+            timestamp: FieldValue.serverTimestamp()
+          });
+
+          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
+        } catch (err) {
+          console.error("Firestore deletewarn slash error:", err);
+        }
+      } else {
+        warningsCount = Math.max(0, warningsCount - 1);
+        const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+        preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
+      }
+
+      const warnReason = deletedWarnDoc?.reason || 'No reason provided';
+      const caseId = generateCaseId();
+
+      const deleteWarnEmbed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle(`**Warning Deleted** ${verify}`)
+        .setDescription(`<@${targetMember.id}> warning **${deletedIndexLabel}** has been **deleted** by <@${user.id}>`)
+        .addFields(
+          { name: `${dot} **Remaining**`, value: `\`#${warningsCount} warning(s)\``, inline: true },
+          { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
+          { name: `${dot} **Deleted Warning Reason**`, value: warnReason, inline: false }
+        )
+        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [deleteWarnEmbed] });
+      logToEmilliaLog(guild, 'deletewarn', targetMember.user.tag, targetMember.id, user.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
+        { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true }
+      ]);
+      return;
+    }
+
+    // ------------------------------------------
+    // 11. /purge
+    // ------------------------------------------
+    if (commandName === 'purge') {
+      if (modTier === 0) {
+        await interaction.reply({ content: "Mou! 🌸 Only staff can purge messages! ❄️", ephemeral: true });
+        return;
+      }
+      const purgeAmount = options.getInteger('amount');
+      const targetUser = options.getUser('user');
+
+      try {
+        const fetchLimit = Math.min(100, purgeAmount + 10);
+        const fetched = await channel.messages.fetch({ limit: fetchLimit });
+
+        let messagesToDelete;
+        if (targetUser) {
+          messagesToDelete = fetched.filter(m => m.author.id === targetUser.id).first(purgeAmount);
+        } else {
+          messagesToDelete = fetched.first(purgeAmount);
+        }
+
+        let deletedCount = 0;
+        if (messagesToDelete && messagesToDelete.length > 0) {
+          if (messagesToDelete.length === 1) {
+            await messagesToDelete[0].delete().catch(() => {});
+            deletedCount = 1;
+          } else {
+            const deleted = await channel.bulkDelete(messagesToDelete, true);
+            deletedCount = deleted.size;
+          }
+        }
+
+        const purgeEmbed = new EmbedBuilder()
+          .setColor(0x3498DB)
+          .setTitle('❄️ Emilia\'s Frost Cleansing • Chat Purged 🧹')
+          .setDescription(`*"I have swept the frost away! **${deletedCount}** message(s) have been cleanly purged from the channel!"* ❄️✨\n\n🧹 **Chat Purification Complete**`)
+          .addFields(
+            { name: '🧹 Messages Purged', value: `\`${deletedCount} message(s)\``, inline: true },
+            { name: '⚖️ Enforced By', value: `**${user.tag}**`, inline: true }
+          );
+
+        if (targetUser) {
+          purgeEmbed.addFields({ name: '👤 Filtered Member', value: `**${targetUser.tag}**`, inline: true });
+        }
+
+        purgeEmbed.setTimestamp().setFooter({ text: 'Emillia — Guardian of Anipedia • Clean Chat Restored ✨' });
+        await interaction.reply({ embeds: [purgeEmbed], ephemeral: true });
+
+        if (db) {
+          await db.collection('moderation_logs').add({
+            action: 'purge',
+            channelId: channel.id,
+            channelName: channel.name || 'Unknown',
+            deletedCount: deletedCount,
+            targetId: targetUser ? targetUser.id : null,
+            targetTag: targetUser ? targetUser.tag : null,
+            moderatorId: user.id,
+            moderatorTag: user.tag,
+            timestamp: FieldValue.serverTimestamp()
+          });
+        }
+      } catch (err) {
+        console.error("Purge slash command error:", err);
+        await interaction.reply({ content: "Something went wrong while purging messages! (Messages older than 14 days cannot be bulk deleted). 😰", ephemeral: true });
+      }
+      return;
+    }
+
+    // ------------------------------------------
+    // 12. /rules, /setrule, /delrule
+    // ------------------------------------------
+    if (commandName === 'rules') {
+      if (serverRulesCache.size === 0) {
+        await interaction.reply({ content: "We don't have any server rules registered yet! A moderator can add some using `/setrule <number> <text>`. 🌸", ephemeral: true });
+        return;
+      }
+      const sortedRules = [...serverRulesCache.entries()].sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+      let rulesList = "📋 **Anipedia Server Rules** 📋\n";
+      for (const [num, text] of sortedRules) {
+        rulesList += `**Rule ${num}**: ${text}\n`;
+      }
+      await interaction.reply({ content: rulesList });
+      return;
+    }
+
+    if (commandName === 'setrule') {
+      if (modTier < 2) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can set server rules! ❄️", ephemeral: true });
+        return;
+      }
+      const ruleNum = options.getInteger('number').toString();
+      const ruleText = options.getString('text').trim();
+
+      if (db) {
+        try {
+          await db.collection('server_rules').doc(ruleNum).set({
+            number: parseInt(ruleNum),
+            text: ruleText,
+            updatedBy: user.username,
+            updatedAt: FieldValue.serverTimestamp()
+          });
+          serverRulesCache.set(ruleNum, ruleText);
+          await interaction.reply({ content: `I have saved **Rule ${ruleNum}**: "${ruleText}". I will keep a close eye on anyone who breaks it! 🌸` });
+        } catch (err) {
+          console.error("Error setting rule in slash command:", err);
+          await interaction.reply({ content: "Could not save the rule to database! 😰", ephemeral: true });
+        }
+      } else {
+        serverRulesCache.set(ruleNum, ruleText);
+        await interaction.reply({ content: `Saved **Rule ${ruleNum}** in memory. 🌸` });
+      }
+      return;
+    }
+
+    if (commandName === 'delrule') {
+      if (modTier < 2) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can delete rules! ❄️", ephemeral: true });
+        return;
+      }
+      const ruleNum = options.getInteger('number').toString();
+      if (db) {
+        try {
+          await db.collection('server_rules').doc(ruleNum).delete();
+          serverRulesCache.delete(ruleNum);
+          await interaction.reply({ content: `I have deleted **Rule ${ruleNum}**. 🌸` });
+        } catch (err) {
+          console.error("Error deleting rule in slash command:", err);
+          await interaction.reply({ content: "Could not delete the rule! 😰", ephemeral: true });
+        }
+      } else {
+        serverRulesCache.delete(ruleNum);
+        await interaction.reply({ content: `Deleted **Rule ${ruleNum}**. 🌸` });
+      }
+      return;
+    }
+
+    // ------------------------------------------
+    // 13. /introduce
+    // ------------------------------------------
+    if (commandName === 'introduce') {
+      const introEmbed = new EmbedBuilder()
+        .setColor(0x9B59B6)
+        .setTitle(`**Emillia — Guardian of Anipedia** ${verify}`)
+        .setDescription(
+          `*${dot} "I am Emilia! I will do my absolute best to keep everyone safe!"* ❄️\n\n` +
+          `${dot} Silver-haired half-elf and Royal Selection candidate from Re:Zero, serving as your **guardian and moderation bot** in **Anipedia**! 🌟\n\n` +
+          `${dot} My beloved big sister **Tessia** 💜 handles friendly conversations and anime chats, while **I protect the realm** with rule enforcement, warnings, timeouts, and bans! ⚔️\n\n` +
+          `${dot} Created by **Aerion-sama** 👑 to keep Anipedia peaceful and orderly!`
+        )
+        .addFields(
+          { 
+            name: `${dot} **Companions**`, 
+            value: [
+              `${dot} **Tessia**: Chatbot & Companion ${verify}`,
+              `${dot} **Emillia**: Moderation & Server Guardian ${verify}`
+            ].join('\n'), 
+            inline: false 
+          },
+          { 
+            name: `${dot} **Staff Hierarchy**`, 
+            value: [
+              `${dot} 👑 **Shogun** & **Royal Hand**: All powers (Ban, Kick, Timeout, Warn) ${verify}`,
+              `${dot} 🛡️ **Supervisor**: Kick, Timeout, Warn, Clear/Delete Warn ${verify}`,
+              `${dot} ⚔️ **Moderator**: Timeout, Warn, Purge, Warn History ${verify}`
+            ].join('\n'), 
+            inline: false 
+          }
+        )
+        .setThumbnail('https://i.imgur.com/emillia_thumb.png')
+        .setFooter({ text: 'Type /help to see all my commands! ✨' })
+        .setTimestamp();
+      await interaction.reply({ embeds: [introEmbed] });
+      return;
+    }
+
+    // ------------------------------------------
+    // 14. /help
+    // ------------------------------------------
+    if (commandName === 'help') {
+      const helpEmbed = new EmbedBuilder()
+        .setColor(0x9B59B6)
+        .setTitle(`🌸 Emilia's Royal Command Guide 📜`)
+        .setDescription(
+          `*"I am here to protect the peace and order of Anipedia! Here is everything I can do to keep our sanctuary safe and harmonious!"* ❄️⚔️\n\n` +
+          `You can use both **Slash Commands** (\`/warn\`, \`/timeout\`, etc.) or **Mentions** (\`@Emillia warn @user\`)!`
+        )
+        .addFields(
+          {
+            name: '🛡️ Moderation Commands (Staff Only)',
+            value: [
+              '`/warn <@user> [reason]` — Issue a formal warning',
+              '`/warns [@user]` — Check warning history & active count',
+              '`/leaderboard` — View the top 5 warned members',
+              '`/deletewarn <@user> [number]` — Remove a specific warning',
+              '`/clearwarns <@user> [reason]` — Reset all warnings to 0',
+              '`/timeout <@user> [duration] [reason]` — Timeout/mute (e.g. 10m, 2h)',
+              '`/untimeout <@user>` — Lift an active timeout',
+              '`/kick <@user> [reason]` — Kick user (Purges 15 messages)',
+              '`/ban <@user> [reason]` — Ban user (Purges 15 messages)',
+              '`/unban <user_id>` — Revoke a ban by user ID',
+              '`/purge <amount> [@user]` — Bulk delete messages (1–100)'
+            ].join('\n'),
+            inline: false
+          },
+          {
+            name: '📋 Server Rules Management',
+            value: [
+              '`/rules` — View all registered server rules',
+              '`/setrule <number> <text>` — Add or update a rule',
+              '`/delrule <number>` — Delete a rule'
+            ].join('\n'),
+            inline: false
+          },
+          {
+            name: '✨ General Commands',
+            value: [
+              '`/introduce` — Learn about Emilia and her role',
+              '`/help` — Open this command manual'
+            ].join('\n'),
+            inline: false
+          }
+        )
+        .setThumbnail('https://i.imgur.com/emillia_thumb.png')
+        .setFooter({ text: 'Emillia — Guardian of Anipedia • Staff Enforcement Bot ✨' })
+        .setTimestamp();
+      await interaction.reply({ embeds: [helpEmbed] });
+      return;
+    }
+  } catch (err) {
+    console.error("Error executing slash command interaction:", err);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: "Something went wrong while executing this command! 😰", ephemeral: true });
+    }
+  }
+});
 
 // Log in to Discord
 client.login(process.env.DISCORD_TOKEN);
