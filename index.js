@@ -447,6 +447,9 @@ client.on('messageCreate', async (message) => {
   // Ignore messages from bots
   if (message.author.bot) return;
 
+  const trimmedContent = message.content.trim();
+  const startsWithPrefix = trimmedContent.startsWith('~');
+
   // Check if bot was mentioned
   const botMention = `<@${client.user.id}>`;
   const botNicknameMention = `<@!${client.user.id}>`;
@@ -465,7 +468,7 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  if (!isMentioned && !isReplyToBot) return;
+  if (!startsWithPrefix && !isMentioned && !isReplyToBot) return;
 
   try {
     const username = message.author.username;
@@ -474,11 +477,16 @@ client.on('messageCreate', async (message) => {
     const guildName = message.guild?.name || "DM";
     const channelName = message.channel.name || "DM";
 
-    // Clean user query by removing the mention string
-    let cleanQuery = message.content
-      .replace(botMention, '')
-      .replace(botNicknameMention, '')
-      .trim();
+    // Clean user query
+    let cleanQuery = '';
+    if (startsWithPrefix) {
+      cleanQuery = trimmedContent.slice(1).trim();
+    } else {
+      cleanQuery = message.content
+        .replace(botMention, '')
+        .replace(botNicknameMention, '')
+        .trim();
+    }
 
     const lowerQuery = cleanQuery.toLowerCase();
 
@@ -703,7 +711,7 @@ client.on('messageCreate', async (message) => {
       
       // We need a target member for everything except unban and purge
       if (actionKeyword !== 'unban' && actionKeyword !== 'purge' && !targetMember) {
-        await message.reply(`Who should I perform this action on? Please mention the user, like this: \`@Emillia ${actionKeyword} @user <reason>\`! 🌸`);
+        await message.reply(`Who should I perform this action on? Please mention the user, like this: \`~${actionKeyword} @user <reason>\`! 🌸`);
         return;
       }
 
@@ -808,7 +816,7 @@ client.on('messageCreate', async (message) => {
       } else if (actionKeyword === 'purge') {
         const numMatch = cleanQuery.match(/\b([1-9]\d?|100)\b/);
         if (!numMatch) {
-          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `@Emillia purge 20` or `@Emillia purge @user 15`! 🌸");
+          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `~purge 20` or `~purge @user 15`! 🌸");
           return;
         }
         const purgeAmount = parseInt(numMatch[1], 10);
@@ -937,7 +945,7 @@ client.on('messageCreate', async (message) => {
         if (requestedWarnNum !== null) {
           const targetIndex = requestedWarnNum - 1;
           if (targetIndex < 0 || targetIndex >= warnDocs.length) {
-            await message.reply(`Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). Use \`@Emillia warns @user\` to see them! ❄️`);
+            await message.reply(`Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). Use \`~warns @user\` to see them! ❄️`);
             return;
           }
           deletedWarnDoc = warnDocs[targetIndex];
@@ -1076,7 +1084,7 @@ client.on('messageCreate', async (message) => {
       } else if (actionKeyword === 'unban') {
         const idMatch = cleanQuery.match(/\b\d{17,19}\b/);
         if (!idMatch) {
-          await message.reply("To unban someone, please provide their User ID (e.g. `@Emillia unban 123456789012345678`)! 🌸");
+          await message.reply("To unban someone, please provide their User ID (e.g. `~unban 123456789012345678`)! 🌸");
           return;
         }
         const targetId = idMatch[0];
@@ -1504,7 +1512,7 @@ client.on('messageCreate', async (message) => {
       }
       const delruleMatch = cleanQuery.match(/delrule\s+(\d+)/i);
       if (!delruleMatch) {
-        await message.reply("To delete a rule, please use: `@Emillia delrule <number>`! 🌸");
+        await message.reply("To delete a rule, please use: `~delrule <number>`! 🌸");
         return;
       }
       const ruleNum = delruleMatch[1];
@@ -1523,7 +1531,7 @@ client.on('messageCreate', async (message) => {
 
     if (lowerQuery === 'rules' || lowerQuery === 'listrules' || lowerQuery === 'list rules') {
       if (serverRulesCache.size === 0) {
-        await message.reply("We don't have any server rules registered yet! A moderator can add some using `@Emillia setrule <number> <text>`. 🌸");
+        await message.reply("We don't have any server rules registered yet! A moderator can add some using `~setrule <number> <text>`. 🌸");
         return;
       }
       
@@ -1709,7 +1717,7 @@ client.on('messageCreate', async (message) => {
               value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
               inline: false 
             });
-            warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Use @Emillia deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+            warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Use ~deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           } else {
             warningsEmbed.addFields({ 
               name: `${dot} **Disciplinary Log**`, 
@@ -1764,7 +1772,7 @@ client.on('messageCreate', async (message) => {
           }
         )
         .setThumbnail('https://i.imgur.com/emillia_thumb.png')
-        .setFooter({ text: 'Type @Emillia help to see all my commands! ✨' })
+        .setFooter({ text: 'Type ~help to see all my commands! ✨' })
         .setTimestamp();
       await message.channel.send({ embeds: [introEmbed] });
       return;
@@ -1776,7 +1784,7 @@ client.on('messageCreate', async (message) => {
 
       const helpEmbed = new EmbedBuilder()
         .setColor(0x9B59B6)
-        .setTitle(`${announce} **Emillia — Command Guide** ${verify}`)
+        .setTitle(`**Emillia — Command Guide** ${verify}`)
         .setDescription(
           `*${sparkle} I am here to protect **Anipedia** and keep everyone safe!* ❄️\n` +
           `*${sparkle} My big sister **Tessia** 💜 handles fun chatting — I handle the serious moderation!* ⚔️\n\n` +
@@ -1787,42 +1795,42 @@ client.on('messageCreate', async (message) => {
           {
             name: `${announce} **Disciplinary & Warnings**`,
             value: [
-              `${sparkle} \`@Emillia warn @user <reason>\` — **Warn User** ${verify}`,
-              `${sparkle} \`@Emillia deletewarn @user [number]\` — **Delete Warning** ${verify}`,
-              `${sparkle} \`@Emillia clearwarns @user\` — **Clear All Warnings** ${verify}`,
-              `${sparkle} \`@Emillia warns @user\` — **View Warning History** ${verify}`,
-              `${sparkle} \`@Emillia warns leaderboard\` — **Top 5 Most Warned** ${verify}`,
-              `${sparkle} \`@Emillia purge <1-100> [@user]\` — **Purge Channel Messages** ${verify}`
+              `${sparkle} \`~warn @user <reason>\` — **Warn User** ${verify}`,
+              `${sparkle} \`~deletewarn @user [number]\` — **Delete Warning** ${verify}`,
+              `${sparkle} \`~clearwarns @user\` — **Clear All Warnings** ${verify}`,
+              `${sparkle} \`~warns @user\` — **View Warning History** ${verify}`,
+              `${sparkle} \`~leaderboard\` / \`~warns leaderboard\` — **Top 5 Most Warned** ${verify}`,
+              `${sparkle} \`~purge <1-100> [@user]\` — **Purge Channel Messages** ${verify}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${announce} **Punishments & Restrictions**`,
             value: [
-              `${sparkle} \`@Emillia timeout @user [10m/2h/1d] <reason>\` — **Timeout Member** ${verify}`,
-              `${sparkle} \`@Emillia untimeout @user\` — **Remove Timeout** ${verify}`,
-              `${sparkle} \`@Emillia kick @user <reason>\` — **Kick Member** ${verify}`,
-              `${sparkle} \`@Emillia ban @user <reason>\` — **Ban Member** ${verify}`,
-              `${sparkle} \`@Emillia unban <user_id>\` — **Unban by ID** ${verify}`
+              `${sparkle} \`~timeout @user [10m/2h/1d] <reason>\` — **Timeout Member** ${verify}`,
+              `${sparkle} \`~untimeout @user\` — **Remove Timeout** ${verify}`,
+              `${sparkle} \`~kick @user <reason>\` — **Kick Member** ${verify}`,
+              `${sparkle} \`~ban @user <reason>\` — **Ban Member** ${verify}`,
+              `${sparkle} \`~unban <user_id>\` — **Unban by ID** ${verify}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${announce} **Rules Commands**`,
             value: [
-              `${sparkle} \`@Emillia setrule <number> <text>\` — **Add or Edit Rule** ${verify}`,
-              `${sparkle} \`@Emillia delrule <number>\` — **Delete Rule** ${verify}`,
-              `${sparkle} \`@Emillia rules\` — **List All Server Rules** ${verify}`
+              `${sparkle} \`~setrule <number> <text>\` — **Add or Edit Rule** ${verify}`,
+              `${sparkle} \`~delrule <number>\` — **Delete Rule** ${verify}`,
+              `${sparkle} \`~rules\` — **List All Server Rules** ${verify}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${announce} **General Commands**`,
             value: [
-              `${sparkle} \`@Emillia introduce\` — **Learn About Me** ${verify}`,
-              `${sparkle} \`@Emillia profile\` — **View User Profile** ${verify}`,
-              `${sparkle} \`@Emillia ping\` — **Check Bot Latency** ${verify}`,
-              `${sparkle} \`@Emillia reset\` — **Reset Memory *(Aerion-sama)* ** ${verify}`
+              `${sparkle} \`~introduce\` — **Learn About Me** ${verify}`,
+              `${sparkle} \`~profile\` — **View User Profile** ${verify}`,
+              `${sparkle} \`~ping\` — **Check Bot Latency** ${verify}`,
+              `${sparkle} \`~reset\` — **Reset Memory *(Aerion-sama)* ** ${verify}`
             ].join('\n'),
             inline: false
           }
