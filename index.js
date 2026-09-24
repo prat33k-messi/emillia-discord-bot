@@ -63,24 +63,6 @@ process.on('uncaughtException', (err) => {
   console.error('[Uncaught Exception] Error:', err);
 });
 
-// Cache for server rules to avoid Firestore lookups on every message
-const serverRulesCache = new Map();
-
-// Helper to load rules from Firestore on startup or modifications
-async function loadRulesFromDb() {
-  if (!db) return;
-  try {
-    const snapshot = await db.collection('server_rules').orderBy('number').get();
-    serverRulesCache.clear();
-    snapshot.forEach(doc => {
-      serverRulesCache.set(doc.id, doc.data().text);
-    });
-    console.log(`Loaded ${serverRulesCache.size} server rules into cache.`);
-  } catch (err) {
-    console.error("Error loading rules into cache:", err);
-  }
-}
-
 // Conversation memory cache: Map username -> Array of message objects (per-user)
 const memory = new Map();
 const MAX_MEMORY_LIMIT = 15;
@@ -171,34 +153,12 @@ const slashCommandsData = [
     .addUserOption(opt => opt.setName('user').setDescription('Filter messages by specific user').setRequired(false)),
 
   new SlashCommandBuilder()
-    .setName('rules')
-    .setDescription('View the server rules'),
-
-  new SlashCommandBuilder()
-    .setName('setrule')
-    .setDescription('Add or update a server rule')
-    .addIntegerOption(opt => opt.setName('number').setDescription('Rule number').setRequired(true))
-    .addStringOption(opt => opt.setName('text').setDescription('Rule description text').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('delrule')
-    .setDescription('Delete a server rule')
-    .addIntegerOption(opt => opt.setName('number').setDescription('Rule number to delete').setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName('introduce')
-    .setDescription('Introduce Emillia and her companions'),
-
-  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help and available commands')
 ];
 
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
-  
-  // Preload rules into cache
-  await loadRulesFromDb();
 
   // Preload user memories from Firestore
   if (db) {
@@ -388,6 +348,8 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
     if (!logChannel) return;
 
+    const { verify, dot } = await getModEmojis(guild);
+
     const colorMap = { 
       'warn': 0xF1C40F, 
       'unwarn': 0x2ECC71, 
@@ -399,18 +361,6 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
       'kick': 0xE67E22, 
       'ban': 0x992D22, 
       'unban': 0x2ECC71 
-    };
-    const emojiMap = { 
-      'warn': '⚠️', 
-      'unwarn': '✅', 
-      'deletewarn': '🗑️',
-      'clearwarns': '🕊️',
-      'purge': '🧹',
-      'timeout': '🔇', 
-      'untimeout': '🔊', 
-      'kick': '👢', 
-      'ban': '🔨', 
-      'unban': '🔓' 
     };
     const titleMap = { 
       'warn': 'Moderation Log • User Warned', 
@@ -425,17 +375,23 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
       'unban': 'Moderation Log • User Unbanned' 
     };
 
+    const formattedExtra = extraFields.map(f => ({
+      name: f.name.startsWith(dot) ? f.name : `${dot} **${f.name.replace(/^[^\w\s]+/, '').trim()}**`,
+      value: f.value,
+      inline: f.inline !== undefined ? f.inline : true
+    }));
+
     const logEmbed = new EmbedBuilder()
       .setColor(colorMap[action] || 0x9B59B6)
-      .setTitle(`${emojiMap[action] || '📋'} ${titleMap[action] || action}`)
+      .setTitle(`**${titleMap[action] || action}** ${verify}`)
       .addFields(
-        { name: '👤 Target User', value: `**${targetTag}** \`(${targetId})\``, inline: false },
-        { name: '⚖️ Moderator', value: `**${moderatorTag}**`, inline: true },
-        ...extraFields,
-        { name: '📜 Reason', value: `>>> ${reason || 'No reason specified'}`, inline: false }
+        { name: `${dot} **Target User**`, value: `**${targetTag}** \`(${targetId})\``, inline: false },
+        { name: `${dot} **Moderator**`, value: `**${moderatorTag}**`, inline: true },
+        ...formattedExtra,
+        { name: `${dot} **Reason**`, value: `>>> ${reason || 'No reason specified'}`, inline: false }
       )
       .setTimestamp()
-      .setFooter({ text: 'Emillia Audit Log • Sanctuary Guardian ✨' });
+      .setFooter({ text: 'AniPedia Moderation • Audit Registry' });
 
     await logChannel.send({ embeds: [logEmbed] });
   } catch (err) {
@@ -506,25 +462,11 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'setrule', 'delrule', 'rules', 'listrules',
-      'introduce', 'profile', 'ping', 'reset', 'help', 'commands'
+      'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
-    const introTriggers = ['introduce yourself', 'who are you', 'what are you', 'whats your name', "what's your name", 'who r u', 'tell me about yourself', 'introduce urself', 'what can you do'];
-    const hasIntroTrigger = introTriggers.some(t => lowerQuery.includes(t));
-
-    const ruleInquiryKeywords = [
-      'rule', 'rules', 'allow', 'allowed', 'allowing', 'permit', 'permitted', 'permission',
-      'forbid', 'forbidden', 'prohibit', 'prohibited', 'punish', 'punishment',
-      'violate', 'violation', 'can i', 'can we', 'am i allowed', 'are we allowed', 'is it allowed',
-      'does the server allow', 'do you allow', 'self-promotion', 'self promotion', 'advertising',
-      'advertise', 'promote', 'promotion', 'spam', 'spamming', 'nsfw', 'tos', 'policy',
-      'policies', 'guideline', 'guidelines'
-    ];
-    const hasRuleInquiry = ruleInquiryKeywords.some(k => lowerQuery.includes(k));
-
-    if (!hasCommandWord && !hasIntroTrigger && !hasRuleInquiry) {
+    if (!hasCommandWord) {
       return; // Silently ignore — no typing, no response
     }
 
@@ -804,12 +746,12 @@ client.on('messageCreate', async (message) => {
             { name: `${dot} **Reason**`, value: reason || 'No reason specified', inline: false }
           )
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await message.channel.send({ embeds: [clearWarnsEmbed] });
         logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
+          { name: `${dot} **Warnings Cleared**`, value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
         ]);
         return;
 
@@ -846,21 +788,22 @@ client.on('messageCreate', async (message) => {
           // Delete the command invocation message
           await message.delete().catch(() => {});
 
+          const { verify, dot } = await getModEmojis(message.guild);
           const purgeEmbed = new EmbedBuilder()
             .setColor(0x3498DB)
-            .setTitle('❄️ Emilia\'s Frost Cleansing • Chat Purged 🧹')
-            .setDescription(`*"I have swept the frost away! **${deletedCount}** message(s) have been cleanly purged from the channel!"* ❄️✨\n\n🧹 **Chat Purification Complete**`)
+            .setTitle(`**Chat Purged** ${verify}`)
+            .setDescription(`**${deletedCount}** message(s) have been cleanly purged from the channel.`)
             .addFields(
-              { name: '🧹 Messages Purged', value: `\`${deletedCount} message(s)\``, inline: true },
-              { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true }
+              { name: `${dot} **Messages Purged**`, value: `\`${deletedCount} message(s)\``, inline: true },
+              { name: `${dot} **Enforced By**`, value: `**${message.author.tag}**`, inline: true }
             );
 
           if (targetMember) {
-            purgeEmbed.addFields({ name: '👤 Filtered Member', value: `**${targetMember.user.tag}**`, inline: true });
+            purgeEmbed.addFields({ name: `${dot} **Filtered Member**`, value: `**${targetMember.user.tag}**`, inline: true });
           }
 
           purgeEmbed.setTimestamp()
-            .setFooter({ text: 'Emillia — Guardian of Anipedia • Clean Chat Restored ✨' });
+            .setFooter({ text: 'AniPedia Moderation • Chat Purge' });
 
           const confMsg = await message.channel.send({ embeds: [purgeEmbed] });
           setTimeout(() => confMsg.delete().catch(() => {}), 5000);
@@ -880,7 +823,7 @@ client.on('messageCreate', async (message) => {
           }
 
           logToEmilliaLog(message.guild, 'purge', targetMember ? targetMember.user.tag : `#${message.channel.name}`, targetMember ? targetMember.id : message.channel.id, message.author.tag, `Purged ${deletedCount} message(s) in #${message.channel.name}`, [
-            { name: '🧹 Messages Purged', value: `\`${deletedCount}\``, inline: true }
+            { name: `${dot} **Messages Purged**`, value: `\`${deletedCount}\``, inline: true }
           ]);
         } catch (err) {
           console.error("Purge error:", err);
@@ -1029,12 +972,12 @@ client.on('messageCreate', async (message) => {
             { name: `${dot} **Deleted Warning Reason**`, value: warnReason, inline: false }
           )
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await message.channel.send({ embeds: [deleteWarnEmbed] });
         logToEmilliaLog(message.guild, 'deletewarn', targetMember.user.tag, targetMember.id, message.author.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
-          { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true }
+          { name: `${dot} **Remaining Warnings**`, value: `\`#${warningsCount}\``, inline: true }
         ]);
         return;
 
@@ -1066,7 +1009,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **Reason**`, value: 'Disciplinary period completed or manually lifted', inline: false }
             )
             .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-            .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [untimeoutEmbed] });
@@ -1114,7 +1057,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **Enforced By**`, value: `<@${message.author.id}>`, inline: true },
               { name: `${dot} **Reason**`, value: 'Ban restriction lifted', inline: false }
             )
-            .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [unbanEmbed] });
@@ -1125,8 +1068,7 @@ client.on('messageCreate', async (message) => {
         }
         return;
 
-      } else
-      if (actionKeyword === 'warn') {
+      } else if (actionKeyword === 'warn') {
         const reason = getReason(cleanQuery, 'warn', targetMember);
         
         let warningsCount = 1;
@@ -1195,32 +1137,33 @@ client.on('messageCreate', async (message) => {
           }
         }
 
+        const { verify, dot } = await getModEmojis(message.guild);
+
         // Try to DM the user
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
             .setColor(0xF1C40F)
-            .setTitle('🌸 Emilia\'s Official Warning Notice ⚠️')
-            .setDescription(`*"You received a formal warning in **${guildName}**. Please be mindful of our server rules so everyone can have a wonderful time together!"* 🌸`)
+            .setTitle(`**Warning Notice** ${verify}`)
+            .setDescription(`*You received a formal warning in **${guildName}**. Please follow the server guidelines.*`)
             .addFields(
-              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
-              { name: '📊 Total Warnings', value: `\`#${warningsCount}\``, inline: true },
-              { name: '⚖️ Issued By', value: `**${message.author.tag}**`, inline: true }
+              { name: `${dot} **Reason & Context**`, value: `>>> ${reason}`, inline: false },
+              { name: `${dot} **Total Warnings**`, value: `\`#${warningsCount}\``, inline: true },
+              { name: `${dot} **Issued By**`, value: `**${message.author.tag}**`, inline: true }
             );
 
           if (autoTimeoutApplied) {
-            dmEmbed.addFields({ name: '⚡ Auto-Timeout Activated', value: `\`${autoTimeoutLabel}\``, inline: false });
+            dmEmbed.addFields({ name: `${dot} **Auto-Timeout Activated**`, value: `\`${autoTimeoutLabel}\``, inline: false });
           }
 
           dmEmbed.setTimestamp()
-            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
+            .setFooter({ text: `AniPedia Moderation • ${guildName}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
         }
 
         // Send embed response in channel
-        const { verify, dot } = await getModEmojis(message.guild);
         const caseId = generateCaseId();
 
         const warnEmbed = new EmbedBuilder()
@@ -1233,7 +1176,7 @@ client.on('messageCreate', async (message) => {
             { name: `${dot} **Reason**`, value: reason || 'No reason specified', inline: false }
           )
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         if (autoTimeoutApplied) {
@@ -1242,7 +1185,7 @@ client.on('messageCreate', async (message) => {
 
         await message.channel.send({ embeds: [warnEmbed] });
         logToEmilliaLog(message.guild, 'warn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: '📊 Warning Level', value: `\`#${warningsCount}\``, inline: true }
+          { name: `${dot} **Warning Level**`, value: `\`#${warningsCount}\``, inline: true }
         ]);
         return;
 
@@ -1274,26 +1217,27 @@ client.on('messageCreate', async (message) => {
             });
           }
 
+          const { verify, dot } = await getModEmojis(message.guild);
+
           // Try to DM the user
           let dmSent = true;
           try {
             const dmEmbed = new EmbedBuilder()
               .setColor(0x3498DB)
-              .setTitle('🌸 Emilia\'s Frost Seal • Timeout Notice 🔇')
-              .setDescription(`*"You were placed in timeout in **${guildName}**. Please use this cooling-down period to reflect upon our server rules."* ❄️`)
+              .setTitle(`**Timeout Notice** ${verify}`)
+              .setDescription(`*You were placed in timeout in **${guildName}**. Please use this cooling-down period to reflect upon our server rules.*`)
               .addFields(
-                { name: '⏳ Freeze Duration', value: `\`${durationInfo.label}\``, inline: true },
-                { name: '⚖️ Enforced By', value: `**${message.author.tag}**`, inline: true },
-                { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
+                { name: `${dot} **Freeze Duration**`, value: `\`${durationInfo.label}\``, inline: true },
+                { name: `${dot} **Enforced By**`, value: `**${message.author.tag}**`, inline: true },
+                { name: `${dot} **Reason & Context**`, value: `>>> ${reason}`, inline: false }
               )
               .setTimestamp()
-              .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
+              .setFooter({ text: `AniPedia Moderation • ${guildName}` });
             await targetMember.send({ embeds: [dmEmbed] });
           } catch (err) {
             dmSent = false;
           }
 
-          const { verify, dot } = await getModEmojis(message.guild);
           const caseId = generateCaseId();
 
           const timeoutEmbed = new EmbedBuilder()
@@ -1306,12 +1250,12 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **Reason**`, value: reason || 'No reason specified', inline: false }
             )
             .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-            .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [timeoutEmbed] });
           logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-            { name: '⏳ Duration', value: `\`${durationInfo.label}\``, inline: true }
+            { name: `${dot} **Duration**`, value: `\`${durationInfo.label}\``, inline: true }
           ]);
         } catch (err) {
           console.error("Timeout execution error:", err);
@@ -1327,20 +1271,21 @@ client.on('messageCreate', async (message) => {
         const reason = getReason(cleanQuery, 'kick', targetMember);
         const targetTag = targetMember.user.tag;
         const targetId = targetMember.id;
+        const { verify, dot } = await getModEmojis(message.guild);
 
         // Try to DM before kicking
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
             .setColor(0xE67E22)
-            .setTitle('🌸 Emilia\'s Expulsion Decree • Kicked from Server 👢')
-            .setDescription(`*"You were expelled from **${guildName}**. Please reflect upon your actions before considering returning to our community."* 🌸🚪`)
+            .setTitle(`**Kicked from Server** ${verify}`)
+            .setDescription(`*You were expelled from **${guildName}**. Please reflect upon your actions.*`)
             .addFields(
-              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
-              { name: '⚖️ Expelled By', value: `**${message.author.tag}**`, inline: true }
+              { name: `${dot} **Reason & Context**`, value: `>>> ${reason}`, inline: false },
+              { name: `${dot} **Expelled By**`, value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
+            .setFooter({ text: `AniPedia Moderation • ${guildName}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
@@ -1365,7 +1310,6 @@ client.on('messageCreate', async (message) => {
             });
           }
 
-          const { verify, dot } = await getModEmojis(message.guild);
           const caseId = generateCaseId();
 
           const kickEmbed = new EmbedBuilder()
@@ -1378,12 +1322,12 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **Reason**`, value: reason || 'No reason specified', inline: false }
             )
             .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : null)
-            .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [kickEmbed] });
           logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason, [
-            { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+            { name: `${dot} **Message Cleanup**`, value: `\`${deletedCount} message(s) purged\``, inline: true }
           ]);
         } catch (err) {
           console.error("Kick execution error:", err);
@@ -1399,20 +1343,21 @@ client.on('messageCreate', async (message) => {
         const reason = getReason(cleanQuery, 'ban', targetMember);
         const targetTag = targetMember.user.tag;
         const targetId = targetMember.id;
+        const { verify, dot } = await getModEmojis(message.guild);
 
         // Try to DM before banning
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
             .setColor(0x992D22)
-            .setTitle('🌸 Emilia\'s Judgment • Permanent Exile Notice 🔨')
-            .setDescription(`*"You have been permanently banished from **${guildName}** by royal decree of our moderation team. Disruption to our sanctuary cannot be tolerated."* ❄️⚔️`)
+            .setTitle(`**Permanent Exile Notice** ${verify}`)
+            .setDescription(`*You have been permanently banished from **${guildName}** by royal decree of our moderation team.*`)
             .addFields(
-              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
-              { name: '⚖️ Banned By', value: `**${message.author.tag}**`, inline: true }
+              { name: `${dot} **Reason & Context**`, value: `>>> ${reason}`, inline: false },
+              { name: `${dot} **Banned By**`, value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guildName}` });
+            .setFooter({ text: `AniPedia Moderation • ${guildName}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
@@ -1437,7 +1382,6 @@ client.on('messageCreate', async (message) => {
             });
           }
 
-          const { verify, dot } = await getModEmojis(message.guild);
           const caseId = generateCaseId();
 
           const banEmbed = new EmbedBuilder()
@@ -1450,12 +1394,12 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **Reason**`, value: reason || 'No reason specified', inline: false }
             )
             .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : null)
-            .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [banEmbed] });
           logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, [
-            { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+            { name: `${dot} **Message Cleanup**`, value: `\`${deletedCount} message(s) purged\``, inline: true }
           ]);
         } catch (err) {
           console.error("Ban execution error:", err);
@@ -1470,83 +1414,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // ==========================================
-    // 2. RULES CONFIGURATION COMMANDS
-    // ==========================================
-    if (words.includes('setrule')) {
-      if (getMemberTier(message.member) < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can set server rules! ❄️");
-        return;
-      }
-      const setruleMatch = cleanQuery.match(/setrule\s+(\d+)\s+(.+)/i);
-      if (!setruleMatch) {
-        await message.reply("To set a rule, please use: `@Emillia setrule <number> <rule text>`! 🌸");
-        return;
-      }
-      const ruleNum = setruleMatch[1];
-      const ruleText = setruleMatch[2].trim();
-      
-      if (db) {
-        try {
-          await db.collection('server_rules').doc(ruleNum).set({
-            number: parseInt(ruleNum),
-            text: ruleText,
-            updatedBy: message.author.username,
-            updatedAt: FieldValue.serverTimestamp()
-          });
-          serverRulesCache.set(ruleNum, ruleText);
-          await message.reply(`I have saved **Rule ${ruleNum}**: "${ruleText}". I will keep a close eye on anyone who breaks it! 🌸`);
-        } catch (err) {
-          console.error("Error setting rule:", err);
-          await message.reply("I couldn't save the rule to the database, mou! 😰");
-        }
-      } else {
-        await message.reply("Database not connected, running in memory-only mode. 🌸");
-      }
-      return;
-    }
-
-    if (words.includes('delrule')) {
-      if (getMemberTier(message.member) < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can delete rules! ❄️");
-        return;
-      }
-      const delruleMatch = cleanQuery.match(/delrule\s+(\d+)/i);
-      if (!delruleMatch) {
-        await message.reply("To delete a rule, please use: `~delrule <number>`! 🌸");
-        return;
-      }
-      const ruleNum = delruleMatch[1];
-      if (db) {
-        try {
-          await db.collection('server_rules').doc(ruleNum).delete();
-          serverRulesCache.delete(ruleNum);
-          await message.reply(`I have deleted **Rule ${ruleNum}**. 🌸`);
-        } catch (err) {
-          console.error("Error deleting rule:", err);
-          await message.reply("I couldn't delete the rule, gomen! 😰");
-        }
-      }
-      return;
-    }
-
-    if (lowerQuery === 'rules' || lowerQuery === 'listrules' || lowerQuery === 'list rules') {
-      if (serverRulesCache.size === 0) {
-        await message.reply("We don't have any server rules registered yet! A moderator can add some using `~setrule <number> <text>`. 🌸");
-        return;
-      }
-      
-      // Sort rules by number
-      const sortedRules = [...serverRulesCache.entries()].sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
-      let rulesList = "📋 **Anipedia Server Rules** 📋\n";
-      for (const [num, text] of sortedRules) {
-        rulesList += `**Rule ${num}**: ${text}\n`;
-      }
-      await message.reply(rulesList);
-      return;
-    }
-
-    // ==========================================
-    // 3. UTILITY COMMANDS (HELP, PING, RESET, PROFILE)
+    // 2. UTILITY COMMANDS (HELP, PING, RESET, PROFILE, LEADERBOARD, WARNS)
     // ==========================================
     if (words.includes('warnings') || words.includes('warns') || words.includes('leaderboard') || words.includes('top')) {
       // Check if user specifically asked for the leaderboard
@@ -1581,7 +1449,7 @@ client.on('messageCreate', async (message) => {
             .setColor(0x2ECC71)
             .setTitle(`**Warning Leaderboard** ${verify}`)
             .setDescription(`> ${dot} **Status:** \`100% Peaceful\`\n> No members have active warnings in Anipedia!`)
-            .setFooter({ text: '🏷️ AniPedia Moderation • Top 5 Standings', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
           await message.channel.send({ embeds: [emptyLbEmbed] });
           return;
@@ -1596,17 +1464,17 @@ client.on('messageCreate', async (message) => {
           const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
           
           let statusBadge = '';
-          if (entry.warnings >= 5) statusBadge = ' 🚨 1h Freeze';
-          else if (entry.warnings >= 3) statusBadge = ' ⚠️ Auto-Timeout';
+          if (entry.warnings >= 5) statusBadge = ' (🚨 1h Freeze)';
+          else if (entry.warnings >= 3) statusBadge = ' (⚠️ Auto-Timeout)';
 
-          lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n└ Warnings: **#${entry.warnings}**${statusBadge}`);
+          lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n└ ${dot} Warnings: **#${entry.warnings}**${statusBadge}`);
         }
 
         const lbEmbed = new EmbedBuilder()
           .setColor(0x2ECC71)
           .setTitle(`**Warning Leaderboard** ${verify}`)
           .setDescription(lbEntries.join('\n\n'))
-          .setFooter({ text: '🏷️ AniPedia Moderation • Top 5 Standings', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.channel.send({ embeds: [lbEmbed] });
         return;
@@ -1648,7 +1516,7 @@ client.on('messageCreate', async (message) => {
           .setTitle(`**Disciplinary Record** ${verify}`)
           .setDescription(`${dot} **Member:** <@${targetMember.id}> (${targetMember.user.username})\n${dot} **Total Warnings:** **#0**\n${dot} **Status:** \`Clean Record • Spotless\``)
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: '🏷️ AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.channel.send({ embeds: [cleanEmbed] });
         return;
@@ -1717,21 +1585,21 @@ client.on('messageCreate', async (message) => {
               value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
               inline: false 
             });
-            warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Use ~deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use ~deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           } else {
             warningsEmbed.addFields({ 
               name: `${dot} **Disciplinary Log**`, 
               value: `*This user has ${warningsCount} active warning(s) recorded in memory.*`, 
               inline: false 
             });
-            warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           }
         } catch (err) {
           console.error('Error fetching warning history:', err);
-          warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+          warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
         }
       } else {
-        warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+        warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
       }
       warningsEmbed.setTimestamp();
 
@@ -1739,103 +1607,53 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Introduction Command (beautiful embed) ---
-    if (introTriggers.some(t => lowerQuery.includes(t))) {
-      const { verify, dot } = await getModEmojis(message.guild);
-
-      const introEmbed = new EmbedBuilder()
-        .setColor(0x9B59B6)
-        .setTitle(`**Emillia — Guardian of Anipedia** ${verify}`)
-        .setDescription(
-          `*${dot} "I am Emilia! I will do my absolute best to keep everyone safe!"* ❄️\n\n` +
-          `${dot} Silver-haired half-elf and Royal Selection candidate from Re:Zero, serving as your **guardian and moderation bot** in **Anipedia**! 🌟\n\n` +
-          `${dot} My beloved big sister **Tessia** 💜 handles friendly conversations and anime chats, while **I protect the realm** with rule enforcement, warnings, timeouts, and bans! ⚔️\n\n` +
-          `${dot} Created by **Aerion-sama** 👑 to keep Anipedia peaceful and orderly!`
-        )
-        .addFields(
-          { 
-            name: `${dot} **Companions**`, 
-            value: [
-              `${dot} **Tessia**: Chatbot & Companion ${verify}`,
-              `${dot} **Emillia**: Moderation & Server Guardian ${verify}`
-            ].join('\n'), 
-            inline: false 
-          },
-          { 
-            name: `${dot} **Staff Hierarchy**`, 
-            value: [
-              `${dot} 👑 **Shogun** & **Royal Hand**: All powers (Ban, Kick, Timeout, Warn) ${verify}`,
-              `${dot} 🛡️ **Supervisor**: Kick, Timeout, Warn, Clear/Delete Warn ${verify}`,
-              `${dot} ⚔️ **Moderator**: Timeout, Warn, Purge, Warn History ${verify}`
-            ].join('\n'), 
-            inline: false 
-          }
-        )
-        .setThumbnail('https://i.imgur.com/emillia_thumb.png')
-        .setFooter({ text: 'Type ~help to see all my commands! ✨' })
-        .setTimestamp();
-      await message.channel.send({ embeds: [introEmbed] });
-      return;
-    }
-
     // --- Help Command (rich embed) ---
     if (lowerQuery === 'help' || lowerQuery.includes('what can you do') || lowerQuery.includes('commands')) {
-      const { announce, verify, sparkle } = await getModEmojis(message.guild);
+      const { verify, dot } = await getModEmojis(message.guild);
 
       const helpEmbed = new EmbedBuilder()
         .setColor(0x9B59B6)
         .setTitle(`**Emillia — Command Guide** ${verify}`)
         .setDescription(
-          `*${sparkle} I am here to protect **Anipedia** and keep everyone safe!* ❄️\n` +
-          `*${sparkle} My big sister **Tessia** 💜 handles fun chatting — I handle the serious moderation!* ⚔️\n\n` +
-          `👑 **Staff Hierarchy & Permissions**\n` +
+          `*${dot} I am here to protect **Anipedia** with active moderation and discipline!* ⚔️\n\n` +
+          `**Staff Hierarchy & Permissions**\n` +
           `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
-            name: `${announce} **Disciplinary & Warnings**`,
+            name: `${dot} **Disciplinary & Warnings**`,
             value: [
-              `${sparkle} \`~warn @user <reason>\` — **Warn User** ${verify}`,
-              `${sparkle} \`~deletewarn @user [number]\` — **Delete Warning** ${verify}`,
-              `${sparkle} \`~clearwarns @user\` — **Clear All Warnings** ${verify}`,
-              `${sparkle} \`~warns @user\` — **View Warning History** ${verify}`,
-              `${sparkle} \`~leaderboard\` / \`~warns leaderboard\` — **Top 5 Most Warned** ${verify}`,
-              `${sparkle} \`~purge <1-100> [@user]\` — **Purge Channel Messages** ${verify}`
+              `${dot} \`~warn @user <reason>\` — **Warn User**`,
+              `${dot} \`~deletewarn @user [number]\` — **Delete Warning**`,
+              `${dot} \`~clearwarns @user\` — **Clear All Warnings**`,
+              `${dot} \`~warns @user\` — **View Warning History**`,
+              `${dot} \`~leaderboard\` / \`~warns leaderboard\` — **Top 5 Most Warned**`,
+              `${dot} \`~purge <1-100> [@user]\` — **Purge Channel Messages**`
             ].join('\n'),
             inline: false
           },
           {
-            name: `${announce} **Punishments & Restrictions**`,
+            name: `${dot} **Punishments & Restrictions**`,
             value: [
-              `${sparkle} \`~timeout @user [10m/2h/1d] <reason>\` — **Timeout Member** ${verify}`,
-              `${sparkle} \`~untimeout @user\` — **Remove Timeout** ${verify}`,
-              `${sparkle} \`~kick @user <reason>\` — **Kick Member** ${verify}`,
-              `${sparkle} \`~ban @user <reason>\` — **Ban Member** ${verify}`,
-              `${sparkle} \`~unban <user_id>\` — **Unban by ID** ${verify}`
+              `${dot} \`~timeout @user [10m/2h/1d] <reason>\` — **Timeout Member**`,
+              `${dot} \`~untimeout @user\` — **Remove Timeout**`,
+              `${dot} \`~kick @user <reason>\` — **Kick Member**`,
+              `${dot} \`~ban @user <reason>\` — **Ban Member**`,
+              `${dot} \`~unban <user_id>\` — **Unban by ID**`
             ].join('\n'),
             inline: false
           },
           {
-            name: `${announce} **Rules Commands**`,
+            name: `${dot} **General Commands**`,
             value: [
-              `${sparkle} \`~setrule <number> <text>\` — **Add or Edit Rule** ${verify}`,
-              `${sparkle} \`~delrule <number>\` — **Delete Rule** ${verify}`,
-              `${sparkle} \`~rules\` — **List All Server Rules** ${verify}`
-            ].join('\n'),
-            inline: false
-          },
-          {
-            name: `${announce} **General Commands**`,
-            value: [
-              `${sparkle} \`~introduce\` — **Learn About Me** ${verify}`,
-              `${sparkle} \`~profile\` — **View User Profile** ${verify}`,
-              `${sparkle} \`~ping\` — **Check Bot Latency** ${verify}`,
-              `${sparkle} \`~reset\` — **Reset Memory *(Aerion-sama)* ** ${verify}`
+              `${dot} \`~profile\` — **View User Profile**`,
+              `${dot} \`~ping\` — **Check Bot Latency**`,
+              `${dot} \`~reset\` — **Reset Memory *(Aerion-sama)* **`
             ].join('\n'),
             inline: false
           }
         )
-        .setFooter({ text: 'Emillia — Guardian of Anipedia • Built by Aerion-sama 👑' })
+        .setFooter({ text: 'AniPedia Moderation • Built by Aerion-sama' })
         .setTimestamp();
       await message.reply({ embeds: [helpEmbed] });
       return;
@@ -1944,7 +1762,7 @@ Formatting & Style:
       systemPromptContent += `\n\nHere are some details you remember about ${nickname}:\n- ${userMemories.join('\n- ')}`;
     }
 
-    // Inject server rules context from cache
+    // Inject server rules context
     const defaultRules = [
       "Keep the chat clean, respectful, and family-friendly.",
       "No spamming, flooding, or advertising of other servers/products.",
@@ -1953,22 +1771,9 @@ Formatting & Style:
     ];
 
     systemPromptContent += `\n\n[ANIPEDIA SERVER RULES - Use these rules to answer the user's questions about what is allowed or if a rule is valid. Cites the exact rule number when answering. If they ask if something is valid/allowed, cross reference with these rules and reply in character as Emilia whether it is allowed or not:]\n`;
-
-    const finalRules = new Map();
     defaultRules.forEach((rule, index) => {
-      finalRules.set((index + 1).toString(), rule);
+      systemPromptContent += `Rule ${index + 1}: ${rule}\n`;
     });
-
-    if (serverRulesCache.size > 0) {
-      for (const [num, text] of serverRulesCache) {
-        finalRules.set(num, text);
-      }
-    }
-
-    const sortedRules = [...finalRules.entries()].sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
-    for (const [num, text] of sortedRules) {
-      systemPromptContent += `Rule ${num}: ${text}\n`;
-    }
 
     systemPromptContent += moodHint + antiRepetitionHint;
 
@@ -2247,17 +2052,17 @@ client.on('interactionCreate', async (interaction) => {
       try {
         const dmEmbed = new EmbedBuilder()
           .setColor(0xF1C40F)
-          .setTitle('🌸 Emilia\'s Official Warning Notice ⚠️')
-          .setDescription(`*"You received a formal warning in **${guild.name}**. Please be mindful of our server rules so everyone can have a wonderful time together!"* 🌸`)
+          .setTitle(`**Warning Notice** ${verify}`)
+          .setDescription(`*"You received a formal warning in **${guild.name}**."*`)
           .addFields(
-            { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
-            { name: '📊 Total Warnings', value: `\`#${warningsCount}\``, inline: true },
-            { name: '⚖️ Issued By', value: `**${user.tag}**`, inline: true }
+            { name: `${dot} **Reason**`, value: reason, inline: false },
+            { name: `${dot} **Total Warnings**`, value: `\`#${warningsCount}\``, inline: true },
+            { name: `${dot} **Issued By**`, value: `**${user.tag}**`, inline: true }
           );
         if (autoTimeoutApplied) {
-          dmEmbed.addFields({ name: '⚡ Auto-Timeout Activated', value: `\`${autoTimeoutLabel}\``, inline: false });
+          dmEmbed.addFields({ name: `${dot} **Auto-Timeout**`, value: `\`${autoTimeoutLabel}\``, inline: false });
         }
-        dmEmbed.setTimestamp().setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+        dmEmbed.setTimestamp().setFooter({ text: `AniPedia Moderation • ${guild.name}` });
         await targetMember.send({ embeds: [dmEmbed] });
       } catch (err) {}
 
@@ -2272,7 +2077,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: `${dot} **Reason**`, value: reason, inline: false }
         )
         .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       if (autoTimeoutApplied) {
@@ -2281,7 +2086,7 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({ embeds: [warnEmbed] });
       logToEmilliaLog(guild, 'warn', targetMember.user.tag, targetMember.id, user.tag, reason, [
-        { name: '📊 Warning Level', value: `\`#${warningsCount}\``, inline: true }
+        { name: `${dot} **Warning Level**`, value: `\`#${warningsCount}\``, inline: true }
       ]);
       return;
     }
@@ -2305,17 +2110,17 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`**Disciplinary Record** ${verify}`)
           .setDescription(`${dot} **Member:** <@${targetMember.id}> (${targetMember.user.username})\n${dot} **Total Warnings:** **#0**\n${dot} **Status:** \`Clean Record • Spotless\``)
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: '🏷️ AniPedia Moderation • Disciplinary Registry', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await interaction.reply({ embeds: [cleanEmbed] });
         return;
       }
 
-      let statusLabel = '`⚠️ Active Warnings`';
+      let statusLabel = '`Active Warnings`';
       if (warningsCount >= 5) {
-        statusLabel = '`🚨 High Risk (5+ Warnings)`';
+        statusLabel = '`High Risk (5+ Warnings)`';
       } else if (warningsCount >= 3) {
-        statusLabel = '`⚠️ Auto-Timeout Active`';
+        statusLabel = '`Auto-Timeout Active`';
       }
 
       const warningsEmbed = new EmbedBuilder()
@@ -2369,7 +2174,7 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      warningsEmbed.setFooter({ text: '🏷️ AniPedia Moderation • Use /deletewarn to remove', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
+      warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use ~deletewarn to remove', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
       warningsEmbed.setTimestamp();
       await interaction.reply({ embeds: [warningsEmbed] });
       return;
@@ -2396,7 +2201,7 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0x2ECC71)
           .setTitle(`**Warning Leaderboard** ${verify}`)
           .setDescription(`> ${dot} **Status:** \`100% Peaceful\`\n> No members have active warnings in Anipedia!`)
-          .setFooter({ text: '🏷️ AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await interaction.reply({ embeds: [emptyLbEmbed] });
         return;
@@ -2411,17 +2216,17 @@ client.on('interactionCreate', async (interaction) => {
         const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
         
         let statusBadge = '';
-        if (entry.warnings >= 5) statusBadge = ' 🚨 1h Freeze';
-        else if (entry.warnings >= 3) statusBadge = ' ⚠️ Auto-Timeout';
+        if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
+        else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
 
-        lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n└ Warnings: **#${entry.warnings}**${statusBadge}`);
+        lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n└ ${dot} Warnings: **#${entry.warnings}**${statusBadge}`);
       }
 
       const lbEmbed = new EmbedBuilder()
         .setColor(0x2ECC71)
         .setTitle(`**Warning Leaderboard** ${verify}`)
         .setDescription(lbEntries.join('\n\n'))
-        .setFooter({ text: '🏷️ AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
       await interaction.reply({ embeds: [lbEmbed] });
       return;
@@ -2476,15 +2281,15 @@ client.on('interactionCreate', async (interaction) => {
         try {
           const dmEmbed = new EmbedBuilder()
             .setColor(0x3498DB)
-            .setTitle('🌸 Emilia\'s Frost Seal • Timeout Notice 🔇')
-            .setDescription(`*"You were placed in timeout in **${guild.name}**. Please use this cooling-down period to reflect upon our server rules."* ❄️`)
+            .setTitle(`**Timeout Notice** ${verify}`)
+            .setDescription(`*"You were placed in timeout in **${guild.name}**."*`)
             .addFields(
-              { name: '⏳ Freeze Duration', value: `\`${durationInfo.label}\``, inline: true },
-              { name: '⚖️ Enforced By', value: `**${user.tag}**`, inline: true },
-              { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false }
+              { name: `${dot} **Duration**`, value: `\`${durationInfo.label}\``, inline: true },
+              { name: `${dot} **Enforced By**`, value: `**${user.tag}**`, inline: true },
+              { name: `${dot} **Reason**`, value: reason, inline: false }
             )
             .setTimestamp()
-            .setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+            .setFooter({ text: `AniPedia Moderation • ${guild.name}` });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {}
 
@@ -2499,12 +2304,12 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **Reason**`, value: reason, inline: false }
           )
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [timeoutEmbed] });
         logToEmilliaLog(guild, 'timeout', targetMember.user.tag, targetMember.id, user.tag, reason, [
-          { name: '⏳ Duration', value: `\`${durationInfo.label}\``, inline: true }
+          { name: `${dot} **Duration**`, value: `\`${durationInfo.label}\``, inline: true }
         ]);
       } catch (err) {
         console.error("Timeout slash command error:", err);
@@ -2555,7 +2360,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **Reason**`, value: 'Disciplinary period completed or manually lifted', inline: false }
           )
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [untimeoutEmbed] });
@@ -2601,14 +2406,14 @@ client.on('interactionCreate', async (interaction) => {
       try {
         const dmEmbed = new EmbedBuilder()
           .setColor(0xE67E22)
-          .setTitle('🌸 Emilia\'s Expulsion Decree • Kicked from Server 👢')
-          .setDescription(`*"You were expelled from **${guild.name}**. Please reflect upon your actions before considering returning to our community."* 🌸🚪`)
+          .setTitle(`**Expulsion Notice** ${verify}`)
+          .setDescription(`*"You were expelled from **${guild.name}**."*`)
           .addFields(
-            { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
-            { name: '⚖️ Expelled By', value: `**${user.tag}**`, inline: true }
+            { name: `${dot} **Reason**`, value: reason, inline: false },
+            { name: `${dot} **Expelled By**`, value: `**${user.tag}**`, inline: true }
           )
           .setTimestamp()
-          .setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+          .setFooter({ text: `AniPedia Moderation • ${guild.name}` });
         await targetMember.send({ embeds: [dmEmbed] });
       } catch (err) {}
 
@@ -2640,12 +2445,12 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **Reason**`, value: reason, inline: false }
           )
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [kickEmbed] });
         logToEmilliaLog(guild, 'kick', targetTag, targetId, user.tag, reason, [
-          { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+          { name: `${dot} **Message Cleanup**`, value: `\`${deletedCount} message(s) purged\``, inline: true }
         ]);
       } catch (err) {
         console.error("Kick slash command error:", err);
@@ -2688,14 +2493,14 @@ client.on('interactionCreate', async (interaction) => {
       try {
         const dmEmbed = new EmbedBuilder()
           .setColor(0x992D22)
-          .setTitle('🌸 Emilia\'s Judgment • Permanent Exile Notice 🔨')
-          .setDescription(`*"You have been permanently banished from **${guild.name}** by royal decree of our moderation team. Disruption to our sanctuary cannot be tolerated."* ❄️⚔️`)
+          .setTitle(`**Permanent Exile Notice** ${verify}`)
+          .setDescription(`*"You have been permanently banished from **${guild.name}**."*`)
           .addFields(
-            { name: '📜 Reason & Context', value: `>>> ${reason}`, inline: false },
-            { name: '⚖️ Banned By', value: `**${user.tag}**`, inline: true }
+            { name: `${dot} **Reason**`, value: reason, inline: false },
+            { name: `${dot} **Banned By**`, value: `**${user.tag}**`, inline: true }
           )
           .setTimestamp()
-          .setFooter({ text: `Emillia — Guardian of Anipedia • ${guild.name}` });
+          .setFooter({ text: `AniPedia Moderation • ${guild.name}` });
         await targetMember.send({ embeds: [dmEmbed] });
       } catch (err) {}
 
@@ -2727,12 +2532,12 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **Reason**`, value: reason, inline: false }
           )
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [banEmbed] });
         logToEmilliaLog(guild, 'ban', targetTag, targetId, user.tag, reason, [
-          { name: '🧹 Message Cleanup', value: `\`${deletedCount} message(s) purged\``, inline: true }
+          { name: `${dot} **Message Cleanup**`, value: `\`${deletedCount} message(s) purged\``, inline: true }
         ]);
       } catch (err) {
         console.error("Ban slash command error:", err);
@@ -2773,7 +2578,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true },
             { name: `${dot} **Reason**`, value: 'Ban restriction lifted', inline: false }
           )
-          .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [unbanEmbed] });
@@ -2862,12 +2667,12 @@ client.on('interactionCreate', async (interaction) => {
           { name: `${dot} **Reason**`, value: reason, inline: false }
         )
         .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await interaction.reply({ embeds: [clearWarnsEmbed] });
       logToEmilliaLog(guild, 'clearwarns', targetMember.user.tag, targetMember.id, user.tag, reason, [
-        { name: '📊 Warnings Cleared', value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
+        { name: `${dot} **Warnings Cleared**`, value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
       ]);
       return;
     }
@@ -2990,12 +2795,12 @@ client.on('interactionCreate', async (interaction) => {
           { name: `${dot} **Deleted Warning Reason**`, value: warnReason, inline: false }
         )
         .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .setFooter({ text: `🏷️ AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await interaction.reply({ embeds: [deleteWarnEmbed] });
       logToEmilliaLog(guild, 'deletewarn', targetMember.user.tag, targetMember.id, user.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
-        { name: '📊 Remaining Warnings', value: `\`#${warningsCount}\``, inline: true }
+        { name: `${dot} **Remaining Warnings**`, value: `\`#${warningsCount}\``, inline: true }
       ]);
       return;
     }
@@ -3035,18 +2840,18 @@ client.on('interactionCreate', async (interaction) => {
 
         const purgeEmbed = new EmbedBuilder()
           .setColor(0x3498DB)
-          .setTitle('❄️ Emilia\'s Frost Cleansing • Chat Purged 🧹')
-          .setDescription(`*"I have swept the frost away! **${deletedCount}** message(s) have been cleanly purged from the channel!"* ❄️✨\n\n🧹 **Chat Purification Complete**`)
+          .setTitle(`**Chat Purged** ${verify}`)
+          .setDescription(`**${deletedCount}** message(s) have been cleanly purged from the channel!`)
           .addFields(
-            { name: '🧹 Messages Purged', value: `\`${deletedCount} message(s)\``, inline: true },
-            { name: '⚖️ Enforced By', value: `**${user.tag}**`, inline: true }
+            { name: `${dot} **Messages Purged**`, value: `\`${deletedCount} message(s)\``, inline: true },
+            { name: `${dot} **Enforced By**`, value: `<@${user.id}>`, inline: true }
           );
 
         if (targetUser) {
-          purgeEmbed.addFields({ name: '👤 Filtered Member', value: `**${targetUser.tag}**`, inline: true });
+          purgeEmbed.addFields({ name: `${dot} **Filtered Member**`, value: `<@${targetUser.id}>`, inline: true });
         }
 
-        purgeEmbed.setTimestamp().setFooter({ text: 'Emillia — Guardian of Anipedia • Clean Chat Restored ✨' });
+        purgeEmbed.setTimestamp().setFooter({ text: 'AniPedia Moderation • Clean Chat Restored', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
         await interaction.reply({ embeds: [purgeEmbed], ephemeral: true });
 
         if (db) {
@@ -3070,161 +2875,43 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 12. /rules, /setrule, /delrule
-    // ------------------------------------------
-    if (commandName === 'rules') {
-      if (serverRulesCache.size === 0) {
-        await interaction.reply({ content: "We don't have any server rules registered yet! A moderator can add some using `/setrule <number> <text>`. 🌸", ephemeral: true });
-        return;
-      }
-      const sortedRules = [...serverRulesCache.entries()].sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
-      let rulesList = "📋 **Anipedia Server Rules** 📋\n";
-      for (const [num, text] of sortedRules) {
-        rulesList += `**Rule ${num}**: ${text}\n`;
-      }
-      await interaction.reply({ content: rulesList });
-      return;
-    }
-
-    if (commandName === 'setrule') {
-      if (modTier < 2) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can set server rules! ❄️", ephemeral: true });
-        return;
-      }
-      const ruleNum = options.getInteger('number').toString();
-      const ruleText = options.getString('text').trim();
-
-      if (db) {
-        try {
-          await db.collection('server_rules').doc(ruleNum).set({
-            number: parseInt(ruleNum),
-            text: ruleText,
-            updatedBy: user.username,
-            updatedAt: FieldValue.serverTimestamp()
-          });
-          serverRulesCache.set(ruleNum, ruleText);
-          await interaction.reply({ content: `I have saved **Rule ${ruleNum}**: "${ruleText}". I will keep a close eye on anyone who breaks it! 🌸` });
-        } catch (err) {
-          console.error("Error setting rule in slash command:", err);
-          await interaction.reply({ content: "Could not save the rule to database! 😰", ephemeral: true });
-        }
-      } else {
-        serverRulesCache.set(ruleNum, ruleText);
-        await interaction.reply({ content: `Saved **Rule ${ruleNum}** in memory. 🌸` });
-      }
-      return;
-    }
-
-    if (commandName === 'delrule') {
-      if (modTier < 2) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', or 'Supervisor' can delete rules! ❄️", ephemeral: true });
-        return;
-      }
-      const ruleNum = options.getInteger('number').toString();
-      if (db) {
-        try {
-          await db.collection('server_rules').doc(ruleNum).delete();
-          serverRulesCache.delete(ruleNum);
-          await interaction.reply({ content: `I have deleted **Rule ${ruleNum}**. 🌸` });
-        } catch (err) {
-          console.error("Error deleting rule in slash command:", err);
-          await interaction.reply({ content: "Could not delete the rule! 😰", ephemeral: true });
-        }
-      } else {
-        serverRulesCache.delete(ruleNum);
-        await interaction.reply({ content: `Deleted **Rule ${ruleNum}**. 🌸` });
-      }
-      return;
-    }
-
-    // ------------------------------------------
-    // 13. /introduce
-    // ------------------------------------------
-    if (commandName === 'introduce') {
-      const introEmbed = new EmbedBuilder()
-        .setColor(0x9B59B6)
-        .setTitle(`**Emillia — Guardian of Anipedia** ${verify}`)
-        .setDescription(
-          `*${dot} "I am Emilia! I will do my absolute best to keep everyone safe!"* ❄️\n\n` +
-          `${dot} Silver-haired half-elf and Royal Selection candidate from Re:Zero, serving as your **guardian and moderation bot** in **Anipedia**! 🌟\n\n` +
-          `${dot} My beloved big sister **Tessia** 💜 handles friendly conversations and anime chats, while **I protect the realm** with rule enforcement, warnings, timeouts, and bans! ⚔️\n\n` +
-          `${dot} Created by **Aerion-sama** 👑 to keep Anipedia peaceful and orderly!`
-        )
-        .addFields(
-          { 
-            name: `${dot} **Companions**`, 
-            value: [
-              `${dot} **Tessia**: Chatbot & Companion ${verify}`,
-              `${dot} **Emillia**: Moderation & Server Guardian ${verify}`
-            ].join('\n'), 
-            inline: false 
-          },
-          { 
-            name: `${dot} **Staff Hierarchy**`, 
-            value: [
-              `${dot} 👑 **Shogun** & **Royal Hand**: All powers (Ban, Kick, Timeout, Warn) ${verify}`,
-              `${dot} 🛡️ **Supervisor**: Kick, Timeout, Warn, Clear/Delete Warn ${verify}`,
-              `${dot} ⚔️ **Moderator**: Timeout, Warn, Purge, Warn History ${verify}`
-            ].join('\n'), 
-            inline: false 
-          }
-        )
-        .setThumbnail('https://i.imgur.com/emillia_thumb.png')
-        .setFooter({ text: 'Type /help to see all my commands! ✨' })
-        .setTimestamp();
-      await interaction.reply({ embeds: [introEmbed] });
-      return;
-    }
-
-    // ------------------------------------------
-    // 14. /help
+    // 12. /help
     // ------------------------------------------
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
         .setColor(0x9B59B6)
-        .setTitle(`🌸 Emilia's Royal Command Guide 📜`)
+        .setTitle(`**Emillia — Command Guide** ${verify}`)
         .setDescription(
-          `*"I am here to protect the peace and order of Anipedia! Here is everything I can do to keep our sanctuary safe and harmonious!"* ❄️⚔️\n\n` +
-          `You can use both **Slash Commands** (\`/warn\`, \`/timeout\`, etc.) or **Mentions** (\`@Emillia warn @user\`)!`
+          `*${dot} I am here to protect **Anipedia** with active moderation and discipline!* ⚔️\n\n` +
+          `**Staff Hierarchy & Permissions**\n` +
+          `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
-            name: '🛡️ Moderation Commands (Staff Only)',
+            name: `${dot} **Disciplinary & Warnings**`,
             value: [
-              '`/warn <@user> [reason]` — Issue a formal warning',
-              '`/warns [@user]` — Check warning history & active count',
-              '`/leaderboard` — View the top 5 warned members',
-              '`/deletewarn <@user> [number]` — Remove a specific warning',
-              '`/clearwarns <@user> [reason]` — Reset all warnings to 0',
-              '`/timeout <@user> [duration] [reason]` — Timeout/mute (e.g. 10m, 2h)',
-              '`/untimeout <@user>` — Lift an active timeout',
-              '`/kick <@user> [reason]` — Kick user (Purges 15 messages)',
-              '`/ban <@user> [reason]` — Ban user (Purges 15 messages)',
-              '`/unban <user_id>` — Revoke a ban by user ID',
-              '`/purge <amount> [@user]` — Bulk delete messages (1–100)'
+              `${dot} \`/warn <user> [reason]\` — **Warn User**`,
+              `${dot} \`/deletewarn <user> [number]\` — **Delete Warning**`,
+              `${dot} \`/clearwarns <user> [reason]\` — **Clear All Warnings**`,
+              `${dot} \`/warns [user]\` — **View Warning History**`,
+              `${dot} \`/leaderboard\` — **Top 5 Most Warned**`,
+              `${dot} \`/purge <amount> [user]\` — **Purge Channel Messages**`
             ].join('\n'),
             inline: false
           },
           {
-            name: '📋 Server Rules Management',
+            name: `${dot} **Punishments & Restrictions**`,
             value: [
-              '`/rules` — View all registered server rules',
-              '`/setrule <number> <text>` — Add or update a rule',
-              '`/delrule <number>` — Delete a rule'
-            ].join('\n'),
-            inline: false
-          },
-          {
-            name: '✨ General Commands',
-            value: [
-              '`/introduce` — Learn about Emilia and her role',
-              '`/help` — Open this command manual'
+              `${dot} \`/timeout <user> [duration] [reason]\` — **Timeout Member**`,
+              `${dot} \`/untimeout <user>\` — **Remove Timeout**`,
+              `${dot} \`/kick <user> [reason]\` — **Kick Member**`,
+              `${dot} \`/ban <user> [reason]\` — **Ban Member**`,
+              `${dot} \`/unban <user_id>\` — **Unban by ID**`
             ].join('\n'),
             inline: false
           }
         )
-        .setThumbnail('https://i.imgur.com/emillia_thumb.png')
-        .setFooter({ text: 'Emillia — Guardian of Anipedia • Staff Enforcement Bot ✨' })
+        .setFooter({ text: 'AniPedia Moderation • Built by Aerion-sama', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
       await interaction.reply({ embeds: [helpEmbed] });
       return;
