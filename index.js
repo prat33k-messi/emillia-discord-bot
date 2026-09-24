@@ -276,9 +276,6 @@ function getReason(text, actionKeyword, targetMember) {
   return reason || "No reason specified";
 }
 
-const MOD_EMOJI_VERIFY = '<:checkmark:996146086978793552>';
-const MOD_EMOJI_DOT = '<:dot:1088773420906467390>';
-
 // Helper to convert text to Small Caps font (IM FELL SC / Manuscript style)
 function toSmallCaps(str) {
   if (!str) return '';
@@ -295,15 +292,79 @@ function toSmallCaps(str) {
 
 // Helper to get custom animated/static moderation emojis
 async function getModEmojis(guild) {
-  let verify = MOD_EMOJI_VERIFY;
-  let dot = MOD_EMOJI_DOT;
+  let verify = '<:checkmark:996146086978793552>';
+  let dot = '•';
 
+  try {
+    if (guild && guild.emojis && typeof guild.emojis.fetch === 'function') {
+      await guild.emojis.fetch().catch(() => {});
+    }
+  } catch (e) {}
+
+  // 1. Search in guild custom emojis
   if (guild && guild.emojis && guild.emojis.cache) {
-    const foundV = guild.emojis.cache.get('996146086978793552') || guild.emojis.cache.get('1548626318399373342') || guild.emojis.cache.find(e => e.name.toLowerCase().includes('checkmark') || e.name.toLowerCase().includes('verify') || e.id === '996146086978793552');
-    if (foundV) verify = foundV.toString();
+    const guildEmojis = Array.from(guild.emojis.cache.values());
+    
+    // Find dot emoji (by exact ID, name matching dot, point, bullet, blue, or containing old ID)
+    const foundDot = guildEmojis.find(e => 
+      e.id === '1088773420906467390' ||
+      e.name.toLowerCase() === 'dot' ||
+      e.name.toLowerCase() === 'point' ||
+      e.name.toLowerCase() === 'bullet' ||
+      e.name.toLowerCase().includes('dot') ||
+      e.name.toLowerCase().includes('point') ||
+      e.name.toLowerCase().includes('bullet') ||
+      e.name.includes('1088773420906467390')
+    );
+    if (foundDot) {
+      dot = foundDot.toString();
+    }
 
-    const foundDot = guild.emojis.cache.get('1088773420906467390') || guild.emojis.cache.find(e => e.id === '1088773420906467390' || e.name.includes('1088773420906467390') || e.name.toLowerCase().includes('dot') || e.name.toLowerCase().includes('bullet'));
-    if (foundDot) dot = foundDot.toString();
+    // Find verify checkmark emoji
+    const foundV = guildEmojis.find(e => 
+      e.id === '996146086978793552' ||
+      e.id === '1548626318399373342' ||
+      e.name.toLowerCase().includes('checkmark') ||
+      e.name.toLowerCase().includes('verify') ||
+      e.name.toLowerCase().includes('check') ||
+      e.name.toLowerCase().includes('tick')
+    );
+    if (foundV) {
+      verify = foundV.toString();
+    }
+  }
+
+  // 2. If not found in guild, check global client emojis cache across all bot servers
+  if (dot === '•' && client && client.emojis && client.emojis.cache) {
+    const clientEmojis = Array.from(client.emojis.cache.values());
+    const foundDot = clientEmojis.find(e => 
+      e.id === '1088773420906467390' ||
+      e.name.toLowerCase() === 'dot' ||
+      e.name.toLowerCase() === 'point' ||
+      e.name.toLowerCase() === 'bullet' ||
+      e.name.toLowerCase().includes('dot') ||
+      e.name.toLowerCase().includes('point') ||
+      e.name.toLowerCase().includes('bullet') ||
+      e.name.includes('1088773420906467390')
+    );
+    if (foundDot) {
+      dot = foundDot.toString();
+    }
+  }
+
+  if (client && client.emojis && client.emojis.cache) {
+    const clientEmojis = Array.from(client.emojis.cache.values());
+    const foundV = clientEmojis.find(e => 
+      e.id === '996146086978793552' ||
+      e.id === '1548626318399373342' ||
+      e.name.toLowerCase().includes('checkmark') ||
+      e.name.toLowerCase().includes('verify') ||
+      e.name.toLowerCase().includes('check') ||
+      e.name.toLowerCase().includes('tick')
+    );
+    if (foundV) {
+      verify = foundV.toString();
+    }
   }
 
   return { verify, dot };
