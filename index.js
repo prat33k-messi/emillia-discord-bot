@@ -404,7 +404,7 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
 
   const trimmedContent = message.content.trim();
-  const startsWithPrefix = trimmedContent.startsWith('~');
+  const startsWithPrefix = trimmedContent.startsWith('-');
 
   // Check if bot was mentioned
   const botMention = `<@${client.user.id}>`;
@@ -653,7 +653,7 @@ client.on('messageCreate', async (message) => {
       
       // We need a target member for everything except unban and purge
       if (actionKeyword !== 'unban' && actionKeyword !== 'purge' && !targetMember) {
-        await message.reply(`Who should I perform this action on? Please mention the user, like this: \`~${actionKeyword} @user <reason>\`! 🌸`);
+        await message.reply(`Who should I perform this action on? Please mention the user, like this: \`-${actionKeyword} @user <reason>\`! 🌸`);
         return;
       }
 
@@ -758,7 +758,7 @@ client.on('messageCreate', async (message) => {
       } else if (actionKeyword === 'purge') {
         const numMatch = cleanQuery.match(/\b([1-9]\d?|100)\b/);
         if (!numMatch) {
-          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `~purge 20` or `~purge @user 15`! 🌸");
+          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `-purge 20` or `-purge @user 15`! 🌸");
           return;
         }
         const purgeAmount = parseInt(numMatch[1], 10);
@@ -888,7 +888,7 @@ client.on('messageCreate', async (message) => {
         if (requestedWarnNum !== null) {
           const targetIndex = requestedWarnNum - 1;
           if (targetIndex < 0 || targetIndex >= warnDocs.length) {
-            await message.reply(`Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). Use \`~warns @user\` to see them! ❄️`);
+            await message.reply(`Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). Use \`-warns @user\` to see them! ❄️`);
             return;
           }
           deletedWarnDoc = warnDocs[targetIndex];
@@ -1027,7 +1027,7 @@ client.on('messageCreate', async (message) => {
       } else if (actionKeyword === 'unban') {
         const idMatch = cleanQuery.match(/\b\d{17,19}\b/);
         if (!idMatch) {
-          await message.reply("To unban someone, please provide their User ID (e.g. `~unban 123456789012345678`)! 🌸");
+          await message.reply("To unban someone, please provide their User ID (e.g. `-unban 123456789012345678`)! 🌸");
           return;
         }
         const targetId = idMatch[0];
@@ -1455,19 +1455,17 @@ client.on('messageCreate', async (message) => {
           return;
         }
 
-        const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
         const lbEntries = [];
         for (let i = 0; i < top5.length; i++) {
           const entry = top5[i];
-          const medal = medals[i] || '▫️';
           const foundMember = message.guild?.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
           const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
           
           let statusBadge = '';
-          if (entry.warnings >= 5) statusBadge = ' (🚨 1h Freeze)';
-          else if (entry.warnings >= 3) statusBadge = ' (⚠️ Auto-Timeout)';
+          if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
+          else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
 
-          lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n└ ${dot} Warnings: **#${entry.warnings}**${statusBadge}`);
+          lbEntries.push(`${dot} **Rank ${i + 1}** • ${userMention}\n└ ${dot} **Warnings:** \`#${entry.warnings}\`${statusBadge}`);
         }
 
         const lbEmbed = new EmbedBuilder()
@@ -1522,11 +1520,11 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      let statusLabel = '`⚠️ Active Warnings`';
+      let statusLabel = '`Active Warnings`';
       if (warningsCount >= 5) {
-        statusLabel = '`🚨 High Risk (5+ Warnings)`';
+        statusLabel = '`High Risk (5+ Warnings)`';
       } else if (warningsCount >= 3) {
-        statusLabel = '`⚠️ Auto-Timeout Active`';
+        statusLabel = '`Auto-Timeout Active`';
       }
 
       const warningsEmbed = new EmbedBuilder()
@@ -1585,7 +1583,7 @@ client.on('messageCreate', async (message) => {
               value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
               inline: false 
             });
-            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use ~deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use -deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           } else {
             warningsEmbed.addFields({ 
               name: `${dot} **Disciplinary Log**`, 
@@ -1623,32 +1621,32 @@ client.on('messageCreate', async (message) => {
           {
             name: `${dot} **Disciplinary & Warnings**`,
             value: [
-              `${dot} \`~warn @user <reason>\` — **Warn User**`,
-              `${dot} \`~deletewarn @user [number]\` — **Delete Warning**`,
-              `${dot} \`~clearwarns @user\` — **Clear All Warnings**`,
-              `${dot} \`~warns @user\` — **View Warning History**`,
-              `${dot} \`~leaderboard\` / \`~warns leaderboard\` — **Top 5 Most Warned**`,
-              `${dot} \`~purge <1-100> [@user]\` — **Purge Channel Messages**`
+              `${dot} \`-warn @user <reason>\` — **Warn User**`,
+              `${dot} \`-deletewarn @user [number]\` — **Delete Warning**`,
+              `${dot} \`-clearwarns @user\` — **Clear All Warnings**`,
+              `${dot} \`-warns @user\` — **View Warning History**`,
+              `${dot} \`-leaderboard\` / \`-warns leaderboard\` — **Top 5 Most Warned**`,
+              `${dot} \`-purge <1-100> [@user]\` — **Purge Channel Messages**`
             ].join('\n'),
             inline: false
           },
           {
             name: `${dot} **Punishments & Restrictions**`,
             value: [
-              `${dot} \`~timeout @user [10m/2h/1d] <reason>\` — **Timeout Member**`,
-              `${dot} \`~untimeout @user\` — **Remove Timeout**`,
-              `${dot} \`~kick @user <reason>\` — **Kick Member**`,
-              `${dot} \`~ban @user <reason>\` — **Ban Member**`,
-              `${dot} \`~unban <user_id>\` — **Unban by ID**`
+              `${dot} \`-timeout @user [10m/2h/1d] <reason>\` — **Timeout Member**`,
+              `${dot} \`-untimeout @user\` — **Remove Timeout**`,
+              `${dot} \`-kick @user <reason>\` — **Kick Member**`,
+              `${dot} \`-ban @user <reason>\` — **Ban Member**`,
+              `${dot} \`-unban <user_id>\` — **Unban by ID**`
             ].join('\n'),
             inline: false
           },
           {
             name: `${dot} **General Commands**`,
             value: [
-              `${dot} \`~profile\` — **View User Profile**`,
-              `${dot} \`~ping\` — **Check Bot Latency**`,
-              `${dot} \`~reset\` — **Reset Memory *(Aerion-sama)* **`
+              `${dot} \`-profile\` — **View User Profile**`,
+              `${dot} \`-ping\` — **Check Bot Latency**`,
+              `${dot} \`-reset\` — **Reset Memory *(Aerion-sama)* **`
             ].join('\n'),
             inline: false
           }
@@ -2174,7 +2172,7 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use ~deletewarn to remove', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
+      warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use -deletewarn to remove', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
       warningsEmbed.setTimestamp();
       await interaction.reply({ embeds: [warningsEmbed] });
       return;
@@ -2207,11 +2205,9 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
-      const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
       const lbEntries = [];
       for (let i = 0; i < top5.length; i++) {
         const entry = top5[i];
-        const medal = medals[i] || '▫️';
         const foundMember = guild.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
         const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
         
@@ -2219,7 +2215,7 @@ client.on('interactionCreate', async (interaction) => {
         if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
         else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
 
-        lbEntries.push(`${medal} **Rank ${i + 1}** • ${userMention}\n└ ${dot} Warnings: **#${entry.warnings}**${statusBadge}`);
+        lbEntries.push(`${dot} **Rank ${i + 1}** • ${userMention}\n└ ${dot} **Warnings:** \`#${entry.warnings}\`${statusBadge}`);
       }
 
       const lbEmbed = new EmbedBuilder()
