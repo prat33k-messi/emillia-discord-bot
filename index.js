@@ -1,5 +1,6 @@
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
 
@@ -151,6 +152,11 @@ const slashCommandsData = [
     .setDescription('Bulk delete messages in the current channel')
     .addIntegerOption(opt => opt.setName('amount').setDescription('Number of messages to delete (1-100)').setMinValue(1).setMaxValue(100).setRequired(true))
     .addUserOption(opt => opt.setName('user').setDescription('Filter messages by specific user').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('aura')
+    .setDescription('Measure your spiritual Aura power level with a custom card')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to check aura for (leave empty for yourself)').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('help')
@@ -373,6 +379,178 @@ async function getModEmojis(guild) {
 // Helper to generate unique Case ID for moderation embeds
 function generateCaseId() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// Helper to generate dynamic Aura Card image with blue flame / aura effects
+async function generateAuraCard(avatarUrl, auraPercent) {
+  const width = 600;
+  const height = 600;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  const intensity = Math.max(0.01, Math.min(1.0, auraPercent / 100));
+
+  // 1. Base card clipping path (smooth rounded rectangle)
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(0, 0, width, height, 32);
+  } else {
+    const r = 32;
+    ctx.moveTo(r, 0);
+    ctx.lineTo(width - r, 0);
+    ctx.quadraticCurveTo(width, 0, width, r);
+    ctx.lineTo(width, height - r);
+    ctx.quadraticCurveTo(width, height, width - r, height);
+    ctx.lineTo(r, height);
+    ctx.quadraticCurveTo(0, height, 0, height - r);
+    ctx.lineTo(0, r);
+    ctx.quadraticCurveTo(0, 0, r, 0);
+    ctx.closePath();
+  }
+  ctx.clip();
+
+  // 2. Draw dark base background
+  ctx.fillStyle = '#0a0d16';
+  ctx.fillRect(0, 0, width, height);
+
+  // 3. Draw User Avatar
+  try {
+    if (avatarUrl) {
+      const avatarImg = await loadImage(avatarUrl);
+      ctx.drawImage(avatarImg, 0, 0, width, height);
+    }
+  } catch (err) {
+    console.error("Failed to load avatar for aura card:", err);
+  }
+
+  // 4. Draw smooth dark vignette & bottom shadow overlay for text contrast
+  const bottomGradient = ctx.createLinearGradient(0, height * 0.35, 0, height);
+  bottomGradient.addColorStop(0, 'rgba(5, 8, 18, 0)');
+  bottomGradient.addColorStop(0.55, 'rgba(4, 7, 16, 0.45)');
+  bottomGradient.addColorStop(0.85, 'rgba(2, 4, 12, 0.85)');
+  bottomGradient.addColorStop(1, 'rgba(1, 2, 8, 0.96)');
+  ctx.fillStyle = bottomGradient;
+  ctx.fillRect(0, 0, width, height);
+
+  // 5. Blue Flame & Aura Glow Layers
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+
+  // Base radial blue haze (scaled by intensity)
+  const radialGlow = ctx.createRadialGradient(width / 2, height, 30, width / 2, height, width * 0.75);
+  if (intensity <= 0.3) {
+    // Dull / low flame
+    radialGlow.addColorStop(0, 'rgba(0, 160, 255, 0.4)');
+    radialGlow.addColorStop(0.4, 'rgba(15, 60, 160, 0.25)');
+    radialGlow.addColorStop(0.8, 'rgba(10, 25, 80, 0.1)');
+    radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  } else if (intensity <= 0.7) {
+    // Medium vibrant blue flame
+    radialGlow.addColorStop(0, 'rgba(0, 230, 255, 0.75)');
+    radialGlow.addColorStop(0.35, 'rgba(0, 120, 255, 0.55)');
+    radialGlow.addColorStop(0.7, 'rgba(20, 50, 180, 0.3)');
+    radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  } else {
+    // Blazing celestial blue flames
+    radialGlow.addColorStop(0, 'rgba(200, 245, 255, 0.95)');
+    radialGlow.addColorStop(0.2, 'rgba(0, 230, 255, 0.85)');
+    radialGlow.addColorStop(0.5, 'rgba(0, 100, 255, 0.7)');
+    radialGlow.addColorStop(0.8, 'rgba(25, 50, 200, 0.4)');
+    radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  }
+  ctx.fillStyle = radialGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  // Multi-layered flame wisps & flares rising upwards
+  const flameAlpha = 0.2 + intensity * 0.6;
+  const flameHeightScale = 80 + intensity * 160;
+
+  // Layer 1: Outer deep blue flame silhouette
+  ctx.fillStyle = `rgba(0, 102, 255, ${flameAlpha * 0.6})`;
+  ctx.beginPath();
+  ctx.moveTo(0, height);
+  ctx.quadraticCurveTo(width * 0.12, height - flameHeightScale * 0.65, width * 0.25, height);
+  ctx.quadraticCurveTo(width * 0.38, height - flameHeightScale * 0.9, width * 0.5, height);
+  ctx.quadraticCurveTo(width * 0.62, height - flameHeightScale * 0.85, width * 0.75, height);
+  ctx.quadraticCurveTo(width * 0.88, height - flameHeightScale * 0.6, width, height);
+  ctx.closePath();
+  ctx.fill();
+
+  // Layer 2: Core electric cyan flame
+  ctx.fillStyle = `rgba(0, 229, 255, ${flameAlpha * 0.8})`;
+  ctx.beginPath();
+  ctx.moveTo(width * 0.08, height);
+  ctx.quadraticCurveTo(width * 0.28, height - flameHeightScale * 0.8, width * 0.42, height);
+  ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 1.15, width * 0.58, height);
+  ctx.quadraticCurveTo(width * 0.72, height - flameHeightScale * 0.75, width * 0.92, height);
+  ctx.closePath();
+  ctx.fill();
+
+  // Layer 3: Hot white-cyan inner spark (for high auras)
+  if (intensity > 0.6) {
+    ctx.fillStyle = `rgba(220, 250, 255, ${(intensity - 0.5) * 0.9})`;
+    ctx.beginPath();
+    ctx.moveTo(width * 0.25, height);
+    ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 0.95, width * 0.75, height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  ctx.restore();
+
+  // 6. Draw Glowing Percentage Text
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.font = 'bold 64px "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+  
+  // Neon Blue Glow
+  ctx.shadowColor = intensity > 0.6 ? '#00e5ff' : (intensity > 0.3 ? '#2979ff' : '#1565c0');
+  ctx.shadowBlur = 18 + intensity * 24;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`${auraPercent}%`, width / 2, height - 38);
+  ctx.restore();
+
+  // 7. Subtle sleek border
+  ctx.strokeStyle = `rgba(0, 200, 255, ${0.15 + intensity * 0.35})`;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
+}
+
+// Helper to build Aura Message Payload with embed, image attachment, and Reroll button
+async function buildAuraPayload(targetMember) {
+  const auraPercent = Math.floor(Math.random() * 100) + 1;
+  const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
+  const buffer = await generateAuraCard(avatarUrl, auraPercent);
+  const attachment = new AttachmentBuilder(buffer, { name: 'aura.png' });
+
+  let flameEmoji = '🔥';
+  if (auraPercent >= 80) flameEmoji = '⚡';
+  else if (auraPercent <= 25) flameEmoji = '💠';
+
+  const embed = new EmbedBuilder()
+    .setColor(auraPercent >= 75 ? 0x00E5FF : (auraPercent >= 40 ? 0x3498DB : 0x2C3E50))
+    .setAuthor({ 
+      name: `Aura of ${targetMember.displayName || targetMember.user.username}`, 
+      iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
+    })
+    .setDescription(`${flameEmoji} **${auraPercent}% Aura** ${flameEmoji}`)
+    .setImage('attachment://aura.png')
+    .setFooter({ text: 'Not satisfied? Reroll and try again!' });
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`aura_reroll_${targetMember.id}`)
+      .setLabel('Reroll')
+      .setEmoji('🔄')
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  return { embeds: [embed], files: [attachment], components: [row] };
 }
 
 // Helper function to send security DMs to the creator
@@ -1710,6 +1888,7 @@ client.on('messageCreate', async (message) => {
           {
             name: `${dot} **General Commands**`,
             value: [
+              `${dot} \`-aura [@user]\` — **Check Spiritual Aura**`,
               `${dot} \`-profile\` — **View User Profile**`,
               `${dot} \`-ping\` — **Check Bot Latency**`,
               `${dot} \`-reset\` — **Reset Memory *(Aerion-sama)* **`
@@ -1759,6 +1938,14 @@ client.on('messageCreate', async (message) => {
         const header = username === '_c0rle0ne' ? "✨ **Aerion-sama's Profile** ✨" : `📝 **User Profile: ${nickname}**`;
         await message.reply(`${header}\nHere is what I remember about you:\n${memoryList}\n\n*Type '@Emillia reset' if you want me to clear this.*`);
       }
+      return;
+    }
+
+    // --- Aura Command ---
+    if (words.includes('aura') || cleanQuery === 'aura' || cleanQuery.startsWith('aura ') || lowerQuery === 'aura' || lowerQuery.startsWith('aura ')) {
+      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
+      const auraPayload = await buildAuraPayload(targetMember);
+      await message.channel.send(auraPayload);
       return;
     }
 
@@ -2003,9 +2190,21 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
 }
 
 // ==========================================
-// SLASH COMMAND INTERACTION HANDLER
+// SLASH & BUTTON INTERACTION HANDLER
 // ==========================================
 client.on('interactionCreate', async (interaction) => {
+  // Handle Button Clicks (e.g. Aura Reroll)
+  if (interaction.isButton()) {
+    if (interaction.customId.startsWith('aura_reroll_')) {
+      const targetId = interaction.customId.replace('aura_reroll_', '');
+      const targetMember = interaction.guild?.members.cache.get(targetId) || interaction.member;
+      await interaction.deferUpdate();
+      const auraPayload = await buildAuraPayload(targetMember);
+      await interaction.editReply(auraPayload);
+      return;
+    }
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName, options, guild, member, user, channel } = interaction;
@@ -2928,7 +3127,18 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 12. /help
+    // 12. /aura
+    // ------------------------------------------
+    if (commandName === 'aura') {
+      const targetMember = options.getMember('user') || member;
+      await interaction.deferReply();
+      const auraPayload = await buildAuraPayload(targetMember);
+      await interaction.editReply(auraPayload);
+      return;
+    }
+
+    // ------------------------------------------
+    // 13. /help
     // ------------------------------------------
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
@@ -2960,6 +3170,14 @@ client.on('interactionCreate', async (interaction) => {
               `${dot} \`/kick <user> [reason]\` — **Kick Member**`,
               `${dot} \`/ban <user> [reason]\` — **Ban Member**`,
               `${dot} \`/unban <user_id>\` — **Unban by ID**`
+            ].join('\n'),
+            inline: false
+          },
+          {
+            name: `${dot} **General & Fun Commands**`,
+            value: [
+              `${dot} \`/aura [user]\` — **Check Spiritual Aura Card**`,
+              `${dot} \`/help\` — **Show Command Guide**`
             ].join('\n'),
             inline: false
           }
