@@ -1241,26 +1241,24 @@ client.on('messageCreate', async (message) => {
         // Send embed response in channel
         const caseId = generateCaseId();
 
+        let warnDesc = `-# <@${targetMember.id}> has been **warned** by <@${message.author.id}>\n` +
+          `-# ${dot} **${toSmallCaps('Reason')}:** ${reason || 'No reason specified'}\n` +
+          `-# ${dot} **${toSmallCaps('Warning Count')}:** \`${warningsCount}\` • **${toSmallCaps('Enforced By')}:** <@${message.author.id}>`;
+        if (autoTimeoutApplied) {
+          warnDesc += `\n-# ${dot} **${toSmallCaps('Auto-Timeout')}:** \`${autoTimeoutLabel}\``;
+        }
+
         const warnEmbed = new EmbedBuilder()
           .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
           .setTitle(`**${toSmallCaps('Warning Issued')}** ${verify}`)
-          .setDescription(`-# <@${targetMember.id}> has been **warned** by <@${message.author.id}>`)
-          .addFields(
-            { name: `${dot} **${toSmallCaps('Warning Count')}**`, value: `-# \`#${warningsCount}\``, inline: true },
-            { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
-            { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
-          )
+          .setDescription(warnDesc)
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
-        if (autoTimeoutApplied) {
-          warnEmbed.addFields({ name: `${dot} **${toSmallCaps('Auto-Timeout')}**`, value: `-# \`${autoTimeoutLabel}\``, inline: false });
-        }
-
         await message.channel.send({ embeds: [warnEmbed] });
         logToEmilliaLog(message.guild, 'warn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: `${dot} **${toSmallCaps('Warning Level')}**`, value: `-# \`#${warningsCount}\``, inline: true }
+          { name: `${dot} **${toSmallCaps('Warning Level')}**`, value: `-# \`${warningsCount}\``, inline: true }
         ]);
         return;
 
@@ -1540,7 +1538,7 @@ client.on('messageCreate', async (message) => {
           if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
           else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
 
-          lbEntries.push(`-# ${dot} **${toSmallCaps(`Rank ${i + 1}`)}** • ${userMention} • **${toSmallCaps('Warnings')}:** \`#${entry.warnings}\`${statusBadge}`);
+          lbEntries.push(`-# ${dot} **${toSmallCaps(`Rank ${i + 1}`)}** • ${userMention} • **${toSmallCaps('Warnings')}:** \`${entry.warnings}\`${statusBadge}`);
         }
 
         const lbEmbed = new EmbedBuilder()
@@ -1587,7 +1585,7 @@ client.on('messageCreate', async (message) => {
         const cleanEmbed = new EmbedBuilder()
           .setColor(0x2ECC71)
           .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
-          .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Total Warnings')}:** \`#0\` • **${toSmallCaps('Status')}:** \`Clean Record • Spotless\``)
+          .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`0\``)
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
@@ -1595,17 +1593,10 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      let statusLabel = '`Active Warnings`';
-      if (warningsCount >= 5) {
-        statusLabel = '`High Risk (5+ Warnings)`';
-      } else if (warningsCount >= 3) {
-        statusLabel = '`Auto-Timeout Active`';
-      }
-
       const warningsEmbed = new EmbedBuilder()
         .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
         .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
-        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`#${warningsCount}\` • **${toSmallCaps('Status')}:** ${statusLabel}`)
+        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``)
         .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }));
 
       // Fetch warning history with reasons and moderators from Firestore (in-memory sort avoids composite index errors)
@@ -2140,26 +2131,24 @@ client.on('interactionCreate', async (interaction) => {
       } catch (err) {}
 
       const caseId = generateCaseId();
+      let warnDesc = `-# <@${targetMember.id}> has been **warned** by <@${user.id}>\n` +
+        `-# ${dot} **${toSmallCaps('Reason')}:** ${reason || 'No reason specified'}\n` +
+        `-# ${dot} **${toSmallCaps('Warning Count')}:** \`${warningsCount}\` • **${toSmallCaps('Enforced By')}:** <@${user.id}>`;
+      if (autoTimeoutApplied) {
+        warnDesc += `\n-# ${dot} **${toSmallCaps('Auto-Timeout')}:** \`${autoTimeoutLabel}\``;
+      }
+
       const warnEmbed = new EmbedBuilder()
         .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
         .setTitle(`**${toSmallCaps('Warning Issued')}** ${verify}`)
-        .setDescription(`-# <@${targetMember.id}> has been **warned** by <@${user.id}>`)
-        .addFields(
-          { name: `${dot} **${toSmallCaps('Warning Count')}**`, value: `-# \`#${warningsCount}\``, inline: true },
-          { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
-          { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
-        )
+        .setDescription(warnDesc)
         .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
-      if (autoTimeoutApplied) {
-        warnEmbed.addFields({ name: `${dot} **${toSmallCaps('Auto-Timeout')}**`, value: `-# \`${autoTimeoutLabel}\``, inline: false });
-      }
-
       await interaction.reply({ embeds: [warnEmbed] });
       logToEmilliaLog(guild, 'warn', targetMember.user.tag, targetMember.id, user.tag, reason, [
-        { name: `${dot} **${toSmallCaps('Warning Level')}**`, value: `-# \`#${warningsCount}\``, inline: true }
+        { name: `${dot} **${toSmallCaps('Warning Level')}**`, value: `-# \`${warningsCount}\``, inline: true }
       ]);
       return;
     }
@@ -2181,7 +2170,7 @@ client.on('interactionCreate', async (interaction) => {
         const cleanEmbed = new EmbedBuilder()
           .setColor(0x2ECC71)
           .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
-          .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Total Warnings')}:** \`#0\` • **${toSmallCaps('Status')}:** \`Clean Record • Spotless\``)
+          .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`0\``)
           .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
@@ -2189,17 +2178,10 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
 
-      let statusLabel = '`Active Warnings`';
-      if (warningsCount >= 5) {
-        statusLabel = '`High Risk (5+ Warnings)`';
-      } else if (warningsCount >= 3) {
-        statusLabel = '`Auto-Timeout Active`';
-      }
-
       const warningsEmbed = new EmbedBuilder()
         .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
         .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
-        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`#${warningsCount}\` • **${toSmallCaps('Status')}:** ${statusLabel}`)
+        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``)
         .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }));
 
       if (db && warningsCount > 0) {
@@ -2290,7 +2272,7 @@ client.on('interactionCreate', async (interaction) => {
         if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
         else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
 
-        lbEntries.push(`-# ${dot} **${toSmallCaps(`Rank ${i + 1}`)}** • ${userMention} • **${toSmallCaps('Warnings')}:** \`#${entry.warnings}\`${statusBadge}`);
+        lbEntries.push(`-# ${dot} **${toSmallCaps(`Rank ${i + 1}`)}** • ${userMention} • **${toSmallCaps('Warnings')}:** \`${entry.warnings}\`${statusBadge}`);
       }
 
       const lbEmbed = new EmbedBuilder()
