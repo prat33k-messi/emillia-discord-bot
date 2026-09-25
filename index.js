@@ -534,7 +534,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   return canvas.toBuffer('image/png');
 }
 
-// Helper to build Aura Message Payload with embed, image attachment, and Reroll button
+// Helper to build Aura Message Payload with embed and image attachment
 async function buildAuraPayload(targetMember) {
   const auraPercent = Math.floor(Math.random() * 100) + 1;
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
@@ -550,18 +550,9 @@ async function buildAuraPayload(targetMember) {
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
     })
     .setDescription(`*${cursiveText}*`)
-    .setImage('attachment://aura.png')
-    .setFooter({ text: 'Not satisfied? Reroll and try again!' });
+    .setImage('attachment://aura.png');
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(`aura_reroll_${targetMember.id}`)
-      .setLabel('Reroll')
-      .setEmoji('🔄')
-      .setStyle(ButtonStyle.Secondary)
-  );
-
-  return { embeds: [embed], files: [attachment], components: [row] };
+  return { embeds: [embed], files: [attachment] };
 }
 
 // Helper function to send security DMs to the creator
@@ -2201,21 +2192,9 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
 }
 
 // ==========================================
-// SLASH & BUTTON INTERACTION HANDLER
+// SLASH INTERACTION HANDLER
 // ==========================================
 client.on('interactionCreate', async (interaction) => {
-  // Handle Button Clicks (e.g. Aura Reroll)
-  if (interaction.isButton()) {
-    if (interaction.customId.startsWith('aura_reroll_')) {
-      const targetId = interaction.customId.replace('aura_reroll_', '');
-      const targetMember = interaction.guild?.members.cache.get(targetId) || interaction.member;
-      await interaction.deferUpdate();
-      const auraPayload = await buildAuraPayload(targetMember);
-      await interaction.editReply(auraPayload);
-      return;
-    }
-  }
-
   if (!interaction.isChatInputCommand()) return;
 
   const { commandName, options, guild, member, user, channel } = interaction;
