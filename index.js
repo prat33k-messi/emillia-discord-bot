@@ -381,6 +381,16 @@ function generateCaseId() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// Helper to format numbers into cursive script characters
+function toCursiveDigits(str) {
+  const cursiveMap = {
+    '0': '𝟢', '1': '𝟣', '2': '𝟤', '3': '𝟥', '4': '𝟦',
+    '5': '𝟧', '6': '𝟨', '7': '𝟩', '8': '𝟪', '9': '𝟫',
+    '%': '%'
+  };
+  return String(str).split('').map(c => cursiveMap[c] || c).join('');
+}
+
 // Helper to generate dynamic Aura Card image with blue flame / aura effects
 async function generateAuraCard(avatarUrl, auraPercent) {
   const width = 600;
@@ -436,78 +446,81 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.save();
   ctx.globalCompositeOperation = 'screen';
 
-  // Base radial blue haze (scaled by intensity)
-  const radialGlow = ctx.createRadialGradient(width / 2, height, 30, width / 2, height, width * 0.75);
+  // Base radial blue haze (scaled by intensity - dull for low %, vibrant for high %)
+  const radialGlow = ctx.createRadialGradient(width / 2, height, 20, width / 2, height * 0.85, width * 0.7);
   if (intensity <= 0.3) {
-    // Dull / low flame
-    radialGlow.addColorStop(0, 'rgba(0, 160, 255, 0.4)');
-    radialGlow.addColorStop(0.4, 'rgba(15, 60, 160, 0.25)');
-    radialGlow.addColorStop(0.8, 'rgba(10, 25, 80, 0.1)');
+    // Dull / faint aura glow at low %
+    radialGlow.addColorStop(0, `rgba(0, 120, 220, ${0.12 + intensity * 0.3})`);
+    radialGlow.addColorStop(0.5, `rgba(10, 40, 120, ${0.06 + intensity * 0.2})`);
     radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   } else if (intensity <= 0.7) {
     // Medium vibrant blue flame
-    radialGlow.addColorStop(0, 'rgba(0, 230, 255, 0.75)');
-    radialGlow.addColorStop(0.35, 'rgba(0, 120, 255, 0.55)');
-    radialGlow.addColorStop(0.7, 'rgba(20, 50, 180, 0.3)');
+    radialGlow.addColorStop(0, 'rgba(0, 220, 255, 0.65)');
+    radialGlow.addColorStop(0.35, 'rgba(0, 120, 255, 0.45)');
+    radialGlow.addColorStop(0.7, 'rgba(20, 50, 180, 0.25)');
     radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   } else {
     // Blazing celestial blue flames
-    radialGlow.addColorStop(0, 'rgba(200, 245, 255, 0.95)');
+    radialGlow.addColorStop(0, 'rgba(220, 250, 255, 0.95)');
     radialGlow.addColorStop(0.2, 'rgba(0, 230, 255, 0.85)');
-    radialGlow.addColorStop(0.5, 'rgba(0, 100, 255, 0.7)');
-    radialGlow.addColorStop(0.8, 'rgba(25, 50, 200, 0.4)');
+    radialGlow.addColorStop(0.5, 'rgba(0, 110, 255, 0.65)');
+    radialGlow.addColorStop(0.8, 'rgba(30, 50, 200, 0.35)');
     radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
   }
   ctx.fillStyle = radialGlow;
   ctx.fillRect(0, 0, width, height);
 
-  // Multi-layered flame wisps & flares rising upwards
-  const flameAlpha = 0.2 + intensity * 0.6;
-  const flameHeightScale = 80 + intensity * 160;
+  // Dynamic Flame Wisps (very subtle at low intensity, blazing at high intensity)
+  if (intensity > 0.15) {
+    const flameAlpha = Math.pow(intensity, 1.4) * 0.85;
+    const flameHeightScale = 50 + intensity * 190;
 
-  // Layer 1: Outer deep blue flame silhouette
-  ctx.fillStyle = `rgba(0, 102, 255, ${flameAlpha * 0.6})`;
-  ctx.beginPath();
-  ctx.moveTo(0, height);
-  ctx.quadraticCurveTo(width * 0.12, height - flameHeightScale * 0.65, width * 0.25, height);
-  ctx.quadraticCurveTo(width * 0.38, height - flameHeightScale * 0.9, width * 0.5, height);
-  ctx.quadraticCurveTo(width * 0.62, height - flameHeightScale * 0.85, width * 0.75, height);
-  ctx.quadraticCurveTo(width * 0.88, height - flameHeightScale * 0.6, width, height);
-  ctx.closePath();
-  ctx.fill();
-
-  // Layer 2: Core electric cyan flame
-  ctx.fillStyle = `rgba(0, 229, 255, ${flameAlpha * 0.8})`;
-  ctx.beginPath();
-  ctx.moveTo(width * 0.08, height);
-  ctx.quadraticCurveTo(width * 0.28, height - flameHeightScale * 0.8, width * 0.42, height);
-  ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 1.15, width * 0.58, height);
-  ctx.quadraticCurveTo(width * 0.72, height - flameHeightScale * 0.75, width * 0.92, height);
-  ctx.closePath();
-  ctx.fill();
-
-  // Layer 3: Hot white-cyan inner spark (for high auras)
-  if (intensity > 0.6) {
-    ctx.fillStyle = `rgba(220, 250, 255, ${(intensity - 0.5) * 0.9})`;
+    // Layer 1: Outer deep blue flame silhouette
+    ctx.fillStyle = `rgba(0, 100, 255, ${flameAlpha * 0.5})`;
     ctx.beginPath();
-    ctx.moveTo(width * 0.25, height);
-    ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 0.95, width * 0.75, height);
+    ctx.moveTo(0, height);
+    ctx.quadraticCurveTo(width * 0.15, height - flameHeightScale * 0.6, width * 0.28, height);
+    ctx.quadraticCurveTo(width * 0.42, height - flameHeightScale * 0.85, width * 0.52, height);
+    ctx.quadraticCurveTo(width * 0.68, height - flameHeightScale * 0.8, width * 0.8, height);
+    ctx.quadraticCurveTo(width * 0.9, height - flameHeightScale * 0.55, width, height);
     ctx.closePath();
     ctx.fill();
+
+    // Layer 2: Core electric cyan flame
+    if (intensity > 0.3) {
+      ctx.fillStyle = `rgba(0, 229, 255, ${flameAlpha * 0.75})`;
+      ctx.beginPath();
+      ctx.moveTo(width * 0.08, height);
+      ctx.quadraticCurveTo(width * 0.25, height - flameHeightScale * 0.75, width * 0.4, height);
+      ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 1.1, width * 0.6, height);
+      ctx.quadraticCurveTo(width * 0.75, height - flameHeightScale * 0.7, width * 0.92, height);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    // Layer 3: Hot white-cyan inner spark (for high auras)
+    if (intensity > 0.6) {
+      ctx.fillStyle = `rgba(230, 250, 255, ${(intensity - 0.5) * 0.9})`;
+      ctx.beginPath();
+      ctx.moveTo(width * 0.22, height);
+      ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 0.95, width * 0.78, height);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 
   ctx.restore();
 
-  // 6. Draw Glowing Percentage Text
+  // 6. Draw Percentage Text in cursive style
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  ctx.font = 'bold 64px "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+  ctx.font = 'italic bold 64px "Brush Script MT", "Segoe Script", "Caveat", "Dancing Script", cursive, sans-serif';
   
   // Neon Blue Glow
   ctx.shadowColor = intensity > 0.6 ? '#00e5ff' : (intensity > 0.3 ? '#2979ff' : '#1565c0');
-  ctx.shadowBlur = 18 + intensity * 24;
-  ctx.fillStyle = '#ffffff';
+  ctx.shadowBlur = 10 + intensity * 24;
+  ctx.fillStyle = intensity > 0.3 ? '#ffffff' : '#c8d6e5';
   ctx.fillText(`${auraPercent}%`, width / 2, height - 38);
   ctx.restore();
 
@@ -528,9 +541,7 @@ async function buildAuraPayload(targetMember) {
   const buffer = await generateAuraCard(avatarUrl, auraPercent);
   const attachment = new AttachmentBuilder(buffer, { name: 'aura.png' });
 
-  let flameEmoji = '🔥';
-  if (auraPercent >= 80) flameEmoji = '⚡';
-  else if (auraPercent <= 25) flameEmoji = '💠';
+  const cursiveText = toCursiveDigits(auraPercent) + '%';
 
   const embed = new EmbedBuilder()
     .setColor(auraPercent >= 75 ? 0x00E5FF : (auraPercent >= 40 ? 0x3498DB : 0x2C3E50))
@@ -538,7 +549,7 @@ async function buildAuraPayload(targetMember) {
       name: `Aura of ${targetMember.displayName || targetMember.user.username}`, 
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
     })
-    .setDescription(`${flameEmoji} **${auraPercent}% Aura** ${flameEmoji}`)
+    .setDescription(`*${cursiveText}*`)
     .setImage('attachment://aura.png')
     .setFooter({ text: 'Not satisfied? Reroll and try again!' });
 
