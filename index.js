@@ -391,13 +391,151 @@ function toCursiveDigits(str) {
   return String(str).split('').map(c => cursiveMap[c] || c).join('');
 }
 
-// Helper to generate dynamic Aura Card image with blue flame / aura effects
+// Helper to determine Aura color theme and metadata based on percentage
+function getAuraTheme(percent) {
+  if (percent <= 25) {
+    return {
+      name: 'Abyssal',
+      embedColor: 0x7E57C2,
+      primary: '#9c27b0',
+      secondary: '#4a148c',
+      glow: '#ab47bc',
+      core: '#e1bee7',
+      flameAlpha: 0.5,
+      borderGlow: 'rgba(171, 71, 188, 0.4)'
+    };
+  } else if (percent <= 59) {
+    return {
+      name: 'Electric Azure',
+      embedColor: 0x00E5FF,
+      primary: '#00b0ff',
+      secondary: '#01579b',
+      glow: '#00e5ff',
+      core: '#e1f5fe',
+      flameAlpha: 0.7,
+      borderGlow: 'rgba(0, 229, 255, 0.5)'
+    };
+  } else if (percent <= 84) {
+    return {
+      name: 'Infernal Mystic',
+      embedColor: 0xFF1744,
+      primary: '#ff1744',
+      secondary: '#d500f9',
+      glow: '#ff4081',
+      core: '#ffebee',
+      flameAlpha: 0.85,
+      borderGlow: 'rgba(255, 23, 68, 0.6)'
+    };
+  } else {
+    return {
+      name: 'Celestial Godly',
+      embedColor: 0xFFD700,
+      primary: '#ffd700',
+      secondary: '#ff6d00',
+      glow: '#ffea00',
+      core: '#ffffff',
+      flameAlpha: 0.95,
+      borderGlow: 'rgba(255, 215, 0, 0.8)'
+    };
+  }
+}
+
+// Helper to draw realistic organic flame tongues
+function drawAuraFlames(ctx, width, height, tier, intensity) {
+  const flameHeightBase = 80 + intensity * 180;
+  
+  const tongues = [
+    [0.05, 0.18, 0.65, -0.02],
+    [0.15, 0.22, 0.95, 0.03],
+    [0.28, 0.25, 0.75, -0.04],
+    [0.40, 0.28, 1.15, 0.02],
+    [0.52, 0.26, 1.25, -0.01],
+    [0.64, 0.25, 1.05, 0.03],
+    [0.76, 0.22, 0.85, -0.02],
+    [0.86, 0.20, 0.70, 0.02],
+    [0.22, 0.18, 1.05, 0.01],
+    [0.48, 0.20, 1.30, 0.00],
+    [0.70, 0.18, 0.98, -0.02]
+  ];
+
+  ctx.save();
+  ctx.globalCompositeOperation = 'screen';
+
+  // 1. Ambient radial aura glow
+  const radialGlow = ctx.createRadialGradient(width / 2, height, 10, width / 2, height * 0.75, width * 0.7);
+  radialGlow.addColorStop(0, tier.glow);
+  radialGlow.addColorStop(0.35, tier.primary);
+  radialGlow.addColorStop(0.7, tier.secondary);
+  radialGlow.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.globalAlpha = tier.flameAlpha * 0.75;
+  ctx.fillStyle = radialGlow;
+  ctx.fillRect(0, 0, width, height);
+
+  // 2. Layer 1: Outer secondary colored flames
+  ctx.fillStyle = tier.secondary;
+  ctx.globalAlpha = tier.flameAlpha * 0.55;
+  for (const [xR, wR, hM, tOff] of tongues) {
+    const x1 = (xR - wR * 0.5) * width;
+    const x2 = (xR + wR * 0.5) * width;
+    const tipX = (xR + tOff) * width;
+    const tipY = height - (flameHeightBase * hM * 0.9);
+
+    ctx.beginPath();
+    ctx.moveTo(x1, height);
+    ctx.bezierCurveTo(x1 + (tipX - x1) * 0.3, height - (height - tipY) * 0.5, tipX - 15, tipY + 20, tipX, tipY);
+    ctx.bezierCurveTo(tipX + 15, tipY + 20, x2 - (x2 - tipX) * 0.3, height - (height - tipY) * 0.5, x2, height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 3. Layer 2: Vibrant primary colored flames
+  ctx.fillStyle = tier.primary;
+  ctx.globalAlpha = tier.flameAlpha * 0.8;
+  for (const [xR, wR, hM, tOff] of tongues) {
+    const x1 = (xR - wR * 0.38) * width;
+    const x2 = (xR + wR * 0.38) * width;
+    const tipX = (xR + tOff * 0.7) * width;
+    const tipY = height - (flameHeightBase * hM * 0.75);
+
+    ctx.beginPath();
+    ctx.moveTo(x1, height);
+    ctx.bezierCurveTo(x1 + (tipX - x1) * 0.35, height - (height - tipY) * 0.55, tipX - 10, tipY + 15, tipX, tipY);
+    ctx.bezierCurveTo(tipX + 10, tipY + 15, x2 - (x2 - tipX) * 0.35, height - (height - tipY) * 0.55, x2, height);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 4. Layer 3: Blazing Hot Core flames
+  if (intensity > 0.25) {
+    ctx.fillStyle = tier.core;
+    ctx.globalAlpha = tier.flameAlpha * 0.9;
+    const coreTongues = [tongues[3], tongues[4], tongues[5], tongues[9]];
+    for (const [xR, wR, hM, tOff] of coreTongues) {
+      const x1 = (xR - wR * 0.22) * width;
+      const x2 = (xR + wR * 0.22) * width;
+      const tipX = xR * width;
+      const tipY = height - (flameHeightBase * hM * 0.5);
+
+      ctx.beginPath();
+      ctx.moveTo(x1, height);
+      ctx.bezierCurveTo(x1 + (tipX - x1) * 0.4, height - (height - tipY) * 0.6, tipX - 6, tipY + 10, tipX, tipY);
+      ctx.bezierCurveTo(tipX + 6, tipY + 10, x2 - (x2 - tipX) * 0.4, height - (height - tipY) * 0.6, x2, height);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  ctx.restore();
+}
+
+// Helper to generate dynamic Aura Card image with tiered flame effects & dark bold typography
 async function generateAuraCard(avatarUrl, auraPercent) {
   const width = 600;
   const height = 600;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
   const intensity = Math.max(0.01, Math.min(1.0, auraPercent / 100));
+  const tier = getAuraTheme(auraPercent);
 
   // 1. Base card clipping path (smooth rounded rectangle)
   ctx.save();
@@ -433,100 +571,73 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     console.error("Failed to load avatar for aura card:", err);
   }
 
-  // 4. Draw smooth dark vignette & bottom shadow overlay for text contrast
+  // 4. Draw smooth dark vignette & bottom shadow overlay for contrast
   const bottomGradient = ctx.createLinearGradient(0, height * 0.35, 0, height);
   bottomGradient.addColorStop(0, 'rgba(5, 8, 18, 0)');
-  bottomGradient.addColorStop(0.55, 'rgba(4, 7, 16, 0.45)');
-  bottomGradient.addColorStop(0.85, 'rgba(2, 4, 12, 0.85)');
-  bottomGradient.addColorStop(1, 'rgba(1, 2, 8, 0.96)');
+  bottomGradient.addColorStop(0.55, 'rgba(4, 7, 16, 0.6)');
+  bottomGradient.addColorStop(0.85, 'rgba(2, 4, 12, 0.94)');
+  bottomGradient.addColorStop(1, 'rgba(1, 2, 8, 0.99)');
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, 0, width, height);
 
-  // 5. Blue Flame & Aura Glow Layers
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
+  // 5. Draw Tier-Themed Organic Flame Wisps
+  drawAuraFlames(ctx, width, height, tier, intensity);
 
-  // Base radial blue haze (scaled by intensity - dull for low %, vibrant for high %)
-  const radialGlow = ctx.createRadialGradient(width / 2, height, 20, width / 2, height * 0.85, width * 0.7);
-  if (intensity <= 0.3) {
-    // Dull / faint aura glow at low %
-    radialGlow.addColorStop(0, `rgba(0, 120, 220, ${0.12 + intensity * 0.3})`);
-    radialGlow.addColorStop(0.5, `rgba(10, 40, 120, ${0.06 + intensity * 0.2})`);
-    radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  } else if (intensity <= 0.7) {
-    // Medium vibrant blue flame
-    radialGlow.addColorStop(0, 'rgba(0, 220, 255, 0.65)');
-    radialGlow.addColorStop(0.35, 'rgba(0, 120, 255, 0.45)');
-    radialGlow.addColorStop(0.7, 'rgba(20, 50, 180, 0.25)');
-    radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  } else {
-    // Blazing celestial blue flames
-    radialGlow.addColorStop(0, 'rgba(220, 250, 255, 0.95)');
-    radialGlow.addColorStop(0.2, 'rgba(0, 230, 255, 0.85)');
-    radialGlow.addColorStop(0.5, 'rgba(0, 110, 255, 0.65)');
-    radialGlow.addColorStop(0.8, 'rgba(30, 50, 200, 0.35)');
-    radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  }
-  ctx.fillStyle = radialGlow;
-  ctx.fillRect(0, 0, width, height);
+  // 6. Draw Floating Glowing Embers
+  const emberCount = 24;
+  for (let i = 0; i < emberCount; i++) {
+    const px = width * (0.05 + 0.9 * ((i * 47) % 100) / 100);
+    const py = height - (30 + ((i * 73) % 360) * (0.35 + intensity * 0.7));
+    const pSize = 1.6 + ((i * 23) % 32) / 10;
+    const pAlpha = 0.3 + 0.65 * Math.sin(i * 2.5 + intensity * 4);
 
-  // Dynamic Flame Wisps (very subtle at low intensity, blazing at high intensity)
-  if (intensity > 0.15) {
-    const flameAlpha = Math.pow(intensity, 1.4) * 0.85;
-    const flameHeightScale = 50 + intensity * 190;
-
-    // Layer 1: Outer deep blue flame silhouette
-    ctx.fillStyle = `rgba(0, 100, 255, ${flameAlpha * 0.5})`;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.2, Math.min(0.95, pAlpha));
+    ctx.fillStyle = (i % 3 === 0) ? tier.core : tier.primary;
+    ctx.shadowColor = tier.glow;
+    ctx.shadowBlur = 12;
     ctx.beginPath();
-    ctx.moveTo(0, height);
-    ctx.quadraticCurveTo(width * 0.15, height - flameHeightScale * 0.6, width * 0.28, height);
-    ctx.quadraticCurveTo(width * 0.42, height - flameHeightScale * 0.85, width * 0.52, height);
-    ctx.quadraticCurveTo(width * 0.68, height - flameHeightScale * 0.8, width * 0.8, height);
-    ctx.quadraticCurveTo(width * 0.9, height - flameHeightScale * 0.55, width, height);
-    ctx.closePath();
+    ctx.arc(px, py, pSize, 0, Math.PI * 2);
     ctx.fill();
-
-    // Layer 2: Core electric cyan flame
-    if (intensity > 0.3) {
-      ctx.fillStyle = `rgba(0, 229, 255, ${flameAlpha * 0.75})`;
-      ctx.beginPath();
-      ctx.moveTo(width * 0.08, height);
-      ctx.quadraticCurveTo(width * 0.25, height - flameHeightScale * 0.75, width * 0.4, height);
-      ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 1.1, width * 0.6, height);
-      ctx.quadraticCurveTo(width * 0.75, height - flameHeightScale * 0.7, width * 0.92, height);
-      ctx.closePath();
-      ctx.fill();
-    }
-
-    // Layer 3: Hot white-cyan inner spark (for high auras)
-    if (intensity > 0.6) {
-      ctx.fillStyle = `rgba(230, 250, 255, ${(intensity - 0.5) * 0.9})`;
-      ctx.beginPath();
-      ctx.moveTo(width * 0.22, height);
-      ctx.quadraticCurveTo(width * 0.5, height - flameHeightScale * 0.95, width * 0.78, height);
-      ctx.closePath();
-      ctx.fill();
-    }
+    ctx.restore();
   }
 
-  ctx.restore();
-
-  // 6. Draw Percentage Text in cursive style
+  // 7. Draw Bold Black Number with Flame Rim & Outer Glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  ctx.font = 'italic bold 64px "Brush Script MT", "Segoe Script", "Caveat", "Dancing Script", cursive, sans-serif';
-  
-  // Neon Blue Glow
-  ctx.shadowColor = intensity > 0.6 ? '#00e5ff' : (intensity > 0.3 ? '#2979ff' : '#1565c0');
-  ctx.shadowBlur = 10 + intensity * 24;
-  ctx.fillStyle = intensity > 0.3 ? '#ffffff' : '#c8d6e5';
-  ctx.fillText(`${auraPercent}%`, width / 2, height - 38);
+  const fontSize = 80;
+  ctx.font = '900 80px "Montserrat", "Arial Black", "Impact", "Segoe UI", sans-serif';
+  const textX = width / 2;
+  const textY = height - 34;
+  const textStr = `${auraPercent}%`;
+
+  // Outer Fiery Bloom
+  ctx.shadowColor = tier.glow;
+  ctx.shadowBlur = 28;
+  ctx.lineWidth = 12;
+  ctx.strokeStyle = tier.primary;
+  ctx.strokeText(textStr, textX, textY);
+
+  // Crisp Neon Rim
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = tier.core;
+  ctx.strokeText(textStr, textX, textY);
+
+  // Bold Black Core with Flame Gradient Highlight
+  ctx.shadowBlur = 0;
+  const textGradient = ctx.createLinearGradient(0, textY - fontSize, 0, textY);
+  textGradient.addColorStop(0, tier.core);
+  textGradient.addColorStop(0.25, '#1e2433');
+  textGradient.addColorStop(1, '#05070c');
+  ctx.fillStyle = textGradient;
+  ctx.fillText(textStr, textX, textY);
+
   ctx.restore();
 
-  // 7. Subtle sleek border
-  ctx.strokeStyle = `rgba(0, 200, 255, ${0.15 + intensity * 0.35})`;
-  ctx.lineWidth = 3;
+  // 8. Outer Glowing Border
+  ctx.strokeStyle = tier.borderGlow;
+  ctx.lineWidth = 4;
   ctx.stroke();
 
   ctx.restore();
@@ -537,6 +648,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
 // Helper to build Aura Message Payload with embed and image attachment
 async function buildAuraPayload(targetMember) {
   const auraPercent = Math.floor(Math.random() * 100) + 1;
+  const tier = getAuraTheme(auraPercent);
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const buffer = await generateAuraCard(avatarUrl, auraPercent);
   const attachment = new AttachmentBuilder(buffer, { name: 'aura.png' });
@@ -544,7 +656,7 @@ async function buildAuraPayload(targetMember) {
   const cursiveText = toCursiveDigits(auraPercent) + '%';
 
   const embed = new EmbedBuilder()
-    .setColor(auraPercent >= 75 ? 0x00E5FF : (auraPercent >= 40 ? 0x3498DB : 0x2C3E50))
+    .setColor(tier.embedColor)
     .setAuthor({ 
       name: `Aura of ${targetMember.displayName || targetMember.user.username}`, 
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
