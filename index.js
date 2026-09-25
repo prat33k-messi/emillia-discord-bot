@@ -1243,7 +1243,7 @@ client.on('messageCreate', async (message) => {
 
         let warnDesc = `-# <@${targetMember.id}> has been **warned** by <@${message.author.id}>\n` +
           `-# ${dot} **${toSmallCaps('Reason')}:** ${reason || 'No reason specified'}\n` +
-          `-# ${dot} **${toSmallCaps('Warning Count')}:** \`${warningsCount}\` • **${toSmallCaps('Enforced By')}:** <@${message.author.id}>`;
+          `-# ${dot} **${toSmallCaps('Warning Count')}:** \`${warningsCount}\``;
         if (autoTimeoutApplied) {
           warnDesc += `\n-# ${dot} **${toSmallCaps('Auto-Timeout')}:** \`${autoTimeoutLabel}\``;
         }
@@ -2133,7 +2133,7 @@ client.on('interactionCreate', async (interaction) => {
       const caseId = generateCaseId();
       let warnDesc = `-# <@${targetMember.id}> has been **warned** by <@${user.id}>\n` +
         `-# ${dot} **${toSmallCaps('Reason')}:** ${reason || 'No reason specified'}\n` +
-        `-# ${dot} **${toSmallCaps('Warning Count')}:** \`${warningsCount}\` • **${toSmallCaps('Enforced By')}:** <@${user.id}>`;
+        `-# ${dot} **${toSmallCaps('Warning Count')}:** \`${warningsCount}\``;
       if (autoTimeoutApplied) {
         warnDesc += `\n-# ${dot} **${toSmallCaps('Auto-Timeout')}:** \`${autoTimeoutLabel}\``;
       }
