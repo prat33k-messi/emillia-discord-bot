@@ -715,7 +715,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'profile', 'ping', 'reset', 'help', 'commands'
+      'aura', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
