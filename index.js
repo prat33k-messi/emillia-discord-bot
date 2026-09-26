@@ -154,7 +154,7 @@ const slashCommandsData = [
     .addUserOption(opt => opt.setName('user').setDescription('Filter messages by specific user').setRequired(false)),
 
   new SlashCommandBuilder()
-    .setName('aura')
+    .setName('auras')
     .setDescription('Measure your spiritual Aura power level with a custom card')
     .addUserOption(opt => opt.setName('user').setDescription('The member to check aura for (leave empty for yourself)').setRequired(false)),
 
@@ -391,159 +391,67 @@ function toCursiveDigits(str) {
   return String(str).split('').map(c => cursiveMap[c] || c).join('');
 }
 
-// Helper to determine Aura color theme and metadata based on percentage
+// Helper to determine Aura color theme and metadata based on percentage (Light Neon tiers)
 function getAuraTheme(percent) {
   if (percent <= 25) {
+    // Lowest / More low: Yellow Neon
     return {
-      name: 'Abyssal',
-      embedColor: 0x7E57C2,
-      primary: '#9c27b0',
-      secondary: '#4a148c',
-      glow: '#ab47bc',
-      core: '#e1bee7',
-      flameAlpha: 0.5,
-      borderGlow: 'rgba(171, 71, 188, 0.4)'
+      name: 'Yellow Neon',
+      embedColor: 0xEAB308,
+      primary: '#eab308',
+      glow: '#facc15',
+      core: '#fef9c3',
+      borderGlow: 'rgba(234, 179, 8, 0.8)'
     };
-  } else if (percent <= 59) {
+  } else if (percent <= 50) {
+    // Low: Pink Neon
     return {
-      name: 'Electric Azure',
-      embedColor: 0x00E5FF,
-      primary: '#00b0ff',
-      secondary: '#01579b',
-      glow: '#00e5ff',
-      core: '#e1f5fe',
-      flameAlpha: 0.7,
-      borderGlow: 'rgba(0, 229, 255, 0.5)'
+      name: 'Pink Neon',
+      embedColor: 0xEC4899,
+      primary: '#ec4899',
+      glow: '#f472b6',
+      core: '#fdf2f8',
+      borderGlow: 'rgba(236, 72, 153, 0.8)'
     };
-  } else if (percent <= 84) {
+  } else if (percent <= 75) {
+    // Mid: Purple Neon
     return {
-      name: 'Infernal Mystic',
-      embedColor: 0xFF1744,
-      primary: '#ff1744',
-      secondary: '#d500f9',
-      glow: '#ff4081',
-      core: '#ffebee',
-      flameAlpha: 0.85,
-      borderGlow: 'rgba(255, 23, 68, 0.6)'
+      name: 'Purple Neon',
+      embedColor: 0xA855F7,
+      primary: '#a855f7',
+      glow: '#c084fc',
+      core: '#faf5ff',
+      borderGlow: 'rgba(168, 85, 247, 0.8)'
     };
   } else {
+    // Higher: Red Neon
     return {
-      name: 'Celestial Godly',
-      embedColor: 0xFFD700,
-      primary: '#ffd700',
-      secondary: '#ff6d00',
-      glow: '#ffea00',
-      core: '#ffffff',
-      flameAlpha: 0.95,
-      borderGlow: 'rgba(255, 215, 0, 0.8)'
+      name: 'Red Neon',
+      embedColor: 0xFF1744,
+      primary: '#ff1744',
+      glow: '#ff5252',
+      core: '#ffebee',
+      borderGlow: 'rgba(255, 23, 68, 0.85)'
     };
   }
 }
 
-// Helper to draw realistic organic flame tongues
-function drawAuraFlames(ctx, width, height, tier, intensity) {
-  const flameHeightBase = 80 + intensity * 180;
-  
-  const tongues = [
-    [0.05, 0.18, 0.65, -0.02],
-    [0.15, 0.22, 0.95, 0.03],
-    [0.28, 0.25, 0.75, -0.04],
-    [0.40, 0.28, 1.15, 0.02],
-    [0.52, 0.26, 1.25, -0.01],
-    [0.64, 0.25, 1.05, 0.03],
-    [0.76, 0.22, 0.85, -0.02],
-    [0.86, 0.20, 0.70, 0.02],
-    [0.22, 0.18, 1.05, 0.01],
-    [0.48, 0.20, 1.30, 0.00],
-    [0.70, 0.18, 0.98, -0.02]
-  ];
-
-  ctx.save();
-  ctx.globalCompositeOperation = 'screen';
-
-  // 1. Ambient radial aura glow
-  const radialGlow = ctx.createRadialGradient(width / 2, height, 10, width / 2, height * 0.75, width * 0.7);
-  radialGlow.addColorStop(0, tier.glow);
-  radialGlow.addColorStop(0.35, tier.primary);
-  radialGlow.addColorStop(0.7, tier.secondary);
-  radialGlow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.globalAlpha = tier.flameAlpha * 0.75;
-  ctx.fillStyle = radialGlow;
-  ctx.fillRect(0, 0, width, height);
-
-  // 2. Layer 1: Outer secondary colored flames
-  ctx.fillStyle = tier.secondary;
-  ctx.globalAlpha = tier.flameAlpha * 0.55;
-  for (const [xR, wR, hM, tOff] of tongues) {
-    const x1 = (xR - wR * 0.5) * width;
-    const x2 = (xR + wR * 0.5) * width;
-    const tipX = (xR + tOff) * width;
-    const tipY = height - (flameHeightBase * hM * 0.9);
-
-    ctx.beginPath();
-    ctx.moveTo(x1, height);
-    ctx.bezierCurveTo(x1 + (tipX - x1) * 0.3, height - (height - tipY) * 0.5, tipX - 15, tipY + 20, tipX, tipY);
-    ctx.bezierCurveTo(tipX + 15, tipY + 20, x2 - (x2 - tipX) * 0.3, height - (height - tipY) * 0.5, x2, height);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // 3. Layer 2: Vibrant primary colored flames
-  ctx.fillStyle = tier.primary;
-  ctx.globalAlpha = tier.flameAlpha * 0.8;
-  for (const [xR, wR, hM, tOff] of tongues) {
-    const x1 = (xR - wR * 0.38) * width;
-    const x2 = (xR + wR * 0.38) * width;
-    const tipX = (xR + tOff * 0.7) * width;
-    const tipY = height - (flameHeightBase * hM * 0.75);
-
-    ctx.beginPath();
-    ctx.moveTo(x1, height);
-    ctx.bezierCurveTo(x1 + (tipX - x1) * 0.35, height - (height - tipY) * 0.55, tipX - 10, tipY + 15, tipX, tipY);
-    ctx.bezierCurveTo(tipX + 10, tipY + 15, x2 - (x2 - tipX) * 0.35, height - (height - tipY) * 0.55, x2, height);
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  // 4. Layer 3: Blazing Hot Core flames
-  if (intensity > 0.25) {
-    ctx.fillStyle = tier.core;
-    ctx.globalAlpha = tier.flameAlpha * 0.9;
-    const coreTongues = [tongues[3], tongues[4], tongues[5], tongues[9]];
-    for (const [xR, wR, hM, tOff] of coreTongues) {
-      const x1 = (xR - wR * 0.22) * width;
-      const x2 = (xR + wR * 0.22) * width;
-      const tipX = xR * width;
-      const tipY = height - (flameHeightBase * hM * 0.5);
-
-      ctx.beginPath();
-      ctx.moveTo(x1, height);
-      ctx.bezierCurveTo(x1 + (tipX - x1) * 0.4, height - (height - tipY) * 0.6, tipX - 6, tipY + 10, tipX, tipY);
-      ctx.bezierCurveTo(tipX + 6, tipY + 10, x2 - (x2 - tipX) * 0.4, height - (height - tipY) * 0.6, x2, height);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-
-  ctx.restore();
-}
-
-// Helper to generate dynamic Aura Card image with tiered flame effects & dark bold typography
+// Helper to generate dynamic Aura Card image with full avatar visibility and 4-sided light neon borders
 async function generateAuraCard(avatarUrl, auraPercent) {
   const width = 600;
   const height = 600;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
-  const intensity = Math.max(0.01, Math.min(1.0, auraPercent / 100));
   const tier = getAuraTheme(auraPercent);
+  const radius = 28;
 
-  // 1. Base card clipping path (smooth rounded rectangle)
+  // 1. Smooth rounded rectangle clipping path
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(0, 0, width, height, 32);
+    ctx.roundRect(0, 0, width, height, radius);
   } else {
-    const r = 32;
+    const r = radius;
     ctx.moveTo(r, 0);
     ctx.lineTo(width - r, 0);
     ctx.quadraticCurveTo(width, 0, width, r);
@@ -557,11 +465,11 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   }
   ctx.clip();
 
-  // 2. Draw dark base background
-  ctx.fillStyle = '#0a0d16';
+  // 2. Base dark background
+  ctx.fillStyle = '#0a0d14';
   ctx.fillRect(0, 0, width, height);
 
-  // 3. Draw User Avatar
+  // 3. Draw User Avatar cleanly across the card (Fully visible profile)
   try {
     if (avatarUrl) {
       const avatarImg = await loadImage(avatarUrl);
@@ -571,74 +479,62 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     console.error("Failed to load avatar for aura card:", err);
   }
 
-  // 4. Draw smooth dark vignette & bottom shadow overlay for contrast
-  const bottomGradient = ctx.createLinearGradient(0, height * 0.35, 0, height);
-  bottomGradient.addColorStop(0, 'rgba(5, 8, 18, 0)');
-  bottomGradient.addColorStop(0.55, 'rgba(4, 7, 16, 0.6)');
-  bottomGradient.addColorStop(0.85, 'rgba(2, 4, 12, 0.94)');
-  bottomGradient.addColorStop(1, 'rgba(1, 2, 8, 0.99)');
+  // 4. Subtle bottom gradient only behind text for legibility (profile stays completely clear)
+  const bottomGradient = ctx.createLinearGradient(0, height * 0.65, 0, height);
+  bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  bottomGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
+  bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
   ctx.fillStyle = bottomGradient;
-  ctx.fillRect(0, 0, width, height);
+  ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 5. Draw Tier-Themed Organic Flame Wisps
-  drawAuraFlames(ctx, width, height, tier, intensity);
-
-  // 6. Draw Floating Glowing Embers
-  const emberCount = 24;
-  for (let i = 0; i < emberCount; i++) {
-    const px = width * (0.05 + 0.9 * ((i * 47) % 100) / 100);
-    const py = height - (30 + ((i * 73) % 360) * (0.35 + intensity * 0.7));
-    const pSize = 1.6 + ((i * 23) % 32) / 10;
-    const pAlpha = 0.3 + 0.65 * Math.sin(i * 2.5 + intensity * 4);
-
-    ctx.save();
-    ctx.globalAlpha = Math.max(0.2, Math.min(0.95, pAlpha));
-    ctx.fillStyle = (i % 3 === 0) ? tier.core : tier.primary;
-    ctx.shadowColor = tier.glow;
-    ctx.shadowBlur = 12;
-    ctx.beginPath();
-    ctx.arc(px, py, pSize, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
-  // 7. Draw Bold Black Number with Flame Rim & Outer Glow
+  // 5. Draw Percentage Text with light neon glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  const fontSize = 80;
-  ctx.font = '900 80px "Montserrat", "Arial Black", "Impact", "Segoe UI", sans-serif';
+  ctx.font = '900 76px "Montserrat", "Arial Black", "Impact", "Segoe UI", sans-serif';
   const textX = width / 2;
-  const textY = height - 34;
+  const textY = height - 32;
   const textStr = `${auraPercent}%`;
 
-  // Outer Fiery Bloom
+  // Soft Outer Neon Halo
   ctx.shadowColor = tier.glow;
-  ctx.shadowBlur = 28;
-  ctx.lineWidth = 12;
+  ctx.shadowBlur = 24;
+  ctx.lineWidth = 10;
   ctx.strokeStyle = tier.primary;
   ctx.strokeText(textStr, textX, textY);
 
-  // Crisp Neon Rim
-  ctx.lineWidth = 4;
+  // Inner crisp neon rim
+  ctx.lineWidth = 3;
   ctx.strokeStyle = tier.core;
   ctx.strokeText(textStr, textX, textY);
 
-  // Bold Black Core with Flame Gradient Highlight
+  // Crisp White Core Text
   ctx.shadowBlur = 0;
-  const textGradient = ctx.createLinearGradient(0, textY - fontSize, 0, textY);
-  textGradient.addColorStop(0, tier.core);
-  textGradient.addColorStop(0.25, '#1e2433');
-  textGradient.addColorStop(1, '#05070c');
-  ctx.fillStyle = textGradient;
+  ctx.fillStyle = '#ffffff';
   ctx.fillText(textStr, textX, textY);
-
   ctx.restore();
 
-  // 8. Outer Glowing Border
-  ctx.strokeStyle = tier.borderGlow;
+  // 6. Light Neon Border around all 4 sides of the card
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(2, 2, width - 4, height - 4, radius - 2);
+  } else {
+    ctx.rect(2, 2, width - 4, height - 4);
+  }
+  // Ambient outer neon glow
+  ctx.shadowColor = tier.glow;
+  ctx.shadowBlur = 20;
+  ctx.strokeStyle = tier.primary;
   ctx.lineWidth = 4;
   ctx.stroke();
+
+  // Inner crisp light neon rim
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = tier.core;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
 
   ctx.restore();
 
@@ -829,7 +725,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'profile', 'ping', 'reset', 'help', 'commands'
+      'auras', 'aura', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
@@ -2002,7 +1898,7 @@ client.on('messageCreate', async (message) => {
           {
             name: `${dot} **General Commands**`,
             value: [
-              `${dot} \`-aura [@user]\` — **Check Spiritual Aura**`,
+              `${dot} \`-auras [@user]\` — **Check Spiritual Aura**`,
               `${dot} \`-profile\` — **View User Profile**`,
               `${dot} \`-ping\` — **Check Bot Latency**`,
               `${dot} \`-reset\` — **Reset Memory *(Aerion-sama)* **`
@@ -2055,8 +1951,8 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Aura Command ---
-    if (words.includes('aura') || cleanQuery === 'aura' || cleanQuery.startsWith('aura ') || lowerQuery === 'aura' || lowerQuery.startsWith('aura ')) {
+    // --- Aura Command (-auras / -aura) ---
+    if (words.includes('auras') || words.includes('aura') || cleanQuery === 'auras' || cleanQuery.startsWith('auras ') || cleanQuery === 'aura' || cleanQuery.startsWith('aura ') || lowerQuery === 'auras' || lowerQuery.startsWith('auras ') || lowerQuery === 'aura' || lowerQuery.startsWith('aura ')) {
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
       const auraPayload = await buildAuraPayload(targetMember);
       await message.channel.send(auraPayload);
@@ -3229,9 +3125,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 12. /aura
+    // 12. /auras & /aura
     // ------------------------------------------
-    if (commandName === 'aura') {
+    if (commandName === 'auras' || commandName === 'aura') {
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const auraPayload = await buildAuraPayload(targetMember);
@@ -3278,7 +3174,7 @@ client.on('interactionCreate', async (interaction) => {
           {
             name: `${dot} **General & Fun Commands**`,
             value: [
-              `${dot} \`/aura [user]\` — **Check Spiritual Aura Card**`,
+              `${dot} \`/auras [user]\` — **Check Spiritual Aura Card**`,
               `${dot} \`/help\` — **Show Command Guide**`
             ].join('\n'),
             inline: false
