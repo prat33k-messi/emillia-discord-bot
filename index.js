@@ -725,7 +725,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'auras', 'aura', 'profile', 'ping', 'reset', 'help', 'commands'
+      'auras', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
@@ -1951,8 +1951,8 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Aura Command (-auras / -aura) ---
-    if (words.includes('auras') || words.includes('aura') || cleanQuery === 'auras' || cleanQuery.startsWith('auras ') || cleanQuery === 'aura' || cleanQuery.startsWith('aura ') || lowerQuery === 'auras' || lowerQuery.startsWith('auras ') || lowerQuery === 'aura' || lowerQuery.startsWith('aura ')) {
+    // --- Aura Command (-auras only) ---
+    if (words.includes('auras') || cleanQuery === 'auras' || cleanQuery.startsWith('auras ') || lowerQuery === 'auras' || lowerQuery.startsWith('auras ')) {
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
       const auraPayload = await buildAuraPayload(targetMember);
       await message.channel.send(auraPayload);
@@ -3125,9 +3125,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 12. /auras & /aura
+    // 12. /auras
     // ------------------------------------------
-    if (commandName === 'auras' || commandName === 'aura') {
+    if (commandName === 'auras') {
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const auraPayload = await buildAuraPayload(targetMember);
