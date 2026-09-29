@@ -391,52 +391,42 @@ function toCursiveDigits(str) {
   return String(str).split('').map(c => cursiveMap[c] || c).join('');
 }
 
-// Helper to determine Aura color theme and metadata based on percentage (Light Neon tiers)
+// Helper to determine Aura color theme and metadata based on percentage (10-Tier Neon System)
 function getAuraTheme(percent) {
-  if (percent <= 25) {
-    // Lowest / More low: Yellow Neon
-    return {
-      name: 'Yellow Neon',
-      embedColor: 0xEAB308,
-      primary: '#eab308',
-      glow: '#facc15',
-      core: '#fef9c3',
-      borderGlow: 'rgba(234, 179, 8, 0.8)'
-    };
+  if (percent <= 10) {
+    // 1% - 10%: Pink
+    return { name: 'Pink', embedColor: 0xFF1493, primary: '#ff1493', glow: '#ff69b4', core: '#fff0f5' };
+  } else if (percent <= 20) {
+    // 11% - 20%: Yellow
+    return { name: 'Yellow', embedColor: 0xFFD700, primary: '#ffd700', glow: '#facc15', core: '#fef9c3' };
+  } else if (percent <= 30) {
+    // 21% - 30%: Blue
+    return { name: 'Blue', embedColor: 0x1E90FF, primary: '#1e90ff', glow: '#38bdf8', core: '#e0f2fe' };
+  } else if (percent <= 40) {
+    // 31% - 40%: Green
+    return { name: 'Green', embedColor: 0x00E676, primary: '#00e676', glow: '#4ade80', core: '#f0fdf4' };
   } else if (percent <= 50) {
-    // Low: Pink Neon
-    return {
-      name: 'Pink Neon',
-      embedColor: 0xEC4899,
-      primary: '#ec4899',
-      glow: '#f472b6',
-      core: '#fdf2f8',
-      borderGlow: 'rgba(236, 72, 153, 0.8)'
-    };
-  } else if (percent <= 75) {
-    // Mid: Purple Neon
-    return {
-      name: 'Purple Neon',
-      embedColor: 0xA855F7,
-      primary: '#a855f7',
-      glow: '#c084fc',
-      core: '#faf5ff',
-      borderGlow: 'rgba(168, 85, 247, 0.8)'
-    };
+    // 41% - 50%: Orange
+    return { name: 'Orange', embedColor: 0xFF6D00, primary: '#ff6d00', glow: '#fb923c', core: '#fff7ed' };
+  } else if (percent <= 60) {
+    // 51% - 60%: Purple
+    return { name: 'Purple', embedColor: 0xA855F7, primary: '#a855f7', glow: '#c084fc', core: '#faf5ff' };
+  } else if (percent <= 70) {
+    // 61% - 70%: Cyan
+    return { name: 'Cyan', embedColor: 0x00F0FF, primary: '#00f0ff', glow: '#22d3ee', core: '#ecfeff' };
+  } else if (percent <= 80) {
+    // 71% - 80%: Brown
+    return { name: 'Brown', embedColor: 0x8D5B4C, primary: '#b45309', glow: '#d97706', core: '#fef3c7' };
+  } else if (percent <= 90) {
+    // 81% - 90%: Dark Black
+    return { name: 'Dark Black', embedColor: 0x18181B, primary: '#27272a', glow: '#71717a', core: '#d4d4d8' };
   } else {
-    // Higher: Red Neon
-    return {
-      name: 'Red Neon',
-      embedColor: 0xFF1744,
-      primary: '#ff1744',
-      glow: '#ff5252',
-      core: '#ffebee',
-      borderGlow: 'rgba(255, 23, 68, 0.85)'
-    };
+    // 91% - 100%: Proper White
+    return { name: 'Proper White', embedColor: 0xFFFFFF, primary: '#ffffff', glow: '#ffffff', core: '#ffffff' };
   }
 }
 
-// Helper to generate dynamic Aura Card image with full avatar visibility and 4-sided light neon borders
+// Helper to generate dynamic Aura Card image with full avatar visibility and boosted 4-sided neon borders
 async function generateAuraCard(avatarUrl, auraPercent) {
   const width = 600;
   const height = 600;
@@ -482,30 +472,31 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   // 4. Subtle bottom gradient only behind text for legibility (profile stays completely clear)
   const bottomGradient = ctx.createLinearGradient(0, height * 0.65, 0, height);
   bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  bottomGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
-  bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
+  bottomGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.5)');
+  bottomGradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 5. Draw Percentage Text with light neon glow
+  // 5. Draw Percentage Text with boosted vibrant neon glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
-  ctx.font = '900 76px "Montserrat", "Arial Black", "Impact", "Segoe UI", sans-serif';
+  ctx.font = '900 80px "Montserrat", "Arial Black", "Impact", "Segoe UI", sans-serif';
   const textX = width / 2;
   const textY = height - 32;
   const textStr = `${auraPercent}%`;
 
-  // Soft Outer Neon Halo
+  // Wide intense neon halo
   ctx.shadowColor = tier.glow;
-  ctx.shadowBlur = 24;
-  ctx.lineWidth = 10;
+  ctx.shadowBlur = 32;
+  ctx.lineWidth = 14;
   ctx.strokeStyle = tier.primary;
   ctx.strokeText(textStr, textX, textY);
 
-  // Inner crisp neon rim
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = tier.core;
+  // Inner neon edge
+  ctx.shadowBlur = 14;
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = tier.glow;
   ctx.strokeText(textStr, textX, textY);
 
   // Crisp White Core Text
@@ -514,22 +505,29 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillText(textStr, textX, textY);
   ctx.restore();
 
-  // 6. Light Neon Border around all 4 sides of the card
+  // 6. Boosted Vibrant Neon Border around all 4 sides of the card
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(2, 2, width - 4, height - 4, radius - 2);
+    ctx.roundRect(3, 3, width - 6, height - 6, radius - 3);
   } else {
-    ctx.rect(2, 2, width - 4, height - 4);
+    ctx.rect(3, 3, width - 6, height - 6);
   }
-  // Ambient outer neon glow
+
+  // Pass 1: Broad outer atmospheric neon glow
   ctx.shadowColor = tier.glow;
-  ctx.shadowBlur = 20;
+  ctx.shadowBlur = 30;
   ctx.strokeStyle = tier.primary;
+  ctx.lineWidth = 7;
+  ctx.stroke();
+
+  // Pass 2: Vivid saturated neon line
+  ctx.shadowBlur = 16;
+  ctx.strokeStyle = tier.glow;
   ctx.lineWidth = 4;
   ctx.stroke();
 
-  // Inner crisp light neon rim
+  // Pass 3: Crisp bright core neon highlight
   ctx.shadowBlur = 6;
   ctx.strokeStyle = tier.core;
   ctx.lineWidth = 2;
