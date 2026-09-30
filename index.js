@@ -572,7 +572,7 @@ async function buildAuraPayload(targetMember) {
   return { embeds: [embed], files: [attachment] };
 }
 
-// Helper to fetch Besties custom emojis (ani_wingL, ani_wingR, ani_sakura)
+// Helper to fetch Besties custom emojis (firegreen, sakura)
 async function getBestieEmojis(guild) {
   let fireGreen = '🔥';
   let sakura = '🌸';
@@ -583,18 +583,43 @@ async function getBestieEmojis(guild) {
     }
   } catch (e) {}
 
-  const searchPool = [
+  try {
+    if (client && client.application && client.application.emojis && typeof client.application.emojis.fetch === 'function') {
+      await client.application.emojis.fetch().catch(() => {});
+    }
+  } catch (e) {}
+
+  if (client && client.guilds && client.guilds.cache) {
+    for (const g of client.guilds.cache.values()) {
+      try {
+        if (g.emojis && typeof g.emojis.fetch === 'function') {
+          await g.emojis.fetch().catch(() => {});
+        }
+      } catch (e) {}
+    }
+  }
+
+  const allEmojis = [
     ...(guild?.emojis?.cache ? Array.from(guild.emojis.cache.values()) : []),
-    ...(client?.emojis?.cache ? Array.from(client.emojis.cache.values()) : [])
+    ...(client?.emojis?.cache ? Array.from(client.emojis.cache.values()) : []),
+    ...(client?.application?.emojis?.cache ? Array.from(client.application.emojis.cache.values()) : [])
   ];
 
-  const foundFireGreen = searchPool.find(e => 
-    e.name.toLowerCase() === '1firegreen' || 
-    e.name.toLowerCase() === 'firegreen' || 
-    e.name.toLowerCase() === 'greenfire' ||
-    e.name.toLowerCase().includes('firegreen') ||
-    e.name.toLowerCase().includes('greenfire')
-  );
+  const searchPool = Array.from(new Map(allEmojis.map(e => [e.id, e])).values());
+
+  const foundFireGreen = searchPool.find(e => {
+    const n = e.name.toLowerCase();
+    return n === '1firegreen' || 
+           n === 'firegreen' || 
+           n === 'greenfire' || 
+           n === 'fire_green' ||
+           n === 'green_fire' ||
+           n === 'flamegreen' ||
+           n === 'greenflame' ||
+           n.includes('firegreen') || 
+           n.includes('greenfire') ||
+           (n.includes('green') && (n.includes('fire') || n.includes('flame')));
+  });
   if (foundFireGreen) fireGreen = foundFireGreen.toString();
 
   const foundSakura = searchPool.find(e => 
@@ -799,12 +824,16 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
     tierMessage = `**BEST ANIPEDIA DUO**`;
   }
 
-  // Calculate dynamic center padding using Unicode em-spaces (\u2003)
+  // Dynamic centering calculation calibrated for full-width Discord embed (approx 28 em units)
   const rawTitle = `Besties ${authorNick} & ${targetNick}`;
-  const padTitle = Math.max(0, Math.floor((36 - rawTitle.length) / 4));
-  const padWings = 6;
+  const titleLenEm = rawTitle.length / 2.1;
+  const padTitle = Math.max(0, Math.round((28 - titleLenEm) / 2));
+  
+  const padWings = 12; // 12 em-spaces centers emojis + percentage above rhombus
+  
   const rawTierLen = tierMessage.replace(/\*\*/g, '').length + 3;
-  const padTier = Math.max(0, Math.floor((36 - rawTierLen) / 4));
+  const tierLenEm = rawTierLen / 2.1;
+  const padTier = Math.max(0, Math.round((28 - tierLenEm) / 2));
 
   const centeredTitle = '\u2003'.repeat(padTitle) + `**Besties ${authorNick} & ${targetNick}**`;
   const centeredWings = '\u2003'.repeat(padWings) + `${fireGreen} **${bestiePercent}%** ${fireGreen}`;
