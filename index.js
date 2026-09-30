@@ -614,28 +614,161 @@ async function getBestieEmojis(guild) {
   return { wingL, wingR, sakura };
 }
 
-// Helper to draw geometric 5-point star on canvas
-function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
-  let rot = Math.PI / 2 * 3;
-  let x = cx;
-  let y = cy;
-  const step = Math.PI / spikes;
+// Helper to draw a realistic top-view pasted unrolled parchment scroll (📜) with red percentage text
+function drawPastedScroll(ctx, cx, cy, width, height, percentText) {
+  ctx.save();
 
+  const x = cx - width / 2;
+  const y = cy - height / 2;
+  const rollH = 14; // Height of the rolled ends
+
+  // 1. Realistic heavy drop shadow for the "pasted" effect
+  ctx.save();
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
+  ctx.shadowBlur = 18;
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 6;
+  ctx.fillStyle = '#edd7a8';
+  
+  // Paper main body shadow
   ctx.beginPath();
-  ctx.moveTo(cx, cy - outerRadius);
-  for (let i = 0; i < spikes; i++) {
-    x = cx + Math.cos(rot) * outerRadius;
-    y = cy + Math.sin(rot) * outerRadius;
-    ctx.lineTo(x, y);
-    rot += step;
-
-    x = cx + Math.cos(rot) * innerRadius;
-    y = cy + Math.sin(rot) * innerRadius;
-    ctx.lineTo(x, y);
-    rot += step;
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x + 4, y + 4, width - 8, height - 8, 4);
+  } else {
+    ctx.rect(x + 4, y + 4, width - 8, height - 8);
   }
-  ctx.lineTo(cx, cy - outerRadius);
+  ctx.fill();
+  ctx.restore();
+
+  // 2. Main Parchment Sheet Body (Top view unrolled surface)
+  ctx.save();
+  const paperGrad = ctx.createLinearGradient(x, y, x + width, y + height);
+  paperGrad.addColorStop(0, '#fffcf2');
+  paperGrad.addColorStop(0.3, '#f9edd2');
+  paperGrad.addColorStop(0.7, '#f4e3be');
+  paperGrad.addColorStop(1, '#ebd09e');
+
+  ctx.fillStyle = paperGrad;
+  ctx.beginPath();
+  // Draw parchment with slightly organic curved sides
+  ctx.moveTo(x + 10, y + rollH);
+  ctx.lineTo(x + width - 10, y + rollH);
+  ctx.lineTo(x + width - 6, y + height - rollH);
+  ctx.lineTo(x + 6, y + height - rollH);
   ctx.closePath();
+  ctx.fill();
+
+  // Vintage parchment inner decorative border lines
+  ctx.strokeStyle = 'rgba(166, 114, 46, 0.45)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(x + 14, y + rollH + 6, width - 28, height - (rollH * 2) - 12);
+  
+  ctx.strokeStyle = 'rgba(166, 114, 46, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 17, y + rollH + 9, width - 34, height - (rollH * 2) - 18);
+
+  // Subtle paper texture lines
+  ctx.strokeStyle = 'rgba(139, 90, 43, 0.08)';
+  ctx.lineWidth = 1;
+  for (let i = y + rollH + 15; i < y + height - rollH - 10; i += 12) {
+    ctx.beginPath();
+    ctx.moveTo(x + 20, i);
+    ctx.lineTo(x + width - 20, i);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 3. Top Rolled Edge (Cylinder / curl of the scroll)
+  ctx.save();
+  const topRollGrad = ctx.createLinearGradient(x, y, x, y + rollH + 4);
+  topRollGrad.addColorStop(0, '#d8b273');
+  topRollGrad.addColorStop(0.3, '#fbf1da');
+  topRollGrad.addColorStop(0.7, '#edd39c');
+  topRollGrad.addColorStop(1, '#c99f5e');
+
+  ctx.fillStyle = topRollGrad;
+  ctx.strokeStyle = '#8c5e28';
+  ctx.lineWidth = 1.5;
+
+  // Top rolled cylinder
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y, width, rollH + 2, 6);
+  } else {
+    ctx.rect(x, y, width, rollH + 2);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  // Scroll wooden/gold spindle tips at left and right of top roll
+  ctx.fillStyle = '#8b2500';
+  ctx.fillRect(x - 5, y + 2, 5, rollH - 2);
+  ctx.fillRect(x + width, y + 2, 5, rollH - 2);
+  ctx.strokeStyle = '#d4af37';
+  ctx.strokeRect(x - 5, y + 2, 5, rollH - 2);
+  ctx.strokeRect(x + width, y + 2, 5, rollH - 2);
+  ctx.restore();
+
+  // 4. Bottom Rolled Edge (Cylinder / curl of the scroll)
+  ctx.save();
+  const botRollGrad = ctx.createLinearGradient(x, y + height - rollH - 4, x, y + height);
+  botRollGrad.addColorStop(0, '#c99f5e');
+  botRollGrad.addColorStop(0.3, '#edd39c');
+  botRollGrad.addColorStop(0.7, '#fbf1da');
+  botRollGrad.addColorStop(1, '#b88947');
+
+  ctx.fillStyle = botRollGrad;
+  ctx.strokeStyle = '#8c5e28';
+  ctx.lineWidth = 1.5;
+
+  // Bottom rolled cylinder
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(x, y + height - rollH - 2, width, rollH + 2, 6);
+  } else {
+    ctx.rect(x, y + height - rollH - 2, width, rollH + 2);
+  }
+  ctx.fill();
+  ctx.stroke();
+
+  // Scroll wooden/gold spindle tips at left and right of bottom roll
+  ctx.fillStyle = '#8b2500';
+  ctx.fillRect(x - 5, y + height - rollH, 5, rollH - 2);
+  ctx.fillRect(x + width, y + height - rollH, 5, rollH - 2);
+  ctx.strokeStyle = '#d4af37';
+  ctx.strokeRect(x - 5, y + height - rollH, 5, rollH - 2);
+  ctx.strokeRect(x + width, y + height - rollH, 5, rollH - 2);
+  ctx.restore();
+
+  // 5. Pasted Tape / Seal accents on top & bottom so it looks authentically pasted
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.fillRect(cx - 24, y - 4, 48, 10);
+  ctx.fillRect(cx - 24, y + height - 6, 48, 10);
+  ctx.restore();
+
+  // 6. Percentage written in RED ink on the scroll
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 42px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+
+  // Soft red ink shadow
+  ctx.shadowColor = 'rgba(220, 38, 38, 0.4)';
+  ctx.shadowBlur = 6;
+  ctx.shadowOffsetY = 1;
+
+  // Sharp dark red outline for crispness
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#7f1d1d';
+  ctx.strokeText(percentText, cx, cy + 1);
+
+  // Vibrant rich Red fill
+  ctx.fillStyle = '#dc2626';
+  ctx.fillText(percentText, cx, cy + 1);
+  ctx.restore();
+
+  ctx.restore();
 }
 
 // Helper to draw images with object-fit: cover
@@ -659,7 +792,7 @@ function drawCoverImage(ctx, img, x, y, w, h) {
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
-// Helper to generate dynamic Besties Card image with dual side-by-side avatars and central Cyan star
+// Helper to generate dynamic Besties Card image with dual side-by-side avatars and central pasted scroll
 async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent) {
   const width = 700;
   const height = 350;
@@ -711,46 +844,8 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.lineTo(halfW, height);
   ctx.stroke();
 
-  // 4. Center Cyan Star with glowing halo
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const outerR = 64;
-  const innerR = 32;
-
-  ctx.save();
-  // Pass 1: Star outer cyan bloom
-  ctx.shadowColor = '#00f0ff';
-  ctx.shadowBlur = 30;
-  ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
-  drawStar(ctx, centerX, centerY, 5, outerR + 4, innerR + 2);
-  ctx.fill();
-
-  // Pass 2: Vivid cyan star body
-  ctx.shadowBlur = 15;
-  ctx.fillStyle = '#00f0ff';
-  ctx.strokeStyle = '#e0f7ff';
-  ctx.lineWidth = 3;
-  drawStar(ctx, centerX, centerY, 5, outerR, innerR);
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
-
-  // 5. Percentage number inside the star
-  ctx.save();
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = '900 32px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
-  
-  // Strong dark contrast behind digits so it's super sharp on the cyan star
-  ctx.shadowColor = '#000000';
-  ctx.shadowBlur = 8;
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = '#050a14';
-  ctx.strokeText(`${bestiePercent}%`, centerX, centerY + 2);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(`${bestiePercent}%`, centerX, centerY + 2);
-  ctx.restore();
+  // 4. Center Pasted Top-View Scroll (📜) with Red percentage text
+  drawPastedScroll(ctx, width / 2, height / 2, 230, 135, `${bestiePercent}%`);
 
   // 6. 4-side Cyan Neon Border around card
   ctx.save();
