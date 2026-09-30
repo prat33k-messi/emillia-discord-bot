@@ -447,7 +447,21 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     console.error("Failed to load avatar for aura card:", err);
   }
 
-  // 4. Subtle bottom gradient only behind text for legibility (profile stays completely clear)
+  // 4. High-Aura Atmospheric Edge Bloom (radiates from the borders inward for high power)
+  if (intensity > 0.4) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const edgeBloom = (intensity - 0.4) / 0.6; // 0 to 1
+    const edgeGrad = ctx.createRadialGradient(width / 2, height / 2, width * 0.3, width / 2, height / 2, width * 0.7);
+    edgeGrad.addColorStop(0, 'rgba(0, 240, 255, 0)');
+    edgeGrad.addColorStop(0.7, `rgba(0, 240, 255, ${edgeBloom * 0.18})`);
+    edgeGrad.addColorStop(1, `rgba(0, 240, 255, ${edgeBloom * 0.45})`);
+    ctx.fillStyle = edgeGrad;
+    ctx.fillRect(0, 0, width, height);
+    ctx.restore();
+  }
+
+  // 5. Subtle bottom gradient only behind text for legibility (profile stays completely clear)
   const bottomGradient = ctx.createLinearGradient(0, height * 0.65, 0, height);
   bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
   bottomGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
@@ -455,7 +469,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 5. Draw Percentage Text with simple clean font and dynamic cyan neon glow
+  // 6. Draw Percentage Text with simple clean font and intensely boosted cyan neon glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -464,19 +478,19 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   const textY = height - 30;
   const textStr = `${auraPercent}%`;
 
-  // Dynamic Neon Halo on text
-  const textBlur = 10 + intensity * 26;
-  const textLineWidth = 4 + intensity * 8;
+  // Dynamic High-Powered Neon Halo on text
+  const textBlur = 12 + intensity * 38;
+  const textLineWidth = 4 + intensity * 12;
   ctx.shadowColor = '#00f0ff';
   ctx.shadowBlur = textBlur;
   ctx.lineWidth = textLineWidth;
-  ctx.strokeStyle = `rgba(0, 240, 255, ${0.4 + intensity * 0.6})`;
+  ctx.strokeStyle = `rgba(0, 240, 255, ${0.5 + intensity * 0.5})`;
   ctx.strokeText(textStr, textX, textY);
 
-  if (intensity > 0.4) {
-    ctx.shadowBlur = textBlur * 0.5;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#e0f7ff';
+  if (intensity > 0.3) {
+    ctx.shadowBlur = textBlur * 0.6;
+    ctx.lineWidth = 4 + intensity * 4;
+    ctx.strokeStyle = '#7df9ff';
     ctx.strokeText(textStr, textX, textY);
   }
 
@@ -486,7 +500,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillText(textStr, textX, textY);
   ctx.restore();
 
-  // 6. 4-Side Dynamic Cyan Neon Border (Glow increases with percentage)
+  // 7. 4-Side Ultra-Bright Cyan Neon Border (Massively boosted for high aura)
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -495,28 +509,35 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     ctx.rect(3, 3, width - 6, height - 6);
   }
 
-  // Pass 1: Outer atmospheric cyan bloom
-  const outerBlur = 12 + intensity * 28;
-  const outerWidth = 3 + intensity * 6;
+  // Pass 1: Super-wide outer atmospheric neon bloom
+  const outerBlur = 15 + intensity * 45;
+  const outerWidth = 4 + intensity * 10;
   ctx.shadowColor = '#00f0ff';
   ctx.shadowBlur = outerBlur;
-  ctx.strokeStyle = `rgba(0, 240, 255, ${0.35 + intensity * 0.65})`;
+  ctx.strokeStyle = `rgba(0, 240, 255, ${0.4 + intensity * 0.6})`;
   ctx.lineWidth = outerWidth;
   ctx.stroke();
 
-  // Pass 2: Vivid neon line
-  const midBlur = 6 + intensity * 14;
-  const midWidth = 2 + intensity * 3;
+  // Pass 2: Radiant electric cyan body
+  const midBlur = 8 + intensity * 24;
+  const midWidth = 3 + intensity * 5;
   ctx.shadowBlur = midBlur;
-  ctx.strokeStyle = `rgba(0, 229, 255, ${0.5 + intensity * 0.5})`;
+  ctx.strokeStyle = `rgba(0, 229, 255, ${0.6 + intensity * 0.4})`;
   ctx.lineWidth = midWidth;
   ctx.stroke();
 
-  // Pass 3: Crisp bright core highlight
-  ctx.shadowBlur = 4 + intensity * 6;
-  ctx.strokeStyle = `rgba(224, 247, 255, ${0.6 + intensity * 0.4})`;
+  // Pass 3: Ultra-bright electric core
+  ctx.shadowBlur = 6 + intensity * 12;
+  ctx.strokeStyle = `rgba(125, 249, 255, ${0.7 + intensity * 0.3})`;
+  ctx.lineWidth = 2 + intensity * 3;
+  ctx.stroke();
+
+  // Pass 4: Pure diamond-white center line
+  ctx.shadowBlur = 3 + intensity * 6;
+  ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 + intensity * 0.2})`;
   ctx.lineWidth = 1.5 + intensity * 1.5;
   ctx.stroke();
+
   ctx.restore();
 
   ctx.restore();
