@@ -159,6 +159,11 @@ const slashCommandsData = [
     .addUserOption(opt => opt.setName('user').setDescription('The member to check aura for (leave empty for yourself)').setRequired(false)),
 
   new SlashCommandBuilder()
+    .setName('besties')
+    .setDescription('Check bestie compatibility with another user')
+    .addUserOption(opt => opt.setName('user').setDescription('The user to check bestie compatibility with').setRequired(true)),
+
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help and available commands')
 ];
@@ -567,6 +572,246 @@ async function buildAuraPayload(targetMember) {
   return { embeds: [embed], files: [attachment] };
 }
 
+// Helper to fetch Besties custom emojis (ani_wingL, ani_wingR, ani_sakura)
+async function getBestieEmojis(guild) {
+  let wingL = '🪽';
+  let wingR = '🪽';
+  let sakura = '🌸';
+
+  try {
+    if (guild && guild.emojis && typeof guild.emojis.fetch === 'function') {
+      await guild.emojis.fetch().catch(() => {});
+    }
+  } catch (e) {}
+
+  const searchPool = [
+    ...(guild?.emojis?.cache ? Array.from(guild.emojis.cache.values()) : []),
+    ...(client?.emojis?.cache ? Array.from(client.emojis.cache.values()) : [])
+  ];
+
+  const foundWingL = searchPool.find(e => 
+    e.name.toLowerCase() === 'ani_wingl' || 
+    e.name.toLowerCase() === 'wingl' || 
+    e.name.toLowerCase().includes('wingl') || 
+    e.name.toLowerCase().includes('wing_l')
+  );
+  if (foundWingL) wingL = foundWingL.toString();
+
+  const foundWingR = searchPool.find(e => 
+    e.name.toLowerCase() === 'ani_wingr' || 
+    e.name.toLowerCase() === 'wingr' || 
+    e.name.toLowerCase().includes('wingr') || 
+    e.name.toLowerCase().includes('wing_r')
+  );
+  if (foundWingR) wingR = foundWingR.toString();
+
+  const foundSakura = searchPool.find(e => 
+    e.name.toLowerCase() === 'ani_sakura' || 
+    e.name.toLowerCase().includes('sakura')
+  );
+  if (foundSakura) sakura = foundSakura.toString();
+
+  return { wingL, wingR, sakura };
+}
+
+// Helper to draw geometric 5-point star on canvas
+function drawStar(ctx, cx, cy, spikes, outerRadius, innerRadius) {
+  let rot = Math.PI / 2 * 3;
+  let x = cx;
+  let y = cy;
+  const step = Math.PI / spikes;
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - outerRadius);
+  for (let i = 0; i < spikes; i++) {
+    x = cx + Math.cos(rot) * outerRadius;
+    y = cy + Math.sin(rot) * outerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+
+    x = cx + Math.cos(rot) * innerRadius;
+    y = cy + Math.sin(rot) * innerRadius;
+    ctx.lineTo(x, y);
+    rot += step;
+  }
+  ctx.lineTo(cx, cy - outerRadius);
+  ctx.closePath();
+}
+
+// Helper to draw images with object-fit: cover
+function drawCoverImage(ctx, img, x, y, w, h) {
+  const imgRatio = img.width / img.height;
+  const targetRatio = w / h;
+  let sx, sy, sw, sh;
+
+  if (imgRatio > targetRatio) {
+    sh = img.height;
+    sw = img.height * targetRatio;
+    sx = (img.width - sw) / 2;
+    sy = 0;
+  } else {
+    sw = img.width;
+    sh = img.width / targetRatio;
+    sx = 0;
+    sy = (img.height - sh) / 2;
+  }
+
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+}
+
+// Helper to generate dynamic Besties Card image with dual side-by-side avatars and central Cyan star
+async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent) {
+  const width = 700;
+  const height = 350;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  const radius = 24;
+
+  // 1. Base card clipping path
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(0, 0, width, height, radius);
+  } else {
+    ctx.rect(0, 0, width, height);
+  }
+  ctx.clip();
+
+  // Dark base
+  ctx.fillStyle = '#0a0d14';
+  ctx.fillRect(0, 0, width, height);
+
+  const halfW = width / 2;
+
+  // 2. Draw Left Avatar (Author)
+  try {
+    if (authorAvatarUrl) {
+      const leftImg = await loadImage(authorAvatarUrl);
+      drawCoverImage(ctx, leftImg, 0, 0, halfW, height);
+    }
+  } catch (err) {
+    console.error("Failed to load author avatar for bestie card:", err);
+  }
+
+  // 3. Draw Right Avatar (Target)
+  try {
+    if (targetAvatarUrl) {
+      const rightImg = await loadImage(targetAvatarUrl);
+      drawCoverImage(ctx, rightImg, halfW, 0, halfW, height);
+    }
+  } catch (err) {
+    console.error("Failed to load target avatar for bestie card:", err);
+  }
+
+  // Middle vertical subtle seam
+  ctx.strokeStyle = 'rgba(0, 240, 255, 0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(halfW, 0);
+  ctx.lineTo(halfW, height);
+  ctx.stroke();
+
+  // 4. Center Cyan Star with glowing halo
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const outerR = 64;
+  const innerR = 32;
+
+  ctx.save();
+  // Pass 1: Star outer cyan bloom
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 30;
+  ctx.fillStyle = 'rgba(0, 240, 255, 0.85)';
+  drawStar(ctx, centerX, centerY, 5, outerR + 4, innerR + 2);
+  ctx.fill();
+
+  // Pass 2: Vivid cyan star body
+  ctx.shadowBlur = 15;
+  ctx.fillStyle = '#00f0ff';
+  ctx.strokeStyle = '#e0f7ff';
+  ctx.lineWidth = 3;
+  drawStar(ctx, centerX, centerY, 5, outerR, innerR);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+
+  // 5. Percentage number inside the star
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 32px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+  
+  // Strong dark contrast behind digits so it's super sharp on the cyan star
+  ctx.shadowColor = '#000000';
+  ctx.shadowBlur = 8;
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#050a14';
+  ctx.strokeText(`${bestiePercent}%`, centerX, centerY + 2);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`${bestiePercent}%`, centerX, centerY + 2);
+  ctx.restore();
+
+  // 6. 4-side Cyan Neon Border around card
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(3, 3, width - 6, height - 6, radius - 3);
+  } else {
+    ctx.rect(3, 3, width - 6, height - 6);
+  }
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 20;
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = '#e0f7ff';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
+}
+
+// Helper to build Besties Message Payload with embed and image attachment
+async function buildBestiePayload(authorMember, targetMember, guild) {
+  const bestiePercent = Math.floor(Math.random() * 100) + 1;
+  const authorAvatarUrl = authorMember.user.displayAvatarURL({ extension: 'png', size: 512 });
+  const targetAvatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
+  const buffer = await generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent);
+  const attachment = new AttachmentBuilder(buffer, { name: 'besties.png' });
+
+  const { wingL, wingR, sakura } = await getBestieEmojis(guild);
+
+  const authorNick = authorMember.displayName || authorMember.user.username;
+  const targetNick = targetMember.displayName || targetMember.user.username;
+
+  let tierMessage = '';
+  if (bestiePercent <= 30) {
+    tierMessage = `we gotta talk ${sakura}`;
+  } else if (bestiePercent <= 50) {
+    tierMessage = `we are almost homie ${sakura}`;
+  } else if (bestiePercent <= 70) {
+    tierMessage = `WE ARE OFFICIAL HOMIES NOW!! ${sakura}`;
+  } else if (bestiePercent <= 90) {
+    tierMessage = `POOKIES AND HOMIES FOREVER ${sakura}`;
+  } else {
+    tierMessage = `(RARE) BEST ANIPEDIA DUO ${sakura}`;
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x00F0FF)
+    .setTitle(`Besties ${authorNick} & ${targetNick}`)
+    .setDescription(`${wingL} **${bestiePercent}%** ${wingR}\n\n${tierMessage}`)
+    .setImage('attachment://besties.png');
+
+  return { embeds: [embed], files: [attachment] };
+}
+
 // Helper function to send security DMs to the creator
 async function sendAlertToCreator(client, username, nickname, guildName, channelName, content) {
   try {
@@ -729,7 +974,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'auras', 'profile', 'ping', 'reset', 'help', 'commands'
+      'auras', 'besties', 'bestie', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
@@ -1903,6 +2148,7 @@ client.on('messageCreate', async (message) => {
             name: `${dot} **General Commands**`,
             value: [
               `${dot} \`-auras [@user]\` — **Check Spiritual Aura**`,
+              `${dot} \`-bestie <@user>\` — **Check Besties Compatibility**`,
               `${dot} \`-profile\` — **View User Profile**`,
               `${dot} \`-ping\` — **Check Bot Latency**`,
               `${dot} \`-reset\` — **Reset Memory *(Aerion-sama)* **`
@@ -1960,6 +2206,32 @@ client.on('messageCreate', async (message) => {
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
       const auraPayload = await buildAuraPayload(targetMember);
       await message.channel.send(auraPayload);
+      return;
+    }
+
+    // --- Bestie Command (-bestie / -besties) ---
+    if (words.includes('bestie') || words.includes('besties') || cleanQuery === 'bestie' || cleanQuery.startsWith('bestie ') || cleanQuery === 'besties' || cleanQuery.startsWith('besties ') || lowerQuery === 'bestie' || lowerQuery.startsWith('bestie ') || lowerQuery === 'besties' || lowerQuery.startsWith('besties ')) {
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
+
+      // If no direct mention, look up by username, nickname or ID in the arguments
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^(besties?)\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m => 
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+
+      if (!targetMember) {
+        await message.reply("Please mention or specify your bestie! 🌸 (e.g. `-bestie @user` or `-bestie username`)");
+        return;
+      }
+
+      const bestiePayload = await buildBestiePayload(message.member, targetMember, message.guild);
+      await message.channel.send(bestiePayload);
       return;
     }
 
@@ -3140,7 +3412,22 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 13. /help
+    // 13. /besties & /bestie
+    // ------------------------------------------
+    if (commandName === 'besties' || commandName === 'bestie') {
+      const targetMember = options.getMember('user');
+      if (!targetMember) {
+        await interaction.reply({ content: "Please specify a user to check besties compatibility with! 🌸", ephemeral: true });
+        return;
+      }
+      await interaction.deferReply();
+      const bestiePayload = await buildBestiePayload(member, targetMember, guild);
+      await interaction.editReply(bestiePayload);
+      return;
+    }
+
+    // ------------------------------------------
+    // 14. /help
     // ------------------------------------------
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
@@ -3179,6 +3466,7 @@ client.on('interactionCreate', async (interaction) => {
             name: `${dot} **General & Fun Commands**`,
             value: [
               `${dot} \`/auras [user]\` — **Check Spiritual Aura Card**`,
+              `${dot} \`/besties <user>\` — **Check Besties Compatibility**`,
               `${dot} \`/help\` — **Show Command Guide**`
             ].join('\n'),
             inline: false
