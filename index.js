@@ -692,13 +692,16 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   }
 
   // Compact Rhombus dimensions (small so avatars are prominently visible)
-  const rx = 82; // Half width
-  const ry = 68; // Half height
+  const rx = 78; // Half width
+  const ry = 62; // Half height
 
-  // 4. Vertical dividing cyan neon lines meeting rhombus vertices
+  const purpleNeon = '#bf5af2';
+  const purpleCore = '#f5d0fe';
+
+  // 4. Vertical dividing purple neon lines meeting rhombus vertices
   ctx.save();
-  ctx.strokeStyle = '#00f0ff';
-  ctx.shadowColor = '#00f0ff';
+  ctx.strokeStyle = purpleNeon;
+  ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 6;
   ctx.lineWidth = 3;
 
@@ -718,53 +721,42 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   // 5. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
-  ctx.fillStyle = 'rgba(8, 14, 24, 0.78)';
+  ctx.fillStyle = 'rgba(15, 10, 25, 0.82)';
   ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
   ctx.shadowBlur = 10;
   ctx.fill();
   ctx.restore();
 
-  // 6. Rhombus Cyan Neon Border (Clean & sharp)
+  // 6. Rhombus Purple Neon Border (Clean & sharp)
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
-  ctx.shadowColor = '#00f0ff';
-  ctx.shadowBlur = 8;
-  ctx.strokeStyle = '#00f0ff';
+  ctx.shadowColor = purpleNeon;
+  ctx.shadowBlur = 9;
+  ctx.strokeStyle = purpleNeon;
   ctx.lineWidth = 3.5;
   ctx.stroke();
 
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = '#e0faff';
+  ctx.strokeStyle = purpleCore;
   ctx.lineWidth = 1.2;
   ctx.stroke();
   ctx.restore();
 
-  // 7. Percentage & "SYNERGY RATE" inside Rhombus
+  // 7. Percentage number inside Rhombus (Centered vertically)
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-
-  // Percentage number (Large Bold White)
-  ctx.font = '900 36px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+  ctx.font = '900 38px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
   ctx.shadowColor = '#000000';
-  ctx.shadowBlur = 5;
-  ctx.lineWidth = 3;
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 3.5;
   ctx.strokeStyle = '#000000';
-  ctx.strokeText(`${bestiePercent}%`, cx, cy - 12);
+  ctx.strokeText(`${bestiePercent}%`, cx, cy + 1);
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(`${bestiePercent}%`, cx, cy - 12);
-
-  // Subtitle: "SYNERGY RATE"
-  ctx.font = '800 12px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
-  ctx.shadowBlur = 4;
-  ctx.lineWidth = 2.5;
-  ctx.strokeStyle = '#000000';
-  ctx.strokeText('SYNERGY RATE', cx, cy + 18);
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillText('SYNERGY RATE', cx, cy + 18);
+  ctx.fillText(`${bestiePercent}%`, cx, cy + 1);
   ctx.restore();
 
-  // 8. 4-side Cyan Neon Border around card (Clean, subtle neon)
+  // 8. 4-side Purple Neon Border around card
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -772,14 +764,14 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   } else {
     ctx.rect(3, 3, width - 6, height - 6);
   }
-  ctx.shadowColor = '#00f0ff';
+  ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 10;
-  ctx.strokeStyle = '#00f0ff';
+  ctx.strokeStyle = purpleNeon;
   ctx.lineWidth = 3.5;
   ctx.stroke();
 
   ctx.shadowBlur = 2;
-  ctx.strokeStyle = '#e0faff';
+  ctx.strokeStyle = purpleCore;
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -812,11 +804,11 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   } else if (bestiePercent <= 90) {
     tierMessage = `POOKIES AND HOMIES FOREVER ${sakura}`;
   } else {
-    tierMessage = `(RARE) BEST ANIPEDIA DUO ${sakura}`;
+    tierMessage = `BEST ANIPEDIA DUO ${sakura}`;
   }
 
   const embed = new EmbedBuilder()
-    .setColor(0x00F0FF)
+    .setColor(0xBF5AF2)
     .setTitle(`Besties ${authorNick} & ${targetNick}`)
     .setDescription(`${wingL} **${bestiePercent}%** ${wingR}\n\n${tierMessage}`)
     .setImage('attachment://besties.png');
