@@ -796,21 +796,31 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
 
   let tierMessage = '';
   if (bestiePercent <= 30) {
-    tierMessage = `**we gotta talk** ${sakura}`;
+    tierMessage = `**we gotta talk**`;
   } else if (bestiePercent <= 50) {
-    tierMessage = `**we are almost homie** ${sakura}`;
+    tierMessage = `**we are almost homie**`;
   } else if (bestiePercent <= 70) {
-    tierMessage = `**WE ARE OFFICIAL HOMIES NOW!!** ${sakura}`;
+    tierMessage = `**WE ARE OFFICIAL HOMIES NOW!!**`;
   } else if (bestiePercent <= 90) {
-    tierMessage = `**POOKIES AND HOMIES FOREVER** ${sakura}`;
+    tierMessage = `**POOKIES AND HOMIES FOREVER**`;
   } else {
-    tierMessage = `**BEST ANIPEDIA DUO** ${sakura}`;
+    tierMessage = `**BEST ANIPEDIA DUO**`;
   }
+
+  // Calculate dynamic center padding using Unicode em-spaces (\u2003)
+  const rawTitle = `Besties ${authorNick} & ${targetNick}`;
+  const padTitle = Math.max(0, Math.floor((36 - rawTitle.length) / 4));
+  const padWings = 6;
+  const rawTierLen = tierMessage.replace(/\*\*/g, '').length + 3;
+  const padTier = Math.max(0, Math.floor((36 - rawTierLen) / 4));
+
+  const centeredTitle = '\u2003'.repeat(padTitle) + `**Besties ${authorNick} & ${targetNick}**`;
+  const centeredWings = '\u2003'.repeat(padWings) + `${wingL} **${bestiePercent}%** ${wingR}`;
+  const centeredTier  = '\u2003'.repeat(padTier) + `${tierMessage} ${sakura}`;
 
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
-    .setTitle(`Besties ${authorNick} & ${targetNick}`)
-    .setDescription(`${wingL} **${bestiePercent}%** ${wingR}\n\n${tierMessage}`)
+    .setDescription(`${centeredTitle}\n${centeredWings}\n\n${centeredTier}`)
     .setImage('attachment://besties.png');
 
   return { embeds: [embed], files: [attachment] };
