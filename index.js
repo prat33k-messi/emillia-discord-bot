@@ -574,8 +574,7 @@ async function buildAuraPayload(targetMember) {
 
 // Helper to fetch Besties custom emojis (ani_wingL, ani_wingR, ani_sakura)
 async function getBestieEmojis(guild) {
-  let wingL = '🪽';
-  let wingR = '🪽';
+  let fireGreen = '🔥';
   let sakura = '🌸';
 
   try {
@@ -589,21 +588,14 @@ async function getBestieEmojis(guild) {
     ...(client?.emojis?.cache ? Array.from(client.emojis.cache.values()) : [])
   ];
 
-  const foundWingL = searchPool.find(e => 
-    e.name.toLowerCase() === 'ani_wingl' || 
-    e.name.toLowerCase() === 'wingl' || 
-    e.name.toLowerCase().includes('wingl') || 
-    e.name.toLowerCase().includes('wing_l')
+  const foundFireGreen = searchPool.find(e => 
+    e.name.toLowerCase() === '1firegreen' || 
+    e.name.toLowerCase() === 'firegreen' || 
+    e.name.toLowerCase() === 'greenfire' ||
+    e.name.toLowerCase().includes('firegreen') ||
+    e.name.toLowerCase().includes('greenfire')
   );
-  if (foundWingL) wingL = foundWingL.toString();
-
-  const foundWingR = searchPool.find(e => 
-    e.name.toLowerCase() === 'ani_wingr' || 
-    e.name.toLowerCase() === 'wingr' || 
-    e.name.toLowerCase().includes('wingr') || 
-    e.name.toLowerCase().includes('wing_r')
-  );
-  if (foundWingR) wingR = foundWingR.toString();
+  if (foundFireGreen) fireGreen = foundFireGreen.toString();
 
   const foundSakura = searchPool.find(e => 
     e.name.toLowerCase() === 'ani_sakura' || 
@@ -611,7 +603,7 @@ async function getBestieEmojis(guild) {
   );
   if (foundSakura) sakura = foundSakura.toString();
 
-  return { wingL, wingR, sakura };
+  return { fireGreen, sakura };
 }
 
 // Helper to draw diamond/rhombus path (customizable width and height)
@@ -695,13 +687,13 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   const rx = 48; // Half width
   const ry = 38; // Half height
 
-  const purpleNeon = '#bf5af2';
-  const purpleCore = '#f5d0fe';
+  const greenNeon = '#00ff66';
+  const greenCore = '#e8fdf0';
 
-  // 4. Vertical dividing purple neon lines meeting rhombus vertices
+  // 4. Vertical dividing green neon lines meeting rhombus vertices
   ctx.save();
-  ctx.strokeStyle = purpleNeon;
-  ctx.shadowColor = purpleNeon;
+  ctx.strokeStyle = greenNeon;
+  ctx.shadowColor = greenNeon;
   ctx.shadowBlur = 6;
   ctx.lineWidth = 2.5;
 
@@ -721,23 +713,23 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   // 5. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
-  ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
+  ctx.fillStyle = 'rgba(8, 20, 14, 0.85)';
   ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
   ctx.shadowBlur = 8;
   ctx.fill();
   ctx.restore();
 
-  // 6. Rhombus Purple Neon Border (Clean & sharp)
+  // 6. Rhombus Green Neon Border (Clean & sharp)
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
-  ctx.shadowColor = purpleNeon;
+  ctx.shadowColor = greenNeon;
   ctx.shadowBlur = 8;
-  ctx.strokeStyle = purpleNeon;
+  ctx.strokeStyle = greenNeon;
   ctx.lineWidth = 2.8;
   ctx.stroke();
 
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = purpleCore;
+  ctx.strokeStyle = greenCore;
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -756,7 +748,7 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.fillText(`${bestiePercent}%`, cx, cy + 1);
   ctx.restore();
 
-  // 8. 4-side Purple Neon Border around card
+  // 8. 4-side Green Neon Border around card
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -764,14 +756,14 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   } else {
     ctx.rect(3, 3, width - 6, height - 6);
   }
-  ctx.shadowColor = purpleNeon;
+  ctx.shadowColor = greenNeon;
   ctx.shadowBlur = 10;
-  ctx.strokeStyle = purpleNeon;
+  ctx.strokeStyle = greenNeon;
   ctx.lineWidth = 3.5;
   ctx.stroke();
 
   ctx.shadowBlur = 2;
-  ctx.strokeStyle = purpleCore;
+  ctx.strokeStyle = greenCore;
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -789,7 +781,7 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   const buffer = await generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent);
   const attachment = new AttachmentBuilder(buffer, { name: 'besties.png' });
 
-  const { wingL, wingR, sakura } = await getBestieEmojis(guild);
+  const { fireGreen, sakura } = await getBestieEmojis(guild);
 
   const authorNick = authorMember.displayName || authorMember.user.username;
   const targetNick = targetMember.displayName || targetMember.user.username;
@@ -815,11 +807,11 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   const padTier = Math.max(0, Math.floor((36 - rawTierLen) / 4));
 
   const centeredTitle = '\u2003'.repeat(padTitle) + `**Besties ${authorNick} & ${targetNick}**`;
-  const centeredWings = '\u2003'.repeat(padWings) + `${wingL} **${bestiePercent}%** ${wingR}`;
+  const centeredWings = '\u2003'.repeat(padWings) + `${fireGreen} **${bestiePercent}%** ${fireGreen}`;
   const centeredTier  = '\u2003'.repeat(padTier) + `${tierMessage} ${sakura}`;
 
   const embed = new EmbedBuilder()
-    .setColor(0xBF5AF2)
+    .setColor(0x00FF66)
     .setDescription(`${centeredTitle}\n${centeredWings}\n\n${centeredTier}`)
     .setImage('attachment://besties.png');
 
