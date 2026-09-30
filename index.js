@@ -691,9 +691,9 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
     console.error("Failed to load target avatar for bestie card:", err);
   }
 
-  // Compact Rhombus dimensions (small so avatars are prominently visible)
-  const rx = 78; // Half width
-  const ry = 62; // Half height
+  // 40% smaller compact Rhombus dimensions (rx: 48, ry: 38)
+  const rx = 48; // Half width
+  const ry = 38; // Half height
 
   const purpleNeon = '#bf5af2';
   const purpleCore = '#f5d0fe';
@@ -703,7 +703,7 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.strokeStyle = purpleNeon;
   ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 6;
-  ctx.lineWidth = 3;
+  ctx.lineWidth = 2.5;
 
   // Top line
   ctx.beginPath();
@@ -721,9 +721,9 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   // 5. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
-  ctx.fillStyle = 'rgba(15, 10, 25, 0.82)';
+  ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
   ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
-  ctx.shadowBlur = 10;
+  ctx.shadowBlur = 8;
   ctx.fill();
   ctx.restore();
 
@@ -731,14 +731,14 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
   ctx.shadowColor = purpleNeon;
-  ctx.shadowBlur = 9;
+  ctx.shadowBlur = 8;
   ctx.strokeStyle = purpleNeon;
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = 2.8;
   ctx.stroke();
 
   ctx.shadowBlur = 0;
   ctx.strokeStyle = purpleCore;
-  ctx.lineWidth = 1.2;
+  ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
 
@@ -746,10 +746,10 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '900 38px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+  ctx.font = '900 24px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
   ctx.shadowColor = '#000000';
-  ctx.shadowBlur = 6;
-  ctx.lineWidth = 3.5;
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 2.5;
   ctx.strokeStyle = '#000000';
   ctx.strokeText(`${bestiePercent}%`, cx, cy + 1);
   ctx.fillStyle = '#ffffff';
@@ -796,15 +796,15 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
 
   let tierMessage = '';
   if (bestiePercent <= 30) {
-    tierMessage = `we gotta talk ${sakura}`;
+    tierMessage = `**we gotta talk** ${sakura}`;
   } else if (bestiePercent <= 50) {
-    tierMessage = `we are almost homie ${sakura}`;
+    tierMessage = `**we are almost homie** ${sakura}`;
   } else if (bestiePercent <= 70) {
-    tierMessage = `WE ARE OFFICIAL HOMIES NOW!! ${sakura}`;
+    tierMessage = `**WE ARE OFFICIAL HOMIES NOW!!** ${sakura}`;
   } else if (bestiePercent <= 90) {
-    tierMessage = `POOKIES AND HOMIES FOREVER ${sakura}`;
+    tierMessage = `**POOKIES AND HOMIES FOREVER** ${sakura}`;
   } else {
-    tierMessage = `BEST ANIPEDIA DUO ${sakura}`;
+    tierMessage = `**BEST ANIPEDIA DUO** ${sakura}`;
   }
 
   const embed = new EmbedBuilder()
