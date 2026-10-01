@@ -793,9 +793,40 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   return canvas.toBuffer('image/png');
 }
 
+// Helper to roll weighted percentage based on user-defined drop chances:
+// 0% – 20%: 80% weight (Common)
+// 21% – 40%: 60% weight (Rare)
+// 41% – 60%: 40% weight (Epic)
+// 61% – 80%: 20% weight (Legendary)
+// 81% – 95%: 5% weight (One Piece)
+// 96% – 100%: 1% weight (Anirare Piece)
+function rollBestiePercent() {
+  const tiers = [
+    { min: 0, max: 20, weight: 80, rarityText: '80% (Common)' },
+    { min: 21, max: 40, weight: 60, rarityText: '60% (Rare)' },
+    { min: 41, max: 60, weight: 40, rarityText: '40% (Epic)' },
+    { min: 61, max: 80, weight: 20, rarityText: '20% (Legendary)' },
+    { min: 81, max: 95, weight: 5, rarityText: '5% (One Piece)' },
+    { min: 96, max: 100, weight: 1, rarityText: '1% (Anirare Piece)' }
+  ];
+
+  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0); // 206
+  let randomVal = Math.random() * totalWeight;
+
+  for (const tier of tiers) {
+    if (randomVal < tier.weight) {
+      const percent = Math.floor(Math.random() * (tier.max - tier.min + 1)) + tier.min;
+      return { percent, rarity: tier.rarityText };
+    }
+    randomVal -= tier.weight;
+  }
+
+  return { percent: Math.floor(Math.random() * 21), rarity: '80% (Common)' };
+}
+
 // Helper to build Besties Message Payload with embed and image attachment
 async function buildBestiePayload(authorMember, targetMember, guild) {
-  const bestiePercent = Math.floor(Math.random() * 100) + 1;
+  const { percent: bestiePercent, rarity: rarityText } = rollBestiePercent();
   const authorAvatarUrl = authorMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const targetAvatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const buffer = await generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent);
@@ -830,12 +861,18 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   const tierLenEm = rawTierLen / 2.1;
   const padTier = Math.max(0, Math.round((28 - tierLenEm) / 2));
 
+  const rawRarity = `Rarity: ${rarityText}`;
+  const rarityLenEm = rawRarity.length / 2.1;
+  const padRarity = Math.max(0, Math.round((28 - rarityLenEm) / 2));
+
   const centeredTitle = '\u2003'.repeat(padTitle) + `**${rawTitle}**`;
   const centeredTier  = '\u2003'.repeat(padTier) + `${purpFlames} **${tierMessage}** ${purpFlames}`;
+  const centeredRarity = '\u2003'.repeat(padRarity) + `-# Rarity: ${rarityText}`;
 
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
-    .setDescription(`${centeredTitle}\n\n${centeredTier}`)
+    .setDescription(`${centeredTitle}\n\n${centeredTier}\n${centeredRarity}`)
+    .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
     .setImage('attachment://besties.png');
 
   return { embeds: [embed], files: [attachment] };
