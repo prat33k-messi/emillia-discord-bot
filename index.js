@@ -572,10 +572,9 @@ async function buildAuraPayload(targetMember) {
   return { embeds: [embed], files: [attachment] };
 }
 
-// Helper to fetch Besties custom emojis (firegreen, sakura)
+// Helper to fetch Besties custom emojis (purpflames)
 async function getBestieEmojis(guild) {
-  let fireGreen = '🔥';
-  let sakura = '🌸';
+  let purpFlames = '💜';
 
   try {
     if (guild && guild.emojis && typeof guild.emojis.fetch === 'function') {
@@ -607,28 +606,24 @@ async function getBestieEmojis(guild) {
 
   const searchPool = Array.from(new Map(allEmojis.map(e => [e.id, e])).values());
 
-  const foundFireGreen = searchPool.find(e => {
+  const foundPurpFlames = searchPool.find(e => {
     const n = e.name.toLowerCase();
-    return n === '1firegreen' || 
-           n === 'firegreen' || 
-           n === 'greenfire' || 
-           n === 'fire_green' ||
-           n === 'green_fire' ||
-           n === 'flamegreen' ||
-           n === 'greenflame' ||
-           n.includes('firegreen') || 
-           n.includes('greenfire') ||
-           (n.includes('green') && (n.includes('fire') || n.includes('flame')));
+    return n === 'purpflames' || 
+           n === 'purpflame' || 
+           n === 'purpleflames' || 
+           n === 'purpleflame' ||
+           n === 'purp_flames' || 
+           n === 'purp_flame' ||
+           n === 'purple_flames' || 
+           n === 'purple_flame' ||
+           n.includes('purpflame') ||
+           n.includes('purp_flam') ||
+           n.includes('purpleflame') ||
+           (n.includes('purp') && (n.includes('flame') || n.includes('fire')));
   });
-  if (foundFireGreen) fireGreen = foundFireGreen.toString();
+  if (foundPurpFlames) purpFlames = foundPurpFlames.toString();
 
-  const foundSakura = searchPool.find(e => 
-    e.name.toLowerCase() === 'ani_sakura' || 
-    e.name.toLowerCase().includes('sakura')
-  );
-  if (foundSakura) sakura = foundSakura.toString();
-
-  return { fireGreen, sakura };
+  return { purpFlames };
 }
 
 // Helper to draw diamond/rhombus path (customizable width and height)
@@ -712,13 +707,13 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   const rx = 48; // Half width
   const ry = 38; // Half height
 
-  const greenNeon = '#00ff66';
-  const greenCore = '#e8fdf0';
+  const purpleNeon = '#bf5af2';
+  const purpleCore = '#f5d0fe';
 
-  // 4. Vertical dividing green neon lines meeting rhombus vertices
+  // 4. Vertical dividing purple neon lines meeting rhombus vertices
   ctx.save();
-  ctx.strokeStyle = greenNeon;
-  ctx.shadowColor = greenNeon;
+  ctx.strokeStyle = purpleNeon;
+  ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 6;
   ctx.lineWidth = 2.5;
 
@@ -738,23 +733,23 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   // 5. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
-  ctx.fillStyle = 'rgba(8, 20, 14, 0.85)';
+  ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
   ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
   ctx.shadowBlur = 8;
   ctx.fill();
   ctx.restore();
 
-  // 6. Rhombus Green Neon Border (Clean & sharp)
+  // 6. Rhombus Purple Neon Border (Clean & sharp)
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
-  ctx.shadowColor = greenNeon;
+  ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 8;
-  ctx.strokeStyle = greenNeon;
+  ctx.strokeStyle = purpleNeon;
   ctx.lineWidth = 2.8;
   ctx.stroke();
 
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = greenCore;
+  ctx.strokeStyle = purpleCore;
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -773,7 +768,7 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.fillText(`${bestiePercent}%`, cx, cy + 1);
   ctx.restore();
 
-  // 8. 4-side Green Neon Border around card
+  // 8. 4-side Purple Neon Border around card
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -781,14 +776,14 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   } else {
     ctx.rect(3, 3, width - 6, height - 6);
   }
-  ctx.shadowColor = greenNeon;
+  ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 10;
-  ctx.strokeStyle = greenNeon;
+  ctx.strokeStyle = purpleNeon;
   ctx.lineWidth = 3.5;
   ctx.stroke();
 
   ctx.shadowBlur = 2;
-  ctx.strokeStyle = greenCore;
+  ctx.strokeStyle = purpleCore;
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -806,22 +801,24 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   const buffer = await generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent);
   const attachment = new AttachmentBuilder(buffer, { name: 'besties.png' });
 
-  const { fireGreen, sakura } = await getBestieEmojis(guild);
+  const { purpFlames } = await getBestieEmojis(guild);
 
   const authorNick = authorMember.displayName || authorMember.user.username;
   const targetNick = targetMember.displayName || targetMember.user.username;
 
   let tierMessage = '';
-  if (bestiePercent <= 30) {
-    tierMessage = `**we gotta talk**`;
-  } else if (bestiePercent <= 50) {
-    tierMessage = `**we are almost homie**`;
-  } else if (bestiePercent <= 70) {
-    tierMessage = `**WE ARE OFFICIAL HOMIES NOW!!**`;
-  } else if (bestiePercent <= 90) {
-    tierMessage = `**POOKIES AND HOMIES FOREVER**`;
+  if (bestiePercent <= 20) {
+    tierMessage = `block list material`;
+  } else if (bestiePercent <= 40) {
+    tierMessage = `awkward wave in the hallway`;
+  } else if (bestiePercent <= 60) {
+    tierMessage = `good chemistry`;
+  } else if (bestiePercent <= 80) {
+    tierMessage = `unmatched dynamic duo`;
+  } else if (bestiePercent <= 95) {
+    tierMessage = `sharing the same braincell`;
   } else {
-    tierMessage = `**BEST ANIPEDIA DUO**`;
+    tierMessage = `Anipedia top duos`;
   }
 
   // Dynamic centering calculation calibrated for full-width Discord embed (approx 28 em units)
@@ -829,19 +826,16 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   const titleLenEm = rawTitle.length / 2.1;
   const padTitle = Math.max(0, Math.round((28 - titleLenEm) / 2));
   
-  const padWings = 12; // 12 em-spaces centers emojis + percentage above rhombus
-  
-  const rawTierLen = tierMessage.replace(/\*\*/g, '').length + 3;
+  const rawTierLen = tierMessage.length + 6;
   const tierLenEm = rawTierLen / 2.1;
   const padTier = Math.max(0, Math.round((28 - tierLenEm) / 2));
 
-  const centeredTitle = '\u2003'.repeat(padTitle) + `**Besties ${authorNick} & ${targetNick}**`;
-  const centeredWings = '\u2003'.repeat(padWings) + `${fireGreen} **${bestiePercent}%** ${fireGreen}`;
-  const centeredTier  = '\u2003'.repeat(padTier) + `${tierMessage} ${sakura}`;
+  const centeredTitle = '\u2003'.repeat(padTitle) + `**${rawTitle}**`;
+  const centeredTier  = '\u2003'.repeat(padTier) + `${purpFlames} **${tierMessage}** ${purpFlames}`;
 
   const embed = new EmbedBuilder()
-    .setColor(0x00FF66)
-    .setDescription(`${centeredTitle}\n${centeredWings}\n\n${centeredTier}`)
+    .setColor(0xBF5AF2)
+    .setDescription(`${centeredTitle}\n\n${centeredTier}`)
     .setImage('attachment://besties.png');
 
   return { embeds: [embed], files: [attachment] };
