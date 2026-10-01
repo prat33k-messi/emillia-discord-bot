@@ -474,7 +474,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 6. Draw Percentage Text with simple clean font and intensely boosted purple neon glow
+  // 6. Draw Percentage Text with simple clean font and diminished subtle purple neon glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -483,21 +483,19 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   const textY = height - 30;
   const textStr = `${auraPercent}%`;
 
-  // Dynamic High-Powered Neon Halo on text
-  const textBlur = 12 + intensity * 38;
-  const textLineWidth = 4 + intensity * 12;
-  ctx.shadowColor = '#bf5af2';
-  ctx.shadowBlur = textBlur;
-  ctx.lineWidth = textLineWidth;
-  ctx.strokeStyle = `rgba(191, 90, 242, ${0.5 + intensity * 0.5})`;
+  // Crisp dark outline for clean contrast
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#000000';
   ctx.strokeText(textStr, textX, textY);
 
-  if (intensity > 0.3) {
-    ctx.shadowBlur = textBlur * 0.6;
-    ctx.lineWidth = 4 + intensity * 4;
-    ctx.strokeStyle = '#e879f9';
-    ctx.strokeText(textStr, textX, textY);
-  }
+  // Gentle diminished neon stroke
+  ctx.shadowColor = '#bf5af2';
+  ctx.shadowBlur = 4 + intensity * 6;
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#bf5af2';
+  ctx.strokeText(textStr, textX, textY);
 
   // Crisp White Core Text
   ctx.shadowBlur = 0;
@@ -552,7 +550,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
 
 // Helper to build Aura Message Payload with embed and image attachment
 async function buildAuraPayload(targetMember) {
-  const auraPercent = Math.floor(Math.random() * 100) + 1;
+  const { percent: auraPercent, rarity: rarityText } = rollBestiePercent();
   const tier = getAuraTheme(auraPercent);
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const buffer = await generateAuraCard(avatarUrl, auraPercent);
@@ -567,6 +565,7 @@ async function buildAuraPayload(targetMember) {
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
     })
     .setDescription(`*${cursiveText}*`)
+    .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
     .setImage('attachment://aura.png');
 
   return { embeds: [embed], files: [attachment] };
@@ -703,9 +702,9 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
     console.error("Failed to load target avatar for bestie card:", err);
   }
 
-  // 40% smaller compact Rhombus dimensions (rx: 48, ry: 38)
-  const rx = 48; // Half width
-  const ry = 38; // Half height
+  // Compact Rhombus dimensions (slightly increased size: rx: 58, ry: 46)
+  const rx = 58; // Half width
+  const ry = 46; // Half height
 
   const purpleNeon = '#bf5af2';
   const purpleCore = '#f5d0fe';
@@ -758,7 +757,7 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = '900 24px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+  ctx.font = '900 28px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
   ctx.shadowColor = '#000000';
   ctx.shadowBlur = 4;
   ctx.lineWidth = 2.5;
@@ -896,14 +895,12 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
 
   const tierMessage = pool[Math.floor(Math.random() * pool.length)];
 
-  // Dynamic centering calculation using non-strippable Braille anchor '\u2800' + em-spaces
-  const msgLen = tierMessage.length;
-  const padCount = Math.max(2, Math.round(20 - (msgLen * 0.38)));
-  const centeredTier = '\u2800' + '\u2003'.repeat(padCount) + `${purpFlames} **${tierMessage}** ${purpFlames}`;
+  // Left-aligned tier text as requested
+  const leftTier = `${purpFlames} **${tierMessage}** ${purpFlames}`;
 
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
-    .setDescription(centeredTier)
+    .setDescription(leftTier)
     .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
     .setImage('attachment://besties.png');
 
@@ -1072,7 +1069,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'auras', 'besties', 'bestie', 'profile', 'ping', 'reset', 'help', 'commands'
+      'auras', 'bestie', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
@@ -2307,13 +2304,13 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Bestie Command (-bestie / -besties) ---
-    if (words.includes('bestie') || words.includes('besties') || cleanQuery === 'bestie' || cleanQuery.startsWith('bestie ') || cleanQuery === 'besties' || cleanQuery.startsWith('besties ') || lowerQuery === 'bestie' || lowerQuery.startsWith('bestie ') || lowerQuery === 'besties' || lowerQuery.startsWith('besties ')) {
+    // --- Bestie Command (-bestie only) ---
+    if (words[0] === 'bestie' || cleanQuery === 'bestie' || cleanQuery.startsWith('bestie ') || lowerQuery === 'bestie' || lowerQuery.startsWith('bestie ')) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
 
       // If no direct mention, look up by username, nickname or ID in the arguments
       if (!targetMember) {
-        const queryArg = cleanQuery.replace(/^(besties?)\s*/i, '').trim();
+        const queryArg = cleanQuery.replace(/^bestie\s*/i, '').trim();
         if (queryArg) {
           targetMember = message.guild.members.cache.find(m => 
             m.user.username.toLowerCase() === queryArg.toLowerCase() ||
