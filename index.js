@@ -896,12 +896,10 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
 
   const tierMessage = pool[Math.floor(Math.random() * pool.length)];
 
-  // Dynamic centering calculation calibrated for full-width Discord embed (approx 28 em units)
-  const rawTierLen = tierMessage.length + 6;
-  const tierLenEm = rawTierLen / 2.1;
-  const padTier = Math.max(0, Math.round((28 - tierLenEm) / 2));
-
-  const centeredTier = '\u2003'.repeat(padTier) + `${purpFlames} **${tierMessage}** ${purpFlames}`;
+  // Dynamic centering calculation using non-strippable Braille anchor '\u2800' + em-spaces
+  const msgLen = tierMessage.length;
+  const padCount = Math.max(2, Math.round(20 - (msgLen * 0.38)));
+  const centeredTier = '\u2800' + '\u2003'.repeat(padCount) + `${purpFlames} **${tierMessage}** ${purpFlames}`;
 
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
