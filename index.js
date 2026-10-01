@@ -396,18 +396,18 @@ function toCursiveDigits(str) {
   return String(str).split('').map(c => cursiveMap[c] || c).join('');
 }
 
-// Helper to determine Aura color theme and metadata (Cyan Neon Theme)
+// Helper to determine Aura color theme and metadata (Purple Neon Theme)
 function getAuraTheme(percent) {
   return {
-    name: 'Cyan Neon',
-    embedColor: 0x00F0FF,
-    primary: '#00f0ff',
-    glow: '#38bdf8',
-    core: '#e0f7ff'
+    name: 'Purple Neon',
+    embedColor: 0xBF5AF2,
+    primary: '#bf5af2',
+    glow: '#c084fc',
+    core: '#f5d0fe'
   };
 }
 
-// Helper to generate dynamic Aura Card image with full avatar visibility and percentage-scaled Cyan neon borders
+// Helper to generate dynamic Aura Card image with full avatar visibility and percentage-scaled Purple neon borders
 async function generateAuraCard(avatarUrl, auraPercent) {
   const width = 600;
   const height = 600;
@@ -458,9 +458,9 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     ctx.globalCompositeOperation = 'screen';
     const edgeBloom = (intensity - 0.4) / 0.6; // 0 to 1
     const edgeGrad = ctx.createRadialGradient(width / 2, height / 2, width * 0.3, width / 2, height / 2, width * 0.7);
-    edgeGrad.addColorStop(0, 'rgba(0, 240, 255, 0)');
-    edgeGrad.addColorStop(0.7, `rgba(0, 240, 255, ${edgeBloom * 0.18})`);
-    edgeGrad.addColorStop(1, `rgba(0, 240, 255, ${edgeBloom * 0.45})`);
+    edgeGrad.addColorStop(0, 'rgba(191, 90, 242, 0)');
+    edgeGrad.addColorStop(0.7, `rgba(191, 90, 242, ${edgeBloom * 0.18})`);
+    edgeGrad.addColorStop(1, `rgba(191, 90, 242, ${edgeBloom * 0.45})`);
     ctx.fillStyle = edgeGrad;
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
@@ -474,7 +474,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 6. Draw Percentage Text with simple clean font and intensely boosted cyan neon glow
+  // 6. Draw Percentage Text with simple clean font and intensely boosted purple neon glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -486,16 +486,16 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   // Dynamic High-Powered Neon Halo on text
   const textBlur = 12 + intensity * 38;
   const textLineWidth = 4 + intensity * 12;
-  ctx.shadowColor = '#00f0ff';
+  ctx.shadowColor = '#bf5af2';
   ctx.shadowBlur = textBlur;
   ctx.lineWidth = textLineWidth;
-  ctx.strokeStyle = `rgba(0, 240, 255, ${0.5 + intensity * 0.5})`;
+  ctx.strokeStyle = `rgba(191, 90, 242, ${0.5 + intensity * 0.5})`;
   ctx.strokeText(textStr, textX, textY);
 
   if (intensity > 0.3) {
     ctx.shadowBlur = textBlur * 0.6;
     ctx.lineWidth = 4 + intensity * 4;
-    ctx.strokeStyle = '#7df9ff';
+    ctx.strokeStyle = '#e879f9';
     ctx.strokeText(textStr, textX, textY);
   }
 
@@ -505,7 +505,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillText(textStr, textX, textY);
   ctx.restore();
 
-  // 7. 4-Side Ultra-Bright Cyan Neon Border (Massively boosted for high aura)
+  // 7. 4-Side Ultra-Bright Purple Neon Border (Massively boosted for high aura)
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -517,23 +517,23 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   // Pass 1: Super-wide outer atmospheric neon bloom
   const outerBlur = 15 + intensity * 45;
   const outerWidth = 4 + intensity * 10;
-  ctx.shadowColor = '#00f0ff';
+  ctx.shadowColor = '#bf5af2';
   ctx.shadowBlur = outerBlur;
-  ctx.strokeStyle = `rgba(0, 240, 255, ${0.4 + intensity * 0.6})`;
+  ctx.strokeStyle = `rgba(191, 90, 242, ${0.4 + intensity * 0.6})`;
   ctx.lineWidth = outerWidth;
   ctx.stroke();
 
-  // Pass 2: Radiant electric cyan body
+  // Pass 2: Radiant purple body
   const midBlur = 8 + intensity * 24;
   const midWidth = 3 + intensity * 5;
   ctx.shadowBlur = midBlur;
-  ctx.strokeStyle = `rgba(0, 229, 255, ${0.6 + intensity * 0.4})`;
+  ctx.strokeStyle = `rgba(168, 85, 247, ${0.6 + intensity * 0.4})`;
   ctx.lineWidth = midWidth;
   ctx.stroke();
 
   // Pass 3: Ultra-bright electric core
   ctx.shadowBlur = 6 + intensity * 12;
-  ctx.strokeStyle = `rgba(125, 249, 255, ${0.7 + intensity * 0.3})`;
+  ctx.strokeStyle = `rgba(245, 208, 254, ${0.7 + intensity * 0.3})`;
   ctx.lineWidth = 2 + intensity * 3;
   ctx.stroke();
 
