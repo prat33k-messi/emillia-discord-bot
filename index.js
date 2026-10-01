@@ -834,44 +834,78 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
 
   const { purpFlames } = await getBestieEmojis(guild);
 
-  const authorNick = authorMember.displayName || authorMember.user.username;
-  const targetNick = targetMember.displayName || targetMember.user.username;
+  const tierMessagePools = {
+    common: [
+      'restraining order pending',
+      'strangers with mutuals',
+      'oil and water energy',
+      'wrong server, wrong person',
+      'do not interact'
+    ],
+    rare: [
+      'dry texters club',
+      'tolerating each other',
+      'seen at 2:00 AM',
+      'nod of acknowledgment',
+      'forced small talk'
+    ],
+    epic: [
+      'vibe check passed',
+      'solid coffee break duo',
+      'casual playlist sharers',
+      'low-key synchronicity',
+      'comfortably unhinged'
+    ],
+    legendary: [
+      'certified chaos partners',
+      'telepathic connection',
+      'pookies and homies forever',
+      'partner in crime material',
+      'two peas in a pod'
+    ],
+    onePiece: [
+      'soulmates locked in',
+      'written in the stars',
+      'hive mind activated',
+      'absolute peak fiction',
+      'inseparable main characters'
+    ],
+    anirarePiece: [
+      'transcending dimensions',
+      'canon event compatibility',
+      'one in a million bond',
+      'infinite sync rate',
+      'god-tier duo protocol'
+    ]
+  };
 
-  let tierMessage = '';
+  let pool = tierMessagePools.common;
   if (bestiePercent <= 20) {
-    tierMessage = `block list material`;
+    pool = tierMessagePools.common;
   } else if (bestiePercent <= 40) {
-    tierMessage = `awkward wave in the hallway`;
+    pool = tierMessagePools.rare;
   } else if (bestiePercent <= 60) {
-    tierMessage = `good chemistry`;
+    pool = tierMessagePools.epic;
   } else if (bestiePercent <= 80) {
-    tierMessage = `unmatched dynamic duo`;
+    pool = tierMessagePools.legendary;
   } else if (bestiePercent <= 95) {
-    tierMessage = `sharing the same braincell`;
+    pool = tierMessagePools.onePiece;
   } else {
-    tierMessage = `Anipedia top duos`;
+    pool = tierMessagePools.anirarePiece;
   }
 
+  const tierMessage = pool[Math.floor(Math.random() * pool.length)];
+
   // Dynamic centering calculation calibrated for full-width Discord embed (approx 28 em units)
-  const rawTitle = `Besties ${authorNick} & ${targetNick}`;
-  const titleLenEm = rawTitle.length / 2.1;
-  const padTitle = Math.max(0, Math.round((28 - titleLenEm) / 2));
-  
   const rawTierLen = tierMessage.length + 6;
   const tierLenEm = rawTierLen / 2.1;
   const padTier = Math.max(0, Math.round((28 - tierLenEm) / 2));
 
-  const rawRarity = `Rarity: ${rarityText}`;
-  const rarityLenEm = rawRarity.length / 2.1;
-  const padRarity = Math.max(0, Math.round((28 - rarityLenEm) / 2));
-
-  const centeredTitle = '\u2003'.repeat(padTitle) + `**${rawTitle}**`;
-  const centeredTier  = '\u2003'.repeat(padTier) + `${purpFlames} **${tierMessage}** ${purpFlames}`;
-  const centeredRarity = '\u2003'.repeat(padRarity) + `-# Rarity: ${rarityText}`;
+  const centeredTier = '\u2003'.repeat(padTier) + `${purpFlames} **${tierMessage}** ${purpFlames}`;
 
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
-    .setDescription(`${centeredTitle}\n\n${centeredTier}\n${centeredRarity}`)
+    .setDescription(centeredTier)
     .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
     .setImage('attachment://besties.png');
 
