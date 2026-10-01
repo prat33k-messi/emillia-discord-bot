@@ -452,21 +452,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     console.error("Failed to load avatar for aura card:", err);
   }
 
-  // 4. High-Aura Atmospheric Edge Bloom (radiates from the borders inward for high power)
-  if (intensity > 0.4) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    const edgeBloom = (intensity - 0.4) / 0.6; // 0 to 1
-    const edgeGrad = ctx.createRadialGradient(width / 2, height / 2, width * 0.3, width / 2, height / 2, width * 0.7);
-    edgeGrad.addColorStop(0, 'rgba(191, 90, 242, 0)');
-    edgeGrad.addColorStop(0.7, `rgba(191, 90, 242, ${edgeBloom * 0.18})`);
-    edgeGrad.addColorStop(1, `rgba(191, 90, 242, ${edgeBloom * 0.45})`);
-    ctx.fillStyle = edgeGrad;
-    ctx.fillRect(0, 0, width, height);
-    ctx.restore();
-  }
-
-  // 5. Subtle bottom gradient only behind text for legibility (profile stays completely clear)
+  // 4. Subtle bottom gradient only behind text for legibility (profile stays completely clear)
   const bottomGradient = ctx.createLinearGradient(0, height * 0.65, 0, height);
   bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
   bottomGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
@@ -474,7 +460,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 6. Draw Percentage Text with simple clean font and diminished subtle purple neon glow
+  // 5. Draw Percentage Text with purple neon glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -483,17 +469,10 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   const textY = height - 30;
   const textStr = `${auraPercent}%`;
 
-  // Crisp dark outline for clean contrast
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
-  ctx.shadowBlur = 6;
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = '#000000';
-  ctx.strokeText(textStr, textX, textY);
-
-  // Gentle diminished neon stroke
+  // Purple Neon Text Glow
   ctx.shadowColor = '#bf5af2';
-  ctx.shadowBlur = 4 + intensity * 6;
-  ctx.lineWidth = 2;
+  ctx.shadowBlur = 18;
+  ctx.lineWidth = 4;
   ctx.strokeStyle = '#bf5af2';
   ctx.strokeText(textStr, textX, textY);
 
@@ -503,7 +482,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillText(textStr, textX, textY);
   ctx.restore();
 
-  // 7. 4-Side Ultra-Bright Purple Neon Border (Massively boosted for high aura)
+  // 6. Clean Crisp Purple Neon Border (No outline bloom)
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -512,35 +491,16 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     ctx.rect(3, 3, width - 6, height - 6);
   }
 
-  // Pass 1: Super-wide outer atmospheric neon bloom
-  const outerBlur = 15 + intensity * 45;
-  const outerWidth = 4 + intensity * 10;
   ctx.shadowColor = '#bf5af2';
-  ctx.shadowBlur = outerBlur;
-  ctx.strokeStyle = `rgba(191, 90, 242, ${0.4 + intensity * 0.6})`;
-  ctx.lineWidth = outerWidth;
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = '#bf5af2';
+  ctx.lineWidth = 3.5;
   ctx.stroke();
 
-  // Pass 2: Radiant purple body
-  const midBlur = 8 + intensity * 24;
-  const midWidth = 3 + intensity * 5;
-  ctx.shadowBlur = midBlur;
-  ctx.strokeStyle = `rgba(168, 85, 247, ${0.6 + intensity * 0.4})`;
-  ctx.lineWidth = midWidth;
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#f5d0fe';
+  ctx.lineWidth = 1.2;
   ctx.stroke();
-
-  // Pass 3: Ultra-bright electric core
-  ctx.shadowBlur = 6 + intensity * 12;
-  ctx.strokeStyle = `rgba(245, 208, 254, ${0.7 + intensity * 0.3})`;
-  ctx.lineWidth = 2 + intensity * 3;
-  ctx.stroke();
-
-  // Pass 4: Pure diamond-white center line
-  ctx.shadowBlur = 3 + intensity * 6;
-  ctx.strokeStyle = `rgba(255, 255, 255, ${0.8 + intensity * 0.2})`;
-  ctx.lineWidth = 1.5 + intensity * 1.5;
-  ctx.stroke();
-
   ctx.restore();
 
   ctx.restore();
@@ -793,20 +753,20 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
 }
 
 // Helper to roll weighted percentage based on user-defined drop chances:
-// 0% – 20%: 80% weight (Common)
-// 21% – 40%: 60% weight (Rare)
-// 41% – 60%: 40% weight (Epic)
-// 61% – 80%: 20% weight (Legendary)
-// 81% – 95%: 5% weight (One Piece)
-// 96% – 100%: 1% weight (Anirare Piece)
+// 0% – 20%: ~80% weight (Common)
+// 21% – 40%: ~60% weight (Rare)
+// 41% – 60%: ~40% weight (Epic)
+// 61% – 80%: ~20% weight (Legendary)
+// 81% – 95%: ~5% weight (One Piece)
+// 96% – 100%: ~1% weight (Anirare Piece)
 function rollBestiePercent() {
   const tiers = [
-    { min: 0, max: 20, weight: 80, rarityText: '80% (Common)' },
-    { min: 21, max: 40, weight: 60, rarityText: '60% (Rare)' },
-    { min: 41, max: 60, weight: 40, rarityText: '40% (Epic)' },
-    { min: 61, max: 80, weight: 20, rarityText: '20% (Legendary)' },
-    { min: 81, max: 95, weight: 5, rarityText: '5% (One Piece)' },
-    { min: 96, max: 100, weight: 1, rarityText: '1% (Anirare Piece)' }
+    { min: 0, max: 20, weight: 80, rarityMin: 73, rarityMax: 87, label: 'Common' },
+    { min: 21, max: 40, weight: 60, rarityMin: 57, rarityMax: 66, label: 'Rare' },
+    { min: 41, max: 60, weight: 40, rarityMin: 37, rarityMax: 46, label: 'Epic' },
+    { min: 61, max: 80, weight: 20, rarityMin: 17, rarityMax: 25, label: 'Legendary' },
+    { min: 81, max: 95, weight: 5, rarityMin: 4, rarityMax: 7, label: 'One Piece' },
+    { min: 96, max: 100, weight: 1, rarityMin: 1, rarityMax: 1, label: 'Anirare Piece' }
   ];
 
   const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0); // 206
@@ -815,12 +775,17 @@ function rollBestiePercent() {
   for (const tier of tiers) {
     if (randomVal < tier.weight) {
       const percent = Math.floor(Math.random() * (tier.max - tier.min + 1)) + tier.min;
-      return { percent, rarity: tier.rarityText };
+      const rarityVal = tier.rarityMin === tier.rarityMax
+        ? tier.rarityMin
+        : Math.floor(Math.random() * (tier.rarityMax - tier.rarityMin + 1)) + tier.rarityMin;
+      const rarityText = `${rarityVal}% (${tier.label})`;
+      return { percent, rarity: rarityText };
     }
     randomVal -= tier.weight;
   }
 
-  return { percent: Math.floor(Math.random() * 21), rarity: '80% (Common)' };
+  const fallbackRarity = Math.floor(Math.random() * 15) + 73;
+  return { percent: Math.floor(Math.random() * 21), rarity: `${fallbackRarity}% (Common)` };
 }
 
 // Helper to build Besties Message Payload with embed and image attachment
