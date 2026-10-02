@@ -164,6 +164,11 @@ const slashCommandsData = [
     .addUserOption(opt => opt.setName('user').setDescription('The user to check bestie compatibility with').setRequired(true)),
 
   new SlashCommandBuilder()
+    .setName('avatar')
+    .setDescription('View the avatar of a user or yourself with purple neon frame')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to view avatar of (leave empty for yourself)').setRequired(false)),
+
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help and available commands')
 ];
@@ -660,6 +665,84 @@ async function buildAuraPayload(targetMember) {
     .setDescription(`*${cursiveText}*`)
     .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
     .setImage('attachment://aura.png');
+
+  return { embeds: [embed], files: [attachment] };
+}
+
+// Helper to generate dynamic Avatar Card image with subtle Purple neon border (less neon)
+async function generateAvatarCard(avatarUrl) {
+  const width = 600;
+  const height = 600;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  const radius = 28;
+
+  // 1. Smooth rounded rectangle clipping path
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(0, 0, width, height, radius);
+  } else {
+    ctx.rect(0, 0, width, height);
+  }
+  ctx.clip();
+
+  // 2. Base dark background (for transparent avatars)
+  ctx.fillStyle = '#0a0d14';
+  ctx.fillRect(0, 0, width, height);
+
+  // 3. Draw User Avatar cleanly across the card
+  try {
+    if (avatarUrl) {
+      const avatarImg = await loadImage(avatarUrl);
+      ctx.drawImage(avatarImg, 0, 0, width, height);
+    }
+  } catch (err) {
+    console.error("Failed to load avatar for avatar card:", err);
+  }
+
+  // 4. Subtle Purple Neon Border (Less neon light)
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(3, 3, width - 6, height - 6, radius - 3);
+  } else {
+    ctx.rect(3, 3, width - 6, height - 6);
+  }
+
+  // Soft purple neon stroke
+  ctx.shadowColor = '#bf5af2';
+  ctx.shadowBlur = 6;
+  ctx.strokeStyle = '#bf5af2';
+  ctx.lineWidth = 3.0;
+  ctx.stroke();
+
+  // Crisp light core highlight
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#f5d0fe';
+  ctx.lineWidth = 1.0;
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
+}
+
+// Helper to build Avatar Message Payload
+async function buildAvatarPayload(targetMember) {
+  const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512, forceStatic: false });
+  const buffer = await generateAvatarCard(avatarUrl);
+  const attachment = new AttachmentBuilder(buffer, { name: 'avatar.png' });
+
+  const embed = new EmbedBuilder()
+    .setColor(0xBF5AF2)
+    .setAuthor({ 
+      name: `Avatar of ${targetMember.displayName || targetMember.user.username}`, 
+      iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
+    })
+    .setImage('attachment://avatar.png')
+    .setFooter({ text: 'AniPedia • Avatar Viewer' });
 
   return { embeds: [embed], files: [attachment] };
 }
@@ -1167,7 +1250,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'auras', 'bestie', 'besties', 'profile', 'ping', 'reset', 'help', 'commands'
+      'auras', 'bestie', 'besties', 'av', 'avatar', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
@@ -2342,6 +2425,7 @@ client.on('messageCreate', async (message) => {
             value: [
               `${dot} \`-auras [@user]\` — **Check Spiritual Aura**`,
               `${dot} \`-bestie <@user>\` — **Check Besties Compatibility**`,
+              `${dot} \`-av [@user]\` — **View User Avatar**`,
               `${dot} \`-profile\` — **View User Profile**`,
               `${dot} \`-ping\` — **Check Bot Latency**`,
               `${dot} \`-reset\` — **Reset Memory *(Aerion-sama)* **`
@@ -2394,6 +2478,37 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    // --- Avatar Command (-av & -avatar) ---
+    const isAvCmd = words[0] === 'av' || words[0] === 'avatar' || 
+                    cleanQuery === 'av' || cleanQuery === 'avatar' ||
+                    cleanQuery.startsWith('av ') || cleanQuery.startsWith('avatar ') ||
+                    lowerQuery === 'av' || lowerQuery === 'avatar' ||
+                    lowerQuery.startsWith('av ') || lowerQuery.startsWith('avatar ');
+
+    if (isAvCmd) {
+      let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
+
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^(avatars?|av)\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m => 
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+
+      // If no user specified, default to the command author
+      if (!targetMember) {
+        targetMember = message.member;
+      }
+
+      const avPayload = await buildAvatarPayload(targetMember);
+      await message.channel.send(avPayload);
+      return;
+    }
+
     // --- Aura Command (-auras only) ---
     if (words.includes('auras') || cleanQuery === 'auras' || cleanQuery.startsWith('auras ') || lowerQuery === 'auras' || lowerQuery.startsWith('auras ')) {
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
@@ -2410,7 +2525,7 @@ client.on('messageCreate', async (message) => {
                         lowerQuery.startsWith('bestie ') || lowerQuery.startsWith('besties ');
 
     if (isBestieCmd) {
-      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
+      let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
 
       // If no direct mention, look up by username, nickname or ID in the arguments
       if (!targetMember) {
@@ -2425,7 +2540,7 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!targetMember) {
-        await message.reply("Please use `-bestie <username>`! 🌸");
+        await message.reply("Please use `-bestie <username>`!");
         return;
       }
 
@@ -3626,7 +3741,18 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 14. /help
+    // 14. /avatar & /av
+    // ------------------------------------------
+    if (commandName === 'avatar' || commandName === 'av') {
+      const targetMember = options.getMember('user') || member;
+      await interaction.deferReply();
+      const avPayload = await buildAvatarPayload(targetMember);
+      await interaction.editReply(avPayload);
+      return;
+    }
+
+    // ------------------------------------------
+    // 15. /help
     // ------------------------------------------
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
@@ -3666,6 +3792,7 @@ client.on('interactionCreate', async (interaction) => {
             value: [
               `${dot} \`/auras [user]\` — **Check Spiritual Aura Card**`,
               `${dot} \`/besties <user>\` — **Check Besties Compatibility**`,
+              `${dot} \`/avatar [user]\` — **View User Avatar**`,
               `${dot} \`/help\` — **Show Command Guide**`
             ].join('\n'),
             inline: false
