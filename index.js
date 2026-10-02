@@ -460,46 +460,83 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 5. Determine 3 Neon Light Tiers:
+  // 5. Determine 5 Neon Light Tiers:
   // - 0% – 40%: Low Neon Light (soft/dim glow)
-  // - 41% – 75%: Moderate Neon Light (crisp/balanced glow)
-  // - 76% – 100%: High Neon Light (vibrant/intense radiant glow)
-  let textShadowBlur, textStrokeWidth, textShadowColor;
+  // - 41% – 59%: Moderate Neon Light (clean subtle glow)
+  // - 60% – 75%: Good Neon Light (solid vibrant glow)
+  // - 76% – 90%: High Neon Light (radiant electric glow)
+  // - 91% – 100%: Extreme Neon Light (overwhelming electric aura radiance)
+  let textShadowBlur, textStrokeWidth, textShadowColor, textExtraBloom = 0, textExtraBloomColor = '';
   let borderShadowBlur, borderLineWidth, borderCoreWidth, borderNeonColor, borderCoreColor;
+  let borderExtraPass = false, borderExtraBlur = 0, borderExtraWidth = 0, borderExtraColor = '';
 
   if (auraPercent <= 40) {
-    // Low Neon Light
-    textShadowBlur = 6;
-    textStrokeWidth = 2;
-    textShadowColor = 'rgba(191, 90, 242, 0.6)';
+    // 1. Low Neon Light
+    textShadowBlur = 5;
+    textStrokeWidth = 2.0;
+    textShadowColor = 'rgba(191, 90, 242, 0.55)';
 
-    borderShadowBlur = 4;
-    borderLineWidth = 2.2;
+    borderShadowBlur = 3;
+    borderLineWidth = 2.0;
     borderCoreWidth = 0.8;
-    borderNeonColor = 'rgba(191, 90, 242, 0.65)';
-    borderCoreColor = 'rgba(245, 208, 254, 0.7)';
-  } else if (auraPercent <= 75) {
-    // Moderate Neon Light
-    textShadowBlur = 16;
-    textStrokeWidth = 3.5;
+    borderNeonColor = 'rgba(191, 90, 242, 0.6)';
+    borderCoreColor = 'rgba(245, 208, 254, 0.6)';
+  } else if (auraPercent <= 59) {
+    // 2. Moderate Neon Light
+    textShadowBlur = 12;
+    textStrokeWidth = 3.0;
     textShadowColor = '#bf5af2';
 
-    borderShadowBlur = 8;
-    borderLineWidth = 3.5;
-    borderCoreWidth = 1.2;
+    borderShadowBlur = 6;
+    borderLineWidth = 2.8;
+    borderCoreWidth = 1.0;
     borderNeonColor = '#bf5af2';
     borderCoreColor = '#f5d0fe';
-  } else {
-    // High Neon Light
+  } else if (auraPercent <= 75) {
+    // 3. Good Neon Light
+    textShadowBlur = 18;
+    textStrokeWidth = 4.0;
+    textShadowColor = '#c084fc';
+
+    borderShadowBlur = 10;
+    borderLineWidth = 3.8;
+    borderCoreWidth = 1.4;
+    borderNeonColor = '#c084fc';
+    borderCoreColor = '#fdf4ff';
+  } else if (auraPercent <= 90) {
+    // 4. High Neon Light
     textShadowBlur = 28;
     textStrokeWidth = 5.5;
     textShadowColor = '#d946ef';
+    textExtraBloom = 40;
+    textExtraBloomColor = '#c084fc';
 
     borderShadowBlur = 18;
     borderLineWidth = 5.0;
     borderCoreWidth = 1.8;
     borderNeonColor = '#e879f9';
     borderCoreColor = '#ffffff';
+    borderExtraPass = true;
+    borderExtraBlur = 24;
+    borderExtraWidth = 7;
+    borderExtraColor = '#c084fc';
+  } else {
+    // 5. Extreme Neon Light
+    textShadowBlur = 40;
+    textStrokeWidth = 7.0;
+    textShadowColor = '#f43f5e';
+    textExtraBloom = 60;
+    textExtraBloomColor = '#e879f9';
+
+    borderShadowBlur = 28;
+    borderLineWidth = 6.5;
+    borderCoreWidth = 2.4;
+    borderNeonColor = '#f472b6';
+    borderCoreColor = '#ffffff';
+    borderExtraPass = true;
+    borderExtraBlur = 38;
+    borderExtraWidth = 10;
+    borderExtraColor = '#d946ef';
   }
 
   // 6. Draw Percentage Text with scaled neon glow
@@ -511,16 +548,16 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   const textY = height - 30;
   const textStr = `${auraPercent}%`;
 
-  // Extra outer bloom for High Neon
-  if (auraPercent > 75) {
-    ctx.shadowColor = '#c084fc';
-    ctx.shadowBlur = 40;
-    ctx.lineWidth = 9;
-    ctx.strokeStyle = '#c084fc';
+  // Extra outer bloom for High & Extreme Neon
+  if (textExtraBloom > 0) {
+    ctx.shadowColor = textExtraBloomColor;
+    ctx.shadowBlur = textExtraBloom;
+    ctx.lineWidth = textStrokeWidth + 4;
+    ctx.strokeStyle = textExtraBloomColor;
     ctx.strokeText(textStr, textX, textY);
   }
 
-  // Purple Neon Text Glow
+  // Purple/Neon Text Glow
   ctx.shadowColor = textShadowColor;
   ctx.shadowBlur = textShadowBlur;
   ctx.lineWidth = textStrokeWidth;
@@ -542,12 +579,12 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     ctx.rect(3, 3, width - 6, height - 6);
   }
 
-  // High Neon extra radiant pass
-  if (auraPercent > 75) {
-    ctx.shadowColor = '#d946ef';
-    ctx.shadowBlur = 26;
-    ctx.strokeStyle = '#c084fc';
-    ctx.lineWidth = 7;
+  // High & Extreme extra radiant pass
+  if (borderExtraPass) {
+    ctx.shadowColor = borderExtraColor;
+    ctx.shadowBlur = borderExtraBlur;
+    ctx.strokeStyle = borderExtraColor;
+    ctx.lineWidth = borderExtraWidth;
     ctx.stroke();
   }
 
