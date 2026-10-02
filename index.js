@@ -508,9 +508,45 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   return canvas.toBuffer('image/png');
 }
 
+// Helper to roll weighted percentage for Aura based on drop rates:
+// 0% – 20%: 20% weight (Common)
+// 21% – 40%: 30% weight (Rare)
+// 41% – 60%: 70% weight (Epic)
+// 61% – 80%: 70% weight (Legendary)
+// 81% – 95%: 50% weight (One Piece)
+// 96% – 100%: 30% weight (Anirare Piece)
+function rollAuraPercent() {
+  const tiers = [
+    { min: 0, max: 20, weight: 20, rarityMin: 17, rarityMax: 23, label: 'Common' },
+    { min: 21, max: 40, weight: 30, rarityMin: 27, rarityMax: 33, label: 'Rare' },
+    { min: 41, max: 60, weight: 70, rarityMin: 66, rarityMax: 74, label: 'Epic' },
+    { min: 61, max: 80, weight: 70, rarityMin: 66, rarityMax: 74, label: 'Legendary' },
+    { min: 81, max: 95, weight: 50, rarityMin: 47, rarityMax: 53, label: 'One Piece' },
+    { min: 96, max: 100, weight: 30, rarityMin: 27, rarityMax: 33, label: 'Anirare Piece' }
+  ];
+
+  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0); // 270
+  let randomVal = Math.random() * totalWeight;
+
+  for (const tier of tiers) {
+    if (randomVal < tier.weight) {
+      const percent = Math.floor(Math.random() * (tier.max - tier.min + 1)) + tier.min;
+      const rarityVal = tier.rarityMin === tier.rarityMax
+        ? tier.rarityMin
+        : Math.floor(Math.random() * (tier.rarityMax - tier.rarityMin + 1)) + tier.rarityMin;
+      const rarityText = `${rarityVal}% (${tier.label})`;
+      return { percent, rarity: rarityText };
+    }
+    randomVal -= tier.weight;
+  }
+
+  const fallbackRarity = Math.floor(Math.random() * 7) + 17;
+  return { percent: Math.floor(Math.random() * 21), rarity: `${fallbackRarity}% (Common)` };
+}
+
 // Helper to build Aura Message Payload with embed and image attachment
 async function buildAuraPayload(targetMember) {
-  const { percent: auraPercent, rarity: rarityText } = rollBestiePercent();
+  const { percent: auraPercent, rarity: rarityText } = rollAuraPercent();
   const tier = getAuraTheme(auraPercent);
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const buffer = await generateAuraCard(avatarUrl, auraPercent);
@@ -753,23 +789,23 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
 }
 
 // Helper to roll weighted percentage based on user-defined drop chances:
-// 0% – 20%: ~80% weight (Common)
-// 21% – 40%: ~60% weight (Rare)
-// 41% – 60%: ~40% weight (Epic)
-// 61% – 80%: ~20% weight (Legendary)
-// 81% – 95%: ~5% weight (One Piece)
-// 96% – 100%: ~1% weight (Anirare Piece)
+// 0% – 20%: 40% weight (Common)
+// 21% – 40%: 40% weight (Rare)
+// 41% – 60%: 70% weight (Epic)
+// 61% – 80%: 70% weight (Legendary)
+// 81% – 95%: 45% weight (One Piece)
+// 96% – 100%: 15% weight (Anirare Piece)
 function rollBestiePercent() {
   const tiers = [
-    { min: 0, max: 20, weight: 80, rarityMin: 73, rarityMax: 87, label: 'Common' },
-    { min: 21, max: 40, weight: 60, rarityMin: 57, rarityMax: 66, label: 'Rare' },
-    { min: 41, max: 60, weight: 40, rarityMin: 37, rarityMax: 46, label: 'Epic' },
-    { min: 61, max: 80, weight: 20, rarityMin: 17, rarityMax: 25, label: 'Legendary' },
-    { min: 81, max: 95, weight: 5, rarityMin: 4, rarityMax: 7, label: 'One Piece' },
-    { min: 96, max: 100, weight: 1, rarityMin: 1, rarityMax: 1, label: 'Anirare Piece' }
+    { min: 0, max: 20, weight: 40, rarityMin: 36, rarityMax: 44, label: 'Common' },
+    { min: 21, max: 40, weight: 40, rarityMin: 36, rarityMax: 44, label: 'Rare' },
+    { min: 41, max: 60, weight: 70, rarityMin: 66, rarityMax: 74, label: 'Epic' },
+    { min: 61, max: 80, weight: 70, rarityMin: 66, rarityMax: 74, label: 'Legendary' },
+    { min: 81, max: 95, weight: 45, rarityMin: 42, rarityMax: 48, label: 'One Piece' },
+    { min: 96, max: 100, weight: 15, rarityMin: 12, rarityMax: 18, label: 'Anirare Piece' }
   ];
 
-  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0); // 206
+  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0); // 280
   let randomVal = Math.random() * totalWeight;
 
   for (const tier of tiers) {
@@ -784,7 +820,7 @@ function rollBestiePercent() {
     randomVal -= tier.weight;
   }
 
-  const fallbackRarity = Math.floor(Math.random() * 15) + 73;
+  const fallbackRarity = Math.floor(Math.random() * 9) + 36;
   return { percent: Math.floor(Math.random() * 21), rarity: `${fallbackRarity}% (Common)` };
 }
 
@@ -1034,7 +1070,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'auras', 'bestie', 'profile', 'ping', 'reset', 'help', 'commands'
+      'auras', 'bestie', 'besties', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
@@ -2269,13 +2305,19 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Bestie Command (-bestie only) ---
-    if (words[0] === 'bestie' || cleanQuery === 'bestie' || cleanQuery.startsWith('bestie ') || lowerQuery === 'bestie' || lowerQuery.startsWith('bestie ')) {
+    // --- Bestie Command (-bestie & -besties) ---
+    const isBestieCmd = words[0] === 'bestie' || words[0] === 'besties' || 
+                        cleanQuery === 'bestie' || cleanQuery === 'besties' ||
+                        cleanQuery.startsWith('bestie ') || cleanQuery.startsWith('besties ') ||
+                        lowerQuery === 'bestie' || lowerQuery === 'besties' ||
+                        lowerQuery.startsWith('bestie ') || lowerQuery.startsWith('besties ');
+
+    if (isBestieCmd) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
 
       // If no direct mention, look up by username, nickname or ID in the arguments
       if (!targetMember) {
-        const queryArg = cleanQuery.replace(/^bestie\s*/i, '').trim();
+        const queryArg = cleanQuery.replace(/^(besties?)\s*/i, '').trim();
         if (queryArg) {
           targetMember = message.guild.members.cache.find(m => 
             m.user.username.toLowerCase() === queryArg.toLowerCase() ||
@@ -2286,7 +2328,7 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!targetMember) {
-        await message.reply("Please mention or specify your bestie! 🌸 (e.g. `-bestie @user` or `-bestie username`)");
+        await message.reply("Please use `-bestie <username>`! 🌸");
         return;
       }
 
