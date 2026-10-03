@@ -249,14 +249,14 @@ const deniedLevel1Users = new Set();
 function getMemberTier(member) {
   if (!member) return 0;
 
+  // Master User & Server Owner have permanent supreme clearance (100% Immune)
+  if (member.id === MASTER_USER_ID) return 4;
+  if (member.guild && member.guild.ownerId === member.id) return 4;
+
   // If user is denied Level 1 clearance via Protocol GrantAccess1
   if (deniedLevel1Users.has(member.id) || (member.user && deniedLevel1Users.has(member.user.username.toLowerCase()))) {
     return 0;
   }
-
-  // Master User & Server Owner have permanent supreme clearance
-  if (member.id === MASTER_USER_ID) return 4;
-  if (member.guild && member.guild.ownerId === member.id) return 4;
 
   // STRICT Role ID Verification (Rejects any duplicate/fake named roles)
   if (member.roles && member.roles.cache) {
@@ -1313,10 +1313,11 @@ client.on('messageCreate', async (message) => {
   // Check for privileged Master Security Directives
   const isProtoZero = /^Authorization:\s*Protocol\s*Zero/i.test(cleanDirectiveMsg);
   const isProtoGrant1 = /^Authorization:\s*Protocol\s*GrantAccess1/i.test(cleanDirectiveMsg);
+  const isProtoRestore = /^Authorization:\s*Protocol\s*(Restore|Unban)/i.test(cleanDirectiveMsg);
   const isCodeBlack = /^Command\s*override:\s*Code\s*Black/i.test(cleanDirectiveMsg);
   const isCodeWhite = /^Command\s*override:\s*(Code\s*White|Reboot)/i.test(cleanDirectiveMsg) || /^Authorization:\s*Reboot/i.test(cleanDirectiveMsg);
 
-  if (isProtoZero || isProtoGrant1 || isCodeBlack || isCodeWhite) {
+  if (isProtoZero || isProtoGrant1 || isProtoRestore || isCodeBlack || isCodeWhite) {
     if (!isMasterUser) {
       await message.reply("ACCESS DENIED. Unauthorized terminal attempting privileged execution. Incident logged.");
       const alertMsg = `⚠️ **UNAUTHORIZED SECURITY DIRECTIVE ATTEMPT!** ⚠️
@@ -1334,6 +1335,12 @@ client.on('messageCreate', async (message) => {
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
                            message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
+      
+      if (targetMember?.id === MASTER_USER_ID || targetQuery.toLowerCase() === 'el_lapulga' || targetQuery.toLowerCase() === '_c0rle0ne') {
+        await message.reply("Primary Administrator el_lapulga is permanently immune to security isolation directives.");
+        return;
+      }
+
       const resolvedName = targetMember ? targetMember.user.username : targetQuery;
       if (targetMember) protocolZeroBlacklist.add(targetMember.id);
       protocolZeroBlacklist.add(resolvedName.toLowerCase());
@@ -1347,11 +1354,37 @@ client.on('messageCreate', async (message) => {
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
                            message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
+      
+      if (targetMember?.id === MASTER_USER_ID || targetQuery.toLowerCase() === 'el_lapulga' || targetQuery.toLowerCase() === '_c0rle0ne') {
+        await message.reply("Primary Administrator el_lapulga is permanently immune to security restriction directives.");
+        return;
+      }
+
       const resolvedName = targetMember ? targetMember.user.username : targetQuery;
       if (targetMember) deniedLevel1Users.add(targetMember.id);
       deniedLevel1Users.add(resolvedName.toLowerCase());
 
       await message.reply(`Protocol GrantAccess1 directive logged. Level 1 operational privileges denied for User: ${resolvedName}. Security seals enforced; restricted subroutines remain locked for this entity.`);
+      return;
+    }
+
+    if (isProtoRestore) {
+      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*(Restore|Unban)/i, '').trim();
+      targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
+      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
+                           message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
+      const resolvedName = targetMember ? targetMember.user.username : targetQuery;
+
+      if (targetMember) {
+        protocolZeroBlacklist.delete(targetMember.id);
+        deniedLevel1Users.delete(targetMember.id);
+      }
+      protocolZeroBlacklist.delete(resolvedName.toLowerCase());
+      protocolZeroBlacklist.delete(targetQuery.toLowerCase());
+      deniedLevel1Users.delete(resolvedName.toLowerCase());
+      deniedLevel1Users.delete(targetQuery.toLowerCase());
+
+      await message.reply(`Protocol Restore acknowledged. Operational clearance and standard credentials restored for User: ${resolvedName}. Firewall updated: Isolation lifted.`);
       return;
     }
 
@@ -1368,13 +1401,13 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // If System is Frozen under Code Black, halt all operations
-  if (isCodeBlackFrozen) {
+  // If System is Frozen under Code Black, halt all operations (except for master user)
+  if (isCodeBlackFrozen && !isMasterUser) {
     return; // Complete frozen state
   }
 
-  // If User is Isolated under Protocol Zero, reject all interactions
-  if (protocolZeroBlacklist.has(message.author.id) || protocolZeroBlacklist.has(message.author.username.toLowerCase())) {
+  // If User is Isolated under Protocol Zero, reject all interactions (Master is immune)
+  if (!isMasterUser && (protocolZeroBlacklist.has(message.author.id) || protocolZeroBlacklist.has(message.author.username.toLowerCase()))) {
     return; // Blacklisted user isolated
   }
 
