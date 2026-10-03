@@ -89,10 +89,19 @@ const nsfwKeywords = [
 // Preloaded user memory cache (facts and warnings count)
 const preloadedMemories = new Map();
 
+// AFK System tracker: Map userId -> { userId, username, reason, afkSince, mentions: [] }
+const afkUsers = new Map();
+const afkMentionCooldowns = new Map();
+
 // ==========================================
 // SLASH COMMAND DEFINITIONS (Auto-popup on /)
 // ==========================================
 const slashCommandsData = [
+  new SlashCommandBuilder()
+    .setName('afk')
+    .setDescription('Set your AFK status with an optional reason')
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for going AFK').setRequired(false)),
+
   new SlashCommandBuilder()
     .setName('warn')
     .setDescription('Issue a formal warning to a member')
@@ -197,6 +206,23 @@ client.once('ready', async () => {
       console.log(`Preloaded memories for ${preloadedMemories.size} users from Firestore.`);
     } catch (err) {
       console.error("Error preloading memories from Firestore:", err);
+    }
+
+    try {
+      const afkSnapshot = await db.collection('afk').get();
+      afkSnapshot.forEach(doc => {
+        const data = doc.data();
+        afkUsers.set(doc.id, {
+          userId: doc.id,
+          username: data.username || 'Unknown',
+          reason: data.reason || 'No reason specified',
+          afkSince: data.afkSince || Date.now(),
+          mentions: data.mentions || []
+        });
+      });
+      console.log(`Preloaded ${afkUsers.size} AFK users from Firestore.`);
+    } catch (err) {
+      console.error("Error preloading AFK data from Firestore:", err);
     }
   }
 
@@ -402,6 +428,25 @@ function getReason(text, actionKeyword, targetMember) {
   return reason || "No reason specified";
 }
 
+// Helper to format AFK duration cleanly
+function formatAfkDuration(ms) {
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${Math.max(1, seconds)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) {
+    return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours < 24) {
+    return remainingMinutes > 0 ? `${hours}h ${remainingMinutes}m` : `${hours}h`;
+  }
+  const days = Math.floor(hours / 24);
+  const remainingHours = hours % 24;
+  return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
+}
+
 // Helper to convert text to Small Caps font (IM FELL SC / Manuscript style)
 function toSmallCaps(str) {
   if (!str) return '';
@@ -431,8 +476,10 @@ async function getModEmojis(guild) {
   if (guild && guild.emojis && guild.emojis.cache) {
     const guildEmojis = Array.from(guild.emojis.cache.values());
     
-    // Find dot emoji (by exact ID, name matching dot, point, bullet, blue, or containing old ID)
+    // Find dot emoji (prioritizing ani_dot)
     const foundDot = guildEmojis.find(e => 
+      e.name.toLowerCase() === 'ani_dot' ||
+      e.name.toLowerCase().includes('ani_dot') ||
       e.id === '1088773420906467390' ||
       e.name.toLowerCase() === 'dot' ||
       e.name.toLowerCase() === 'point' ||
@@ -446,8 +493,10 @@ async function getModEmojis(guild) {
       dot = foundDot.toString();
     }
 
-    // Find verify checkmark emoji
+    // Find verify checkmark emoji (prioritizing ani_check)
     const foundV = guildEmojis.find(e => 
+      e.name.toLowerCase() === 'ani_check' ||
+      e.name.toLowerCase().includes('ani_check') ||
       e.id === '996146086978793552' ||
       e.id === '1548626318399373342' ||
       e.name.toLowerCase().includes('checkmark') ||
@@ -464,6 +513,8 @@ async function getModEmojis(guild) {
   if (dot === '•' && client && client.emojis && client.emojis.cache) {
     const clientEmojis = Array.from(client.emojis.cache.values());
     const foundDot = clientEmojis.find(e => 
+      e.name.toLowerCase() === 'ani_dot' ||
+      e.name.toLowerCase().includes('ani_dot') ||
       e.id === '1088773420906467390' ||
       e.name.toLowerCase() === 'dot' ||
       e.name.toLowerCase() === 'point' ||
@@ -481,6 +532,8 @@ async function getModEmojis(guild) {
   if (client && client.emojis && client.emojis.cache) {
     const clientEmojis = Array.from(client.emojis.cache.values());
     const foundV = clientEmojis.find(e => 
+      e.name.toLowerCase() === 'ani_check' ||
+      e.name.toLowerCase().includes('ani_check') ||
       e.id === '996146086978793552' ||
       e.id === '1548626318399373342' ||
       e.name.toLowerCase().includes('checkmark') ||
@@ -1706,6 +1759,88 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
 client.on('messageCreate', async (message) => {
   // Ignore messages from bots
   if (message.author.bot) return;
+  if (!message.guild) return;
+
+  // ==========================================
+  // AFK SYSTEM: Check if user is returning from AFK
+  // ==========================================
+  if (afkUsers.has(message.author.id)) {
+    const afkData = afkUsers.get(message.author.id);
+    const timeSinceAfk = Date.now() - (afkData.afkSince || 0);
+    const isSettingAfk = message.content.trim().toLowerCase().startsWith('-afk');
+
+    // Only remove AFK if not currently executing -afk and at least 3 seconds have passed
+    if (!isSettingAfk && timeSinceAfk > 3000) {
+      afkUsers.delete(message.author.id);
+      if (db) {
+        db.collection('afk').doc(message.author.id).delete().catch(() => {});
+      }
+
+      const { verify } = await getModEmojis(message.guild);
+      const durationStr = formatAfkDuration(timeSinceAfk);
+
+      let removeAfkDesc = `> ${verify} <@${message.author.id}> I have removed your **AFK** • \`${durationStr}\`\n`;
+      if (afkData.mentions && afkData.mentions.length > 0) {
+        const uniqueMentioners = [...new Set(afkData.mentions.map(m => `<@${m.authorId}>`))];
+        removeAfkDesc += `> Mentioned by • ${uniqueMentioners.join(', ')}\n`;
+      }
+      removeAfkDesc += `──────────────────────────`;
+
+      const removeAfkEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setTitle(`**${toSmallCaps('AFK Removed')}**`)
+        .setDescription(removeAfkDesc)
+        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await message.reply({ embeds: [removeAfkEmbed] }).catch(() => {});
+    }
+  }
+
+  // ==========================================
+  // AFK SYSTEM: Check if message mentions any AFK user
+  // ==========================================
+  if (message.mentions && message.mentions.members && message.mentions.members.size > 0) {
+    for (const [mentionedId] of message.mentions.members) {
+      if (mentionedId !== message.author.id && afkUsers.has(mentionedId)) {
+        const afkData = afkUsers.get(mentionedId);
+        if (!afkData.mentions) afkData.mentions = [];
+        afkData.mentions.push({
+          authorId: message.author.id,
+          authorTag: message.author.tag,
+          channelId: message.channel.id,
+          messageId: message.id,
+          timestamp: Date.now()
+        });
+
+        if (db) {
+          db.collection('afk').doc(mentionedId).set({
+            mentions: afkData.mentions
+          }, { merge: true }).catch(() => {});
+        }
+
+        const lastReplyTime = afkMentionCooldowns.get(mentionedId) || 0;
+        if (Date.now() - lastReplyTime > 5000) {
+          afkMentionCooldowns.set(mentionedId, Date.now());
+          const { dot } = await getModEmojis(message.guild);
+          const afkSinceUnix = Math.floor(afkData.afkSince / 1000);
+
+          const afkMentionEmbed = new EmbedBuilder()
+            .setColor(0x2B2D31)
+            .setTitle(`**${toSmallCaps('AFK Notice')}**`)
+            .setDescription(
+              `> ${dot} <@${mentionedId}> is on **AFK** • <t:${afkSinceUnix}:R>\n` +
+              `> Reason • \`${afkData.reason || 'No reason specified'}\`\n` +
+              `──────────────────────────`
+            )
+            .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+            .setTimestamp();
+
+          await message.reply({ embeds: [afkMentionEmbed] }).catch(() => {});
+        }
+      }
+    }
+  }
 
   const isMasterUser = message.author.id === MASTER_USER_ID;
 
@@ -1959,6 +2094,7 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     const preCheckWords = lowerQuery.split(/\s+/);
     const commandKeywords = [
+      'afk',
       'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
       'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
@@ -2910,8 +3046,49 @@ client.on('messageCreate', async (message) => {
     }
 
     // ==========================================
-    // 2. UTILITY COMMANDS (HELP, PING, RESET, PROFILE, LEADERBOARD, WARNS)
+    // 2. UTILITY COMMANDS (AFK, HELP, PING, RESET, PROFILE, LEADERBOARD, WARNS)
     // ==========================================
+    if (words[0] === 'afk' || lowerQuery.startsWith('afk')) {
+      let reason = cleanQuery.replace(/^afk\s*/i, '').trim();
+      if (!reason) reason = 'No reason specified';
+
+      const afkSince = Date.now();
+      afkUsers.set(message.author.id, {
+        userId: message.author.id,
+        username: message.author.username,
+        reason: reason,
+        afkSince: afkSince,
+        mentions: []
+      });
+
+      if (db) {
+        await db.collection('afk').doc(message.author.id).set({
+          userId: message.author.id,
+          username: message.author.username,
+          reason: reason,
+          afkSince: afkSince,
+          mentions: []
+        }).catch(err => console.error("Error saving AFK to Firestore:", err));
+      }
+
+      const { dot } = await getModEmojis(message.guild);
+      const afkSinceUnix = Math.floor(afkSince / 1000);
+
+      const setAfkEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setTitle(`**${toSmallCaps('AFK Status Set')}**`)
+        .setDescription(
+          `> ${dot} <@${message.author.id}> has been set to **AFK** • <t:${afkSinceUnix}:R>\n` +
+          `> Reason • \`${reason}\`\n` +
+          `──────────────────────────`
+        )
+        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await message.reply({ embeds: [setAfkEmbed] });
+      return;
+    }
+
     if (words.includes('warnings') || words.includes('warns') || words.includes('leaderboard') || words.includes('top')) {
       // Check if user specifically asked for the leaderboard
       const isLeaderboard = words.includes('leaderboard') || 
@@ -3139,6 +3316,7 @@ client.on('messageCreate', async (message) => {
           {
             name: `${dot} **General Commands**`,
             value: [
+              `${dot} \`-afk [reason]\` — **Set AFK Status**`,
               `${dot} \`-auras [@user]\` — **Check Spiritual Aura**`,
               `${dot} \`-bestie <@user>\` — **Check Besties Compatibility**`,
               `${dot} \`-av [@user]\` — **View User Avatar**`,
@@ -3572,6 +3750,48 @@ client.on('interactionCreate', async (interaction) => {
   const modTier = getMemberTier(member);
 
   try {
+    // ------------------------------------------
+    // 0. /afk
+    // ------------------------------------------
+    if (commandName === 'afk') {
+      const reason = options.getString('reason') || 'No reason specified';
+      const afkSince = Date.now();
+      afkUsers.set(user.id, {
+        userId: user.id,
+        username: user.username,
+        reason: reason,
+        afkSince: afkSince,
+        mentions: []
+      });
+
+      if (db) {
+        await db.collection('afk').doc(user.id).set({
+          userId: user.id,
+          username: user.username,
+          reason: reason,
+          afkSince: afkSince,
+          mentions: []
+        }).catch(err => console.error("Error saving AFK in slash to Firestore:", err));
+      }
+
+      const { dot } = await getModEmojis(guild);
+      const afkSinceUnix = Math.floor(afkSince / 1000);
+
+      const setAfkEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setTitle(`**${toSmallCaps('AFK Status Set')}**`)
+        .setDescription(
+          `> ${dot} <@${user.id}> has been set to **AFK** • <t:${afkSinceUnix}:R>\n` +
+          `> Reason • \`${reason}\`\n` +
+          `──────────────────────────`
+        )
+        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await interaction.reply({ embeds: [setAfkEmbed] });
+      return;
+    }
+
     // ------------------------------------------
     // 1. /warn
     // ------------------------------------------
@@ -4574,6 +4794,7 @@ client.on('interactionCreate', async (interaction) => {
           {
             name: `${dot} **General & Fun Commands**`,
             value: [
+              `${dot} \`/afk [reason]\` — **Set AFK Status**`,
               `${dot} \`/auras [user]\` — **Check Spiritual Aura Card**`,
               `${dot} \`/besties <user>\` — **Check Besties Compatibility**`,
               `${dot} \`/avatar [user]\` — **View User Avatar**`,
