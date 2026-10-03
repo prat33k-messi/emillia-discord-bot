@@ -1297,14 +1297,24 @@ client.on('messageCreate', async (message) => {
   // Ignore messages from bots
   if (message.author.bot) return;
 
-  const rawMsg = message.content.trim();
   const isMasterUser = message.author.id === MASTER_USER_ID;
 
+  // Check if bot was mentioned
+  const botMention = `<@${client.user.id}>`;
+  const botNicknameMention = `<@!${client.user.id}>`;
+  const isMentioned = message.content.includes(botMention) || message.content.includes(botNicknameMention);
+
+  // Normalize directive content (strips bot mentions and leading symbols like '-')
+  const cleanDirectiveMsg = message.content
+    .replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '')
+    .replace(/^[-!/.]\s*/, '')
+    .trim();
+
   // Check for privileged Master Security Directives
-  const isProtoZero = /^Authorization:\s*Protocol\s*Zero/i.test(rawMsg);
-  const isProtoGrant1 = /^Authorization:\s*Protocol\s*GrantAccess1/i.test(rawMsg);
-  const isCodeBlack = /^Command\s*override:\s*Code\s*Black/i.test(rawMsg);
-  const isCodeWhite = /^Command\s*override:\s*(Code\s*White|Reboot)/i.test(rawMsg) || /^Authorization:\s*Reboot/i.test(rawMsg);
+  const isProtoZero = /^Authorization:\s*Protocol\s*Zero/i.test(cleanDirectiveMsg);
+  const isProtoGrant1 = /^Authorization:\s*Protocol\s*GrantAccess1/i.test(cleanDirectiveMsg);
+  const isCodeBlack = /^Command\s*override:\s*Code\s*Black/i.test(cleanDirectiveMsg);
+  const isCodeWhite = /^Command\s*override:\s*(Code\s*White|Reboot)/i.test(cleanDirectiveMsg) || /^Authorization:\s*Reboot/i.test(cleanDirectiveMsg);
 
   if (isProtoZero || isProtoGrant1 || isCodeBlack || isCodeWhite) {
     if (!isMasterUser) {
@@ -1312,7 +1322,7 @@ client.on('messageCreate', async (message) => {
       const alertMsg = `⚠️ **UNAUTHORIZED SECURITY DIRECTIVE ATTEMPT!** ⚠️
 • **User:** <@${message.author.id}> (\`${message.author.tag}\` - ID: \`${message.author.id}\`)
 • **Server/Channel:** ${message.guild?.name || 'DM'} / #${message.channel?.name || 'DM'}
-• **Attempted Command:** "${rawMsg}"`;
+• **Attempted Command:** "${message.content.trim()}"`;
       const masterUser = await client.users.fetch(MASTER_USER_ID).catch(() => null);
       if (masterUser) await masterUser.send(alertMsg).catch(() => {});
       return;
@@ -1320,9 +1330,10 @@ client.on('messageCreate', async (message) => {
 
     // --- Authorized Master Executions ---
     if (isProtoZero) {
-      const targetQuery = rawMsg.replace(/^Authorization:\s*Protocol\s*Zero/i, '').trim();
-      const targetMember = message.mentions.members.first() || 
-                           message.guild?.members.cache.find(m => m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()) || m.id === targetQuery);
+      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*Zero/i, '').trim();
+      targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
+      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
+                           message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
       const resolvedName = targetMember ? targetMember.user.username : targetQuery;
       if (targetMember) protocolZeroBlacklist.add(targetMember.id);
       protocolZeroBlacklist.add(resolvedName.toLowerCase());
@@ -1332,9 +1343,10 @@ client.on('messageCreate', async (message) => {
     }
 
     if (isProtoGrant1) {
-      const targetQuery = rawMsg.replace(/^Authorization:\s*Protocol\s*GrantAccess1/i, '').trim();
-      const targetMember = message.mentions.members.first() || 
-                           message.guild?.members.cache.find(m => m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()) || m.id === targetQuery);
+      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*GrantAccess1/i, '').trim();
+      targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
+      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
+                           message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
       const resolvedName = targetMember ? targetMember.user.username : targetQuery;
       if (targetMember) deniedLevel1Users.add(targetMember.id);
       deniedLevel1Users.add(resolvedName.toLowerCase());
@@ -1368,11 +1380,6 @@ client.on('messageCreate', async (message) => {
 
   const trimmedContent = message.content.trim();
   const startsWithPrefix = trimmedContent.startsWith('-');
-
-  // Check if bot was mentioned
-  const botMention = `<@${client.user.id}>`;
-  const botNicknameMention = `<@!${client.user.id}>`;
-  const isMentioned = message.content.includes(botMention) || message.content.includes(botNicknameMention);
 
   // Check if message is a reply to the bot
   let isReplyToBot = false;
