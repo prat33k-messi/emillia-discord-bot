@@ -3428,9 +3428,6 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
       history.splice(0, history.length - MAX_MEMORY_LIMIT);
     }
 
-    // Delay response slightly for natural feel
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
     // Send response
     if (botResponse.length <= 2000) {
       await message.reply(botResponse);
