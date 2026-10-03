@@ -169,6 +169,11 @@ const slashCommandsData = [
     .addUserOption(opt => opt.setName('user').setDescription('The member to view avatar of (leave empty for yourself)').setRequired(false)),
 
   new SlashCommandBuilder()
+    .setName('iq')
+    .setDescription('Test your IQ or another user\'s IQ score')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to test IQ for (leave empty for yourself)').setRequired(false)),
+
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help and available commands')
 ];
@@ -1187,6 +1192,407 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
     .setDescription(leftTier)
     .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
     .setImage('attachment://besties.png');
+
+  return { embeds: [embed], files: [attachment] };
+}
+
+// Helper to wrap text cleanly for Canvas
+function wrapText(ctx, text, maxWidth) {
+  const words = text.split(' ');
+  const lines = [];
+  let currentLine = words[0] || '';
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    const width = ctx.measureText(currentLine + ' ' + word).width;
+    if (width < maxWidth) {
+      currentLine += ' ' + word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+  return lines;
+}
+
+// 7 IQ Tiers Configuration with Custom Archetypes & Quotes
+const IQ_TIERS = [
+  {
+    tier: 1,
+    min: 0,
+    max: 10,
+    weight: 20,
+    title: 'Single Brain Cell',
+    charName: 'Saitama',
+    image: 'tier1.png',
+    rarity: 'Common',
+    quotes: [
+      "I fail in English? That's unpossible!",
+      "My two brain cells are fighting for 3rd place.",
+      "Purification! Purification! Why is the math test still covered in numbers?!",
+      "I stared at the sun and the sun blinked first. I win.",
+      "If I eat the flashcard, does the knowledge go straight into my bloodstream?",
+      "Thinking makes that dial-up internet screeching sound inside my skull.",
+      "The teacher asked for the hypotenuse, so I punched the desk.",
+      "No thoughts, head entirely empty, smooth like an egg."
+    ]
+  },
+  {
+    tier: 2,
+    min: 11,
+    max: 30,
+    weight: 35,
+    title: 'Meat-Powered Brain',
+    charName: 'Monkey D. Luffy',
+    image: 'tier2.png',
+    rarity: 'Common',
+    quotes: [
+      "Thinking makes my forehead hot. Let's solve this with barbecue.",
+      "Wait, repeat that whole sentence, but this time don't use words.",
+      "I have a bulletproof 3-step master plan: Run in, yell really loud, and hit things.",
+      "Is this going to be on the test? Because I already sold my pencil for a drumstick.",
+      "Look, if punching it didn't work, it just means I didn't punch it hard enough.",
+      "I didn't lose—the enemy's face just hurt my knuckles so bad I needed a nap.",
+      "My brain runs on 90% beef, 10% adrenaline, and 0% critical thinking."
+    ]
+  },
+  {
+    tier: 3,
+    min: 31,
+    max: 50,
+    weight: 50,
+    title: 'Average Human / Pure Survival',
+    charName: 'Zenitsu Agatsuma',
+    image: 'tier3.png',
+    rarity: 'Uncommon',
+    quotes: [
+      "My brain runs exclusively on panic and unverified rumors.",
+      "I don't need a strategy, I need an excuse to go home right now.",
+      "If surviving this means I get bread with jam tomorrow, I’ll fight God.",
+      "I’m screaming because that is statistically the safest thing I can do!",
+      "Look, I didn't come here to be the protagonist, I came here to not die horribly.",
+      "Common sense took one look at this situation and filed for early retirement.",
+      "My ultimate special technique is called: Apologizing Loudly While Backing Away."
+    ]
+  },
+  {
+    tier: 4,
+    min: 51,
+    max: 70,
+    weight: 60,
+    title: 'Street Smart / Shameless Cheater',
+    charName: 'Satoru Gojo',
+    image: 'tier4.png',
+    rarity: 'Rare',
+    quotes: [
+      "Throughout heaven and earth, I alone am the honored slacker.",
+      "Your next line will be: 'Wait, did you just cheat?' ...And yes, I did.",
+      "I didn't study at all. I just guessed with immense charisma.",
+      "Why outsmart your enemy when you can just make the situation so absurd they give up?",
+      "Rules exist solely so I can find hilarious loopholes around them.",
+      "I am the strongest, which means technicalities are for losers.",
+      "Don't worry, I have a backup plan! (Runs in the opposite direction at full sprint)"
+    ]
+  },
+  {
+    tier: 5,
+    min: 71,
+    max: 85,
+    weight: 45,
+    title: 'Tactical Genius / Certified Overthinker',
+    charName: 'L Lawliet',
+    image: 'tier5.png',
+    rarity: 'Epic',
+    quotes: [
+      "What a drag... I already predicted your next 40 mistakes, including that haircut.",
+      "I was hoping to take a 4-hour nap, but your sheer stupidity forced my brain to wake up.",
+      "Your trap was actually pretty decent. Too bad you built it right inside my PowerPoint presentation.",
+      "I am not overthinking, you're just violently underthinking.",
+      "I solved the entire confrontation 10 minutes ago, I was just waiting for you to finish your villain speech.",
+      "I calculated a 99.4% victory rate, and the remaining 0.6% is just in case you do something completely brainless."
+    ]
+  },
+  {
+    tier: 6,
+    min: 86,
+    max: 95,
+    weight: 25,
+    title: 'Mastermind / Calculating Strategist',
+    charName: 'Sosuke Aizen',
+    image: 'tier6.png',
+    rarity: 'Legendary',
+    quotes: [
+      "The fish that keeps its mouth closed never gets caught by the hook.",
+      "Everything is proceeding exactly as planned... including you dropping your pencil just now.",
+      "Since when were you under the impression that you were using your own brain?",
+      "A fool speaks because he must say something; I stay silent because I've already laid the trap.",
+      "I will take a potato chip... AND FIGURE OUT YOUR ENTIRE TAX HISTORY.",
+      "If you actually used your brain for once, you wouldn't gain weight eating cake.",
+      "I didn't just read your mind; I rewrote the script you're reading from.",
+      "You thought you were playing 4D chess, but we're actually playing Uno and I have four Wild Draw Fours.",
+      "Your defeat was finalized during season 1; you're just catching up now."
+    ]
+  },
+  {
+    tier: 7,
+    min: 96,
+    max: 100,
+    weight: 10,
+    title: 'The Sovereign Mind / Elizabethan Polymath',
+    charName: 'Senku Ishigami',
+    image: 'tier7.png',
+    rarity: 'Mythic',
+    quotes: [
+      "Even the leviathan escapes the net when it keeps its jaws sealed—yet thou babblest away thy doom.",
+      "Doubt that the stars are fire, doubt that the sun doth move, but doubt not thy mind is an empty vessel.",
+      "Thy wit is like a blunt poniard—it hath neither point nor edge, yet thou thrusteth it with great vigor.",
+      "Give every man thy ear, but few thy voice; the silent sovereign rules where loud fools perish.",
+      "More of your conversation would infect my brain, for thou art an intellectual peasant in a velvet doublet.",
+      "The cosmos whispereth its grand design unto mine ear, whilst thou strugglest to decipher thine own alphabet.",
+      "I have calculated the arc of fate itself; alas, it predicteth that thou art bound to remain utterly hopeless.",
+      "Thou speakest an infinite deal of nothing, whilst my mere idle thoughts shatter the heavens with divine geometry.",
+      "Banish thy crude notions, knave—nature's laws bend not to thy pathetic pleas, but to my pristine intellect."
+    ]
+  }
+];
+
+// Helper to roll random weighted IQ Score
+function rollIqScore() {
+  const totalWeight = IQ_TIERS.reduce((acc, t) => acc + t.weight, 0);
+  let randomVal = Math.random() * totalWeight;
+
+  for (const tier of IQ_TIERS) {
+    if (randomVal < tier.weight) {
+      const score = Math.floor(Math.random() * (tier.max - tier.min + 1)) + tier.min;
+      const quote = tier.quotes[Math.floor(Math.random() * tier.quotes.length)];
+      return { tier, score, quote };
+    }
+    randomVal -= tier.weight;
+  }
+
+  const fallbackTier = IQ_TIERS[0];
+  return {
+    tier: fallbackTier,
+    score: Math.floor(Math.random() * 11),
+    quote: fallbackTier.quotes[0]
+  };
+}
+
+// Helper to generate dynamic IQ Card Canvas
+async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
+  const width = 850;
+  const height = 450;
+  const canvas = createCanvas(width, height);
+  const ctx = canvas.getContext('2d');
+  const cardRadius = 24;
+
+  // 1. Base card clipping
+  ctx.save();
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(0, 0, width, height, cardRadius);
+  } else {
+    ctx.rect(0, 0, width, height);
+  }
+  ctx.clip();
+
+  // 2. Background Gradient
+  const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+  bgGrad.addColorStop(0, '#090a12');
+  bgGrad.addColorStop(0.5, '#121424');
+  bgGrad.addColorStop(1, '#090a12');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = 'rgba(191, 90, 242, 0.03)';
+  ctx.fillRect(0, 0, width, height);
+
+  // 3. Outer Border Glow
+  ctx.save();
+  ctx.shadowColor = '#bf5af2';
+  ctx.shadowBlur = 18;
+  ctx.strokeStyle = '#bf5af2';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(6, 6, width - 12, height - 12);
+  ctx.restore();
+
+  // 4. Top Quote Banner Box
+  const quoteBoxX = 40;
+  const quoteBoxY = 24;
+  const quoteBoxW = width - 80;
+  const quoteBoxH = 80;
+  const quoteBoxRadius = 14;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(quoteBoxX, quoteBoxY, quoteBoxW, quoteBoxH, quoteBoxRadius);
+  } else {
+    ctx.rect(quoteBoxX, quoteBoxY, quoteBoxW, quoteBoxH);
+  }
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(191, 90, 242, 0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = '#f5d0fe';
+  let quoteFontSize = 18;
+  ctx.font = `italic 600 ${quoteFontSize}px "Segoe UI", Arial, sans-serif`;
+  ctx.textAlign = 'center';
+
+  let quoteLines = wrapText(ctx, `“${quote}”`, quoteBoxW - 40);
+  if (quoteLines.length > 2) {
+    quoteFontSize = 15;
+    ctx.font = `italic 600 ${quoteFontSize}px "Segoe UI", Arial, sans-serif`;
+    quoteLines = wrapText(ctx, `“${quote}”`, quoteBoxW - 40);
+  }
+
+  const lineSpacing = quoteFontSize + 6;
+  const quoteStartY = quoteBoxY + (quoteBoxH - (quoteLines.length * lineSpacing)) / 2 + quoteFontSize - 2;
+  quoteLines.forEach((line, idx) => {
+    ctx.fillText(line, width / 2, quoteStartY + (idx * lineSpacing));
+  });
+
+  // 5. Dual Avatars
+  const avatarSize = 185;
+  const avatarRadius = 18;
+  const leftX = 70;
+  const rightX = width - 70 - avatarSize;
+  const avatarY = 125;
+
+  // Left Avatar (User)
+  try {
+    if (userAvatarUrl) {
+      const userImg = await loadImage(userAvatarUrl);
+      ctx.save();
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(leftX, avatarY, avatarSize, avatarSize, avatarRadius);
+      } else {
+        ctx.rect(leftX, avatarY, avatarSize, avatarSize);
+      }
+      ctx.clip();
+      drawCoverImage(ctx, userImg, leftX, avatarY, avatarSize, avatarSize);
+      ctx.restore();
+    }
+  } catch (err) {
+    console.error("Failed to load user avatar for IQ card:", err);
+  }
+
+  ctx.save();
+  ctx.shadowColor = '#bf5af2';
+  ctx.shadowBlur = 12;
+  ctx.strokeStyle = '#bf5af2';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(leftX, avatarY, avatarSize, avatarSize, avatarRadius);
+  } else {
+    ctx.rect(leftX, avatarY, avatarSize, avatarSize);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // Right Avatar (Anime Character)
+  const charImgPath = path.join(__dirname, 'assets', 'iq', tier.image);
+  try {
+    if (fs.existsSync(charImgPath)) {
+      const charImg = await loadImage(charImgPath);
+      ctx.save();
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(rightX, avatarY, avatarSize, avatarSize, avatarRadius);
+      } else {
+        ctx.rect(rightX, avatarY, avatarSize, avatarSize);
+      }
+      ctx.clip();
+      drawCoverImage(ctx, charImg, rightX, avatarY, avatarSize, avatarSize);
+      ctx.restore();
+    }
+  } catch (err) {
+    console.error("Failed to load anime character image for IQ card:", err);
+  }
+
+  ctx.save();
+  ctx.shadowColor = '#f1c40f';
+  ctx.shadowBlur = 14;
+  ctx.strokeStyle = '#f1c40f';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  if (typeof ctx.roundRect === 'function') {
+    ctx.roundRect(rightX, avatarY, avatarSize, avatarSize, avatarRadius);
+  } else {
+    ctx.rect(rightX, avatarY, avatarSize, avatarSize);
+  }
+  ctx.stroke();
+  ctx.restore();
+
+  // 6. Center IQ Badge
+  const centerX = width / 2;
+  const centerY = avatarY + avatarSize / 2;
+
+  ctx.save();
+  ctx.shadowColor = '#f1c40f';
+  ctx.shadowBlur = 22;
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, 58, 0, Math.PI * 2);
+  ctx.fillStyle = '#0f111e';
+  ctx.fill();
+  ctx.lineWidth = 3.5;
+  ctx.strokeStyle = '#f1c40f';
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(`${score}%`, centerX, centerY - 2);
+
+  ctx.fillStyle = '#f1c40f';
+  ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+  ctx.fillText('IQ LEVEL', centerX, centerY + 22);
+
+  // 7. Labels below Avatars
+  ctx.fillStyle = '#c084fc';
+  ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(userName, leftX + avatarSize / 2, avatarY + avatarSize + 32);
+
+  ctx.fillStyle = '#fde047';
+  ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(`${tier.charName} (Tier ${tier.tier})`, rightX + avatarSize / 2, avatarY + avatarSize + 32);
+
+  // 8. Bottom Footer / Rarity
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+  ctx.font = '14px "Segoe UI", Arial, sans-serif';
+  ctx.fillText(`.anipedia  •  Tier ${tier.tier}: ${tier.title} (${tier.rarity})`, width / 2, height - 20);
+
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
+}
+
+// Helper to build IQ Message Payload
+async function buildIqPayload(targetMember, guild) {
+  const { tier, score, quote } = rollIqScore();
+  const targetAvatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
+  const displayName = targetMember.displayName || targetMember.user.username;
+  const formattedName = `@${displayName}`;
+
+  const buffer = await generateIqCard(targetAvatarUrl, formattedName, tier, score, quote);
+  const attachment = new AttachmentBuilder(buffer, { name: 'iq.png' });
+
+  const { purpFlames } = await getBestieEmojis(guild);
+
+  const embed = new EmbedBuilder()
+    .setColor(0xBF5AF2)
+    .setDescription(`${purpFlames} **Tier ${tier.tier}: ${tier.title}** ${purpFlames}`)
+    .setFooter({ text: `AniPedia IQ Assessment • Rarity: ${tier.rarity}` })
+    .setImage('attachment://iq.png');
 
   return { embeds: [embed], files: [attachment] };
 }
@@ -2715,6 +3121,7 @@ client.on('messageCreate', async (message) => {
               `${dot} \`-auras [@user]\` — **Check Spiritual Aura**`,
               `${dot} \`-bestie <@user>\` — **Check Besties Compatibility**`,
               `${dot} \`-av [@user]\` — **View User Avatar**`,
+              `${dot} \`-iq [@user]\` — **Test User IQ Score**`,
               `${dot} \`-profile\` — **View User Profile**`,
               `${dot} \`-ping\` — **Check Bot Latency**`,
               `${dot} \`-reset\` — **Reset Memory *(Aerion-sama)* **`
@@ -2835,6 +3242,37 @@ client.on('messageCreate', async (message) => {
 
       const bestiePayload = await buildBestiePayload(message.member, targetMember, message.guild);
       await message.channel.send(bestiePayload);
+      return;
+    }
+
+    // --- IQ Command (-iq) ---
+    const isIqCmd = words[0] === 'iq' || 
+                    cleanQuery === 'iq' || 
+                    cleanQuery.startsWith('iq ') || 
+                    lowerQuery === 'iq' || 
+                    lowerQuery.startsWith('iq ');
+
+    if (isIqCmd) {
+      let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
+
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^iq\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m => 
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+
+      // If no user specified, default to the command author
+      if (!targetMember) {
+        targetMember = message.member;
+      }
+
+      const iqPayload = await buildIqPayload(targetMember, message.guild);
+      await message.channel.send(iqPayload);
       return;
     }
 
@@ -4054,7 +4492,18 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 15. /help
+    // 15. /iq
+    // ------------------------------------------
+    if (commandName === 'iq') {
+      const targetMember = options.getMember('user') || member;
+      await interaction.deferReply();
+      const iqPayload = await buildIqPayload(targetMember, guild);
+      await interaction.editReply(iqPayload);
+      return;
+    }
+
+    // ------------------------------------------
+    // 16. /help
     // ------------------------------------------
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
@@ -4095,6 +4544,7 @@ client.on('interactionCreate', async (interaction) => {
               `${dot} \`/auras [user]\` — **Check Spiritual Aura Card**`,
               `${dot} \`/besties <user>\` — **Check Besties Compatibility**`,
               `${dot} \`/avatar [user]\` — **View User Avatar**`,
+              `${dot} \`/iq [user]\` — **Test User IQ Score**`,
               `${dot} \`/help\` — **Show Command Guide**`
             ].join('\n'),
             inline: false
