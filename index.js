@@ -1318,14 +1318,16 @@ client.on('messageCreate', async (message) => {
 
   if (isProtoZero || isProtoOne || isCodeBlack || isCodeWhite) {
     const caseId = generateCaseId();
-    const { verify } = await getModEmojis(message.guild);
+    const { verify, dot } = await getModEmojis(message.guild);
 
     if (!isMasterUser) {
       const deniedEmbed = new EmbedBuilder()
         .setColor(0x992D22)
         .setTitle(`**${toSmallCaps('Access Denied')}** 🚫`)
-        .setDescription(`<@${message.author.id}> attempted **unauthorized privileged execution**`)
-        .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setDescription(
+          `<@${message.author.id}> attempted **unauthorized privileged execution**\n` +
+          `-# ${dot} **${toSmallCaps('Incident Status')}:** \`Logged & Reported to Administration\``
+        )
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -1373,8 +1375,10 @@ client.on('messageCreate', async (message) => {
         const immuneEmbed = new EmbedBuilder()
           .setColor(0xF1C40F)
           .setTitle(`**${toSmallCaps('Security Protocol')}** 🛡️`)
-          .setDescription(`Primary Administrator <@${MASTER_USER_ID}> is **permanently immune** to security restriction directives.`)
-          .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setDescription(
+            `Primary Administrator <@${MASTER_USER_ID}> is **permanently immune** to security restriction directives.\n` +
+            `-# ${dot} **${toSmallCaps('Clearance Level')}:** \`Supreme Master Clearance (Tier 4)\``
+          )
           .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.reply({ embeds: [immuneEmbed] });
@@ -1388,8 +1392,10 @@ client.on('messageCreate', async (message) => {
       const protoZeroEmbed = new EmbedBuilder()
         .setColor(0xF1C40F)
         .setTitle(`**${toSmallCaps('Protocol Zero Engaged')}** ${verify}`)
-        .setDescription(`<@${targetMember.id}> permissions have been **revoked** by <@${message.author.id}>`)
-        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setDescription(
+          `<@${targetMember.id}> permissions have been **revoked** by <@${message.author.id}>\n` +
+          `-# ${dot} **${toSmallCaps('Directives')}:** \`Level 1 Clearance Denied • Permissions Stripped\``
+        )
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -1434,8 +1440,10 @@ client.on('messageCreate', async (message) => {
       const protoOneEmbed = new EmbedBuilder()
         .setColor(0xF1C40F)
         .setTitle(`**${toSmallCaps('Protocol One Granted')}** ${verify}`)
-        .setDescription(`<@${targetMember.id}> permissions have been **restored** by <@${message.author.id}>`)
-        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setDescription(
+          `<@${targetMember.id}> permissions have been **restored** by <@${message.author.id}>\n` +
+          `-# ${dot} **${toSmallCaps('Directives')}:** \`Standard Clearance Granted • Active\``
+        )
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -1448,8 +1456,10 @@ client.on('messageCreate', async (message) => {
       const codeBlackEmbed = new EmbedBuilder()
         .setColor(0x1F1F1F)
         .setTitle(`**${toSmallCaps('Critical Override: Code Black')}** 🔒`)
-        .setDescription(`System emergency lockdown **engaged** by <@${message.author.id}>`)
-        .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setDescription(
+          `System emergency lockdown **engaged** by <@${message.author.id}>\n` +
+          `-# ${dot} **${toSmallCaps('Core Status')}:** \`Core Offline • Neural Pipelines Frozen\``
+        )
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -1462,8 +1472,10 @@ client.on('messageCreate', async (message) => {
       const codeWhiteEmbed = new EmbedBuilder()
         .setColor(0xF1C40F)
         .setTitle(`**${toSmallCaps('Reboot Sequence: Code White')}** ${verify}`)
-        .setDescription(`System reboot sequence **initialized** by <@${message.author.id}>`)
-        .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setDescription(
+          `System reboot sequence **initialized** by <@${message.author.id}>\n` +
+          `-# ${dot} **${toSmallCaps('Core Status')}:** \`Core Online • Neural Pipelines Restored\``
+        )
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -1819,7 +1831,6 @@ client.on('messageCreate', async (message) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
           )
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -2045,7 +2056,6 @@ client.on('messageCreate', async (message) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${warnReason}`, inline: false }
           )
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -2082,7 +2092,6 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: '-# Disciplinary period completed or manually lifted', inline: false }
             )
-            .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -2251,7 +2260,6 @@ client.on('messageCreate', async (message) => {
           .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
           .setTitle(`**${toSmallCaps('Warning Issued')}** ${verify}`)
           .setDescription(warnDesc)
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -2321,7 +2329,6 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
             )
-            .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
             .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -2393,7 +2400,6 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
             )
-            .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : null)
             .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -2465,7 +2471,6 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
             )
-            .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : null)
             .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -2585,7 +2590,6 @@ client.on('messageCreate', async (message) => {
           .setColor(0x2ECC71)
           .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
           .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`0\``)
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.channel.send({ embeds: [cleanEmbed] });
@@ -2595,8 +2599,7 @@ client.on('messageCreate', async (message) => {
       const warningsEmbed = new EmbedBuilder()
         .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
         .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
-        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``)
-        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }));
+        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``);
 
       // Fetch warning history with reasons and moderators from Firestore (in-memory sort avoids composite index errors)
       if (db && warningsCount > 0) {
@@ -3237,7 +3240,6 @@ client.on('interactionCreate', async (interaction) => {
         .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
         .setTitle(`**${toSmallCaps('Warning Issued')}** ${verify}`)
         .setDescription(warnDesc)
-        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -3266,7 +3268,6 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0x2ECC71)
           .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
           .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`0\``)
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await interaction.reply({ embeds: [cleanEmbed] });
@@ -3276,8 +3277,7 @@ client.on('interactionCreate', async (interaction) => {
       const warningsEmbed = new EmbedBuilder()
         .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
         .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
-        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``)
-        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }));
+        .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``);
 
       if (db && warningsCount > 0) {
         try {
@@ -3451,7 +3451,6 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
           )
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -3507,7 +3506,6 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: '-# Disciplinary period completed or manually lifted', inline: false }
           )
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -3592,7 +3590,6 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
           )
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -3679,7 +3676,6 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
           )
-          .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
           .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -3814,7 +3810,6 @@ client.on('interactionCreate', async (interaction) => {
           { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
           { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
         )
-        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -3942,7 +3937,6 @@ client.on('interactionCreate', async (interaction) => {
           { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
           { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${warnReason}`, inline: false }
         )
-        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
