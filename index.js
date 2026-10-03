@@ -1344,10 +1344,32 @@ client.on('messageCreate', async (message) => {
     if (isProtoZero) {
       let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*(Zero|0)/i, '').trim();
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
-      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
-                           message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
+
+      if (!targetQuery || targetQuery.toLowerCase() === 'username' || targetQuery.toLowerCase() === '<username>') {
+        await message.reply("Please provide a valid username or mention a user.");
+        return;
+      }
+
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      if (!targetMember && message.guild) {
+        targetMember = message.guild.members.cache.find(m => 
+          m.id === targetQuery || 
+          m.user.username.toLowerCase() === targetQuery.toLowerCase() || 
+          (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase())
+        );
+        if (!targetMember && /^\d+$/.test(targetQuery)) {
+          try {
+            targetMember = await message.guild.members.fetch(targetQuery).catch(() => null);
+          } catch (e) {}
+        }
+      }
+
+      if (!targetMember) {
+        await message.reply("Could not find that user. Please provide a valid username, mention, or user ID.");
+        return;
+      }
       
-      if (targetMember?.id === MASTER_USER_ID || targetQuery.toLowerCase() === 'el_lapulga' || targetQuery.toLowerCase() === '_c0rle0ne') {
+      if (targetMember.id === MASTER_USER_ID || targetMember.user.username.toLowerCase() === 'el_lapulga' || targetMember.user.username.toLowerCase() === '_c0rle0ne') {
         const immuneEmbed = new EmbedBuilder()
           .setColor(0xF1C40F)
           .setTitle(`**${toSmallCaps('Security Protocol')}** 🛡️`)
@@ -1359,21 +1381,15 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      const resolvedName = targetMember ? targetMember.user.username : targetQuery.replace(/[<>@]/g, '').trim();
-      if (targetMember) deniedLevel1Users.add(targetMember.id);
-      if (resolvedName) {
-        deniedLevel1Users.add(resolvedName.toLowerCase());
-        deniedLevel1Users.add(targetQuery.toLowerCase());
-      }
-
-      const targetDisplay = targetMember ? `<@${targetMember.id}>` : `**${resolvedName || 'User'}**`;
-      const targetThumb = targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : (message.guild?.iconURL() || client.user.displayAvatarURL());
+      const resolvedName = targetMember.user.username;
+      deniedLevel1Users.add(targetMember.id);
+      deniedLevel1Users.add(resolvedName.toLowerCase());
 
       const protoZeroEmbed = new EmbedBuilder()
         .setColor(0xF1C40F)
         .setTitle(`**${toSmallCaps('Protocol Zero Engaged')}** ${verify}`)
-        .setDescription(`${targetDisplay} permissions have been **revoked** by <@${message.author.id}>`)
-        .setThumbnail(targetThumb)
+        .setDescription(`<@${targetMember.id}> permissions have been **revoked** by <@${message.author.id}>`)
+        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -1384,29 +1400,42 @@ client.on('messageCreate', async (message) => {
     if (isProtoOne) {
       let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*(One|1)/i, '').trim();
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
-      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
-                           message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
-      const resolvedName = targetMember ? targetMember.user.username : targetQuery.replace(/[<>@]/g, '').trim();
 
-      if (targetMember) {
-        protocolZeroBlacklist.delete(targetMember.id);
-        deniedLevel1Users.delete(targetMember.id);
-      }
-      if (resolvedName) {
-        protocolZeroBlacklist.delete(resolvedName.toLowerCase());
-        protocolZeroBlacklist.delete(targetQuery.toLowerCase());
-        deniedLevel1Users.delete(resolvedName.toLowerCase());
-        deniedLevel1Users.delete(targetQuery.toLowerCase());
+      if (!targetQuery || targetQuery.toLowerCase() === 'username' || targetQuery.toLowerCase() === '<username>') {
+        await message.reply("Please provide a valid username or mention a user.");
+        return;
       }
 
-      const targetDisplay = targetMember ? `<@${targetMember.id}>` : `**${resolvedName || 'User'}**`;
-      const targetThumb = targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : (message.guild?.iconURL() || client.user.displayAvatarURL());
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      if (!targetMember && message.guild) {
+        targetMember = message.guild.members.cache.find(m => 
+          m.id === targetQuery || 
+          m.user.username.toLowerCase() === targetQuery.toLowerCase() || 
+          (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase())
+        );
+        if (!targetMember && /^\d+$/.test(targetQuery)) {
+          try {
+            targetMember = await message.guild.members.fetch(targetQuery).catch(() => null);
+          } catch (e) {}
+        }
+      }
+
+      if (!targetMember) {
+        await message.reply("Could not find that user. Please provide a valid username, mention, or user ID.");
+        return;
+      }
+
+      const resolvedName = targetMember.user.username;
+      protocolZeroBlacklist.delete(targetMember.id);
+      deniedLevel1Users.delete(targetMember.id);
+      protocolZeroBlacklist.delete(resolvedName.toLowerCase());
+      deniedLevel1Users.delete(resolvedName.toLowerCase());
 
       const protoOneEmbed = new EmbedBuilder()
         .setColor(0xF1C40F)
         .setTitle(`**${toSmallCaps('Protocol One Granted')}** ${verify}`)
-        .setDescription(`${targetDisplay} permissions have been **restored** by <@${message.author.id}>`)
-        .setThumbnail(targetThumb)
+        .setDescription(`<@${targetMember.id}> permissions have been **restored** by <@${message.author.id}>`)
+        .setThumbnail(targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }))
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
