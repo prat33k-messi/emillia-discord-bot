@@ -2248,7 +2248,6 @@ client.on('messageCreate', async (message) => {
             `> Reason • ${reason || 'No reason specified'}\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -2283,7 +2282,7 @@ client.on('messageCreate', async (message) => {
               await messagesToDelete[0].delete().catch(() => {});
               deletedCount = 1;
             } else {
-              const deleted = await message.channel.bulkDelete(messagesToDelete, true);
+              const deleted = await channel.bulkDelete(messagesToDelete, true);
               deletedCount = deleted.size;
             }
           }
@@ -2473,7 +2472,6 @@ client.on('messageCreate', async (message) => {
             `> Reason • ${warnReason}\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -2510,7 +2508,6 @@ client.on('messageCreate', async (message) => {
               `> Status • \`Timeout Removed\`\n` +
               `──────────────────────────`
             )
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -2656,7 +2653,6 @@ client.on('messageCreate', async (message) => {
             .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Warning Notice')}**`)
             .setDescription(dmWarnDesc)
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation') });
           await targetMember.send({ embeds: [dmEmbed] });
@@ -2679,7 +2675,6 @@ client.on('messageCreate', async (message) => {
           .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warning has been issued')}**`)
           .setDescription(warnDesc)
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -2731,7 +2726,6 @@ client.on('messageCreate', async (message) => {
               .setColor(0x2B2D31)
               .setTitle(`**${toSmallCaps('Timeout Notice')}** ${verify}`)
               .setDescription(dmTimeoutDesc)
-              .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
               .setTimestamp()
               .setFooter({ text: toSmallCaps('AniPedia Moderation') });
             await targetMember.send({ embeds: [dmEmbed] });
@@ -2750,7 +2744,6 @@ client.on('messageCreate', async (message) => {
               `> Duration • \`${durationInfo.label}\`\n` +
               `──────────────────────────`
             )
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -2786,7 +2779,6 @@ client.on('messageCreate', async (message) => {
               `> Reason • ${reason || 'No reason specified'}\n` +
               `──────────────────────────`
             )
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation') });
           await targetMember.send({ embeds: [dmEmbed] });
@@ -2825,7 +2817,6 @@ client.on('messageCreate', async (message) => {
               `> Messages Purged • \`${deletedCount} message(s)\`\n` +
               `──────────────────────────`
             )
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -2861,7 +2852,6 @@ client.on('messageCreate', async (message) => {
               `> Reason • ${reason || 'No reason specified'}\n` +
               `──────────────────────────`
             )
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation') });
           await targetMember.send({ embeds: [dmEmbed] });
@@ -2900,7 +2890,6 @@ client.on('messageCreate', async (message) => {
               `> Messages Purged • \`${deletedCount} message(s)\`\n` +
               `──────────────────────────`
             )
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
@@ -3024,7 +3013,6 @@ client.on('messageCreate', async (message) => {
             `> Total Warnings • \`0\`\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.channel.send({ embeds: [cleanEmbed] });
@@ -3038,8 +3026,7 @@ client.on('messageCreate', async (message) => {
           `> <@${targetMember.id}> (${targetMember.user.username})\n` +
           `> Total Warnings • \`#${warningsCount}\`\n` +
           `──────────────────────────`
-        )
-        .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }));
+        );
 
       // Fetch warning history with reasons and moderators from Firestore (in-memory sort avoids composite index errors)
       if (db && warningsCount > 0) {
@@ -3693,7 +3680,6 @@ client.on('interactionCreate', async (interaction) => {
           .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warning Notice')}**`)
           .setDescription(dmWarnDesc)
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setTimestamp()
           .setFooter({ text: toSmallCaps('AniPedia Moderation') });
         await targetMember.send({ embeds: [dmEmbed] });
@@ -3712,7 +3698,6 @@ client.on('interactionCreate', async (interaction) => {
         .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Warning has been issued')}**`)
         .setDescription(warnDesc)
-        .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -3745,7 +3730,6 @@ client.on('interactionCreate', async (interaction) => {
             `> Total Warnings • \`0\`\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await interaction.reply({ embeds: [cleanEmbed] });
@@ -3759,8 +3743,7 @@ client.on('interactionCreate', async (interaction) => {
           `> <@${targetMember.id}> (${targetMember.user.username})\n` +
           `> Total Warnings • \`#${warningsCount}\`\n` +
           `──────────────────────────`
-        )
-        .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }));
+        );
 
       if (db && warningsCount > 0) {
         try {
@@ -3919,7 +3902,6 @@ client.on('interactionCreate', async (interaction) => {
             .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Timeout Notice')}** ${verify}`)
             .setDescription(dmTimeoutDesc)
-            .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation') });
           await targetMember.send({ embeds: [dmEmbed] });
@@ -3935,7 +3917,6 @@ client.on('interactionCreate', async (interaction) => {
             `> Duration • \`${durationInfo.label}\`\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -3991,7 +3972,6 @@ client.on('interactionCreate', async (interaction) => {
             `> Status • \`Timeout Removed\`\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -4045,7 +4025,6 @@ client.on('interactionCreate', async (interaction) => {
             `> Reason • ${reason}\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setTimestamp()
           .setFooter({ text: toSmallCaps('AniPedia Moderation') });
         await targetMember.send({ embeds: [dmEmbed] });
@@ -4079,7 +4058,6 @@ client.on('interactionCreate', async (interaction) => {
             `> Messages Purged • \`${deletedCount} message(s)\`\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -4135,7 +4113,6 @@ client.on('interactionCreate', async (interaction) => {
             `> Reason • ${reason}\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setTimestamp()
           .setFooter({ text: toSmallCaps('AniPedia Moderation') });
         await targetMember.send({ embeds: [dmEmbed] });
@@ -4169,7 +4146,6 @@ client.on('interactionCreate', async (interaction) => {
             `> Messages Purged • \`${deletedCount} message(s)\`\n` +
             `──────────────────────────`
           )
-          .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
@@ -4305,7 +4281,6 @@ client.on('interactionCreate', async (interaction) => {
           `> Reason • ${reason}\n` +
           `──────────────────────────`
         )
-        .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -4434,7 +4409,6 @@ client.on('interactionCreate', async (interaction) => {
           `> Reason • ${warnReason}\n` +
           `──────────────────────────`
         )
-        .setThumbnail(targetMember.user?.displayAvatarURL({ extension: 'png', size: 256 }) || targetMember.displayAvatarURL({ extension: 'png', size: 256 }))
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
