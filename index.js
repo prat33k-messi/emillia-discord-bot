@@ -1686,7 +1686,7 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     }));
 
     const logEmbed = new EmbedBuilder()
-      .setColor(colorMap[action] || 0x9B59B6)
+      .setColor(0x2B2D31)
       .setTitle(`**${titleMap[action] || action}** ${verify}`)
       .addFields(
         { name: `${dot} **Target User**`, value: `**${targetTag}** \`(${targetId})\``, inline: false },
@@ -1695,7 +1695,7 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
         { name: `${dot} **Reason**`, value: `>>> ${reason || 'No reason specified'}`, inline: false }
       )
       .setTimestamp()
-      .setFooter({ text: 'AniPedia Moderation • Audit Registry' });
+      .setFooter({ text: 'AniPedia Moderation' });
 
     await logChannel.send({ embeds: [logEmbed] });
   } catch (err) {
@@ -1732,13 +1732,13 @@ client.on('messageCreate', async (message) => {
 
     if (!isMasterUser) {
       const deniedEmbed = new EmbedBuilder()
-        .setColor(0x992D22)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Access Denied')}** 🚫`)
         .setDescription(
           `<@${message.author.id}> attempted **unauthorized privileged execution**\n` +
           `-# ${dot} **${toSmallCaps('Incident Status')}:** \`Logged & Reported to Administration\``
         )
-        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await message.reply({ embeds: [deniedEmbed] });
@@ -1783,13 +1783,13 @@ client.on('messageCreate', async (message) => {
       
       if (targetMember.id === MASTER_USER_ID || targetMember.user.username.toLowerCase() === 'el_lapulga' || targetMember.user.username.toLowerCase() === '_c0rle0ne') {
         const immuneEmbed = new EmbedBuilder()
-          .setColor(0xF1C40F)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Security Protocol')}** 🛡️`)
           .setDescription(
             `Primary Administrator <@${MASTER_USER_ID}> is **permanently immune** to security restriction directives.\n` +
             `-# ${dot} **${toSmallCaps('Clearance Level')}:** \`Supreme Master Clearance (Tier 4)\``
           )
-          .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.reply({ embeds: [immuneEmbed] });
         return;
@@ -1800,13 +1800,13 @@ client.on('messageCreate', async (message) => {
       deniedLevel1Users.add(resolvedName.toLowerCase());
 
       const protoZeroEmbed = new EmbedBuilder()
-        .setColor(0xF1C40F)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Protocol Zero Engaged')}** ${verify}`)
         .setDescription(
           `<@${targetMember.id}> permissions have been **revoked** by <@${message.author.id}>\n` +
           `-# ${dot} **${toSmallCaps('Directives')}:** \`Level 1 Clearance Denied • Permissions Stripped\``
         )
-        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await message.reply({ embeds: [protoZeroEmbed] });
@@ -1848,13 +1848,13 @@ client.on('messageCreate', async (message) => {
       deniedLevel1Users.delete(resolvedName.toLowerCase());
 
       const protoOneEmbed = new EmbedBuilder()
-        .setColor(0xF1C40F)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Protocol One Granted')}** ${verify}`)
         .setDescription(
           `<@${targetMember.id}> permissions have been **restored** by <@${message.author.id}>\n` +
           `-# ${dot} **${toSmallCaps('Directives')}:** \`Standard Clearance Granted • Active\``
         )
-        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await message.reply({ embeds: [protoOneEmbed] });
@@ -1864,13 +1864,13 @@ client.on('messageCreate', async (message) => {
     if (isCodeBlack) {
       isCodeBlackFrozen = true;
       const codeBlackEmbed = new EmbedBuilder()
-        .setColor(0x1F1F1F)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Critical Override: Code Black')}** 🔒`)
         .setDescription(
           `System emergency lockdown **engaged** by <@${message.author.id}>\n` +
           `-# ${dot} **${toSmallCaps('Core Status')}:** \`Core Offline • Neural Pipelines Frozen\``
         )
-        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await message.reply({ embeds: [codeBlackEmbed] });
@@ -1880,13 +1880,13 @@ client.on('messageCreate', async (message) => {
     if (isCodeWhite) {
       isCodeBlackFrozen = false;
       const codeWhiteEmbed = new EmbedBuilder()
-        .setColor(0xF1C40F)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Reboot Sequence: Code White')}** ${verify}`)
         .setDescription(
           `System reboot sequence **initialized** by <@${message.author.id}>\n` +
           `-# ${dot} **${toSmallCaps('Core Status')}:** \`Core Online • Neural Pipelines Restored\``
         )
-        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await message.reply({ embeds: [codeWhiteEmbed] });
@@ -2233,7 +2233,7 @@ client.on('messageCreate', async (message) => {
         const caseId = generateCaseId();
 
         const clearWarnsEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warnings Cleared')}** ${verify}`)
           .setDescription(`-# <@${targetMember.id}> has been **cleared of all warnings** by <@${message.author.id}>`)
           .addFields(
@@ -2241,7 +2241,7 @@ client.on('messageCreate', async (message) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
           )
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await message.channel.send({ embeds: [clearWarnsEmbed] });
@@ -2285,7 +2285,7 @@ client.on('messageCreate', async (message) => {
 
           const { verify, dot } = await getModEmojis(message.guild);
           const purgeEmbed = new EmbedBuilder()
-            .setColor(0x3498DB)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Chat Purged')}** ${verify}`)
             .setDescription(`-# **${deletedCount}** message(s) have been cleanly purged from the channel by <@${message.author.id}>.`)
             .addFields(
@@ -2298,7 +2298,7 @@ client.on('messageCreate', async (message) => {
           }
 
           purgeEmbed.setTimestamp()
-            .setFooter({ text: 'AniPedia Moderation • Chat Purge' });
+            .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() });
 
           const confMsg = await message.channel.send({ embeds: [purgeEmbed] });
           setTimeout(() => confMsg.delete().catch(() => {}), 5000);
@@ -2458,7 +2458,7 @@ client.on('messageCreate', async (message) => {
         const caseId = generateCaseId();
 
         const deleteWarnEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warning Deleted')}** ${verify}`)
           .setDescription(`-# <@${targetMember.id}> warning **${deletedIndexLabel}** has been **deleted** by <@${message.author.id}>`)
           .addFields(
@@ -2466,7 +2466,7 @@ client.on('messageCreate', async (message) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${warnReason}`, inline: false }
           )
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await message.channel.send({ embeds: [deleteWarnEmbed] });
@@ -2494,7 +2494,7 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const untimeoutEmbed = new EmbedBuilder()
-            .setColor(0x2ECC71)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Timeout Lifted')}** ${verify}`)
             .setDescription(`-# <@${targetMember.id}> has been **untimed out** by <@${message.author.id}>`)
             .addFields(
@@ -2502,7 +2502,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: '-# Disciplinary period completed or manually lifted', inline: false }
             )
-            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [untimeoutEmbed] });
@@ -2542,7 +2542,7 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const unbanEmbed = new EmbedBuilder()
-            .setColor(0x2ECC71)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Ban Revoked')}** ${verify}`)
             .setDescription(`-# <@${targetId}> has been **unbanned** by <@${message.author.id}>`)
             .addFields(
@@ -2550,7 +2550,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: '-# Ban restriction lifted', inline: false }
             )
-            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [unbanEmbed] });
@@ -2636,7 +2636,7 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0xF1C40F)
+            .setColor(0x2B2D31)
             .setTitle(`**Warning Notice** ${verify}`)
             .setDescription(`*You received a formal warning in **${guildName}**. Please follow the server guidelines.*`)
             .addFields(
@@ -2650,7 +2650,7 @@ client.on('messageCreate', async (message) => {
           }
 
           dmEmbed.setTimestamp()
-            .setFooter({ text: `AniPedia Moderation • ${guildName}` });
+            .setFooter({ text: 'AniPedia Moderation' });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
@@ -2667,10 +2667,10 @@ client.on('messageCreate', async (message) => {
         }
 
         const warnEmbed = new EmbedBuilder()
-          .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warning Issued')}** ${verify}`)
           .setDescription(warnDesc)
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await message.channel.send({ embeds: [warnEmbed] });
@@ -2713,7 +2713,7 @@ client.on('messageCreate', async (message) => {
           let dmSent = true;
           try {
             const dmEmbed = new EmbedBuilder()
-              .setColor(0x3498DB)
+              .setColor(0x2B2D31)
               .setTitle(`**${toSmallCaps('Timeout Notice')}** ${verify}`)
               .setDescription(`*You were placed in timeout in **${guildName}**. Please use this cooling-down period to reflect upon our server rules.*`)
               .addFields(
@@ -2722,7 +2722,7 @@ client.on('messageCreate', async (message) => {
                 { name: `${dot} **${toSmallCaps('Reason & Context')}**`, value: `>>> ${reason}`, inline: false }
               )
               .setTimestamp()
-              .setFooter({ text: `AniPedia Moderation • ${guildName}` });
+              .setFooter({ text: 'AniPedia Moderation' });
             await targetMember.send({ embeds: [dmEmbed] });
           } catch (err) {
             dmSent = false;
@@ -2731,7 +2731,7 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const timeoutEmbed = new EmbedBuilder()
-            .setColor(0x3498DB)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Timeout Issued')}** ${verify}`)
             .setDescription(`-# <@${targetMember.id}> has been **timed out** by <@${message.author.id}>`)
             .addFields(
@@ -2739,7 +2739,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
             )
-            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [timeoutEmbed] });
@@ -2766,7 +2766,7 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0xE67E22)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Kicked from Server')}** ${verify}`)
             .setDescription(`*You were expelled from **${guildName}**. Please reflect upon your actions.*`)
             .addFields(
@@ -2774,7 +2774,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Expelled By')}**`, value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: `AniPedia Moderation • ${guildName}` });
+            .setFooter({ text: 'AniPedia Moderation' });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
@@ -2802,7 +2802,7 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const kickEmbed = new EmbedBuilder()
-            .setColor(0xE67E22)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Kick Issued')}** ${verify}`)
             .setDescription(`-# <@${targetId}> has been **kicked** by <@${message.author.id}>`)
             .addFields(
@@ -2810,7 +2810,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
             )
-            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [kickEmbed] });
@@ -2837,7 +2837,7 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0x992D22)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Permanent Exile Notice')}** ${verify}`)
             .setDescription(`*You have been permanently banished from **${guildName}** by royal decree of our moderation team.*`)
             .addFields(
@@ -2845,7 +2845,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Banned By')}**`, value: `**${message.author.tag}**`, inline: true }
             )
             .setTimestamp()
-            .setFooter({ text: `AniPedia Moderation • ${guildName}` });
+            .setFooter({ text: 'AniPedia Moderation' });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {
           dmSent = false;
@@ -2873,7 +2873,7 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const banEmbed = new EmbedBuilder()
-            .setColor(0x992D22)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Ban Issued')}** ${verify}`)
             .setDescription(`-# <@${targetId}> has been **permanently banned** by <@${message.author.id}>`)
             .addFields(
@@ -2881,7 +2881,7 @@ client.on('messageCreate', async (message) => {
               { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${message.author.id}>`, inline: true },
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason || 'No reason specified'}`, inline: false }
             )
-            .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
           await message.channel.send({ embeds: [banEmbed] });
@@ -2933,10 +2933,10 @@ client.on('messageCreate', async (message) => {
 
         if (top5.length === 0) {
           const emptyLbEmbed = new EmbedBuilder()
-            .setColor(0x2ECC71)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Warning Leaderboard')}** ${verify}`)
             .setDescription(`-# ${dot} **${toSmallCaps('Status')}:** \`100% Peaceful\`\n-# No members have active warnings in Anipedia!`)
-            .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+            .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
           await message.channel.send({ embeds: [emptyLbEmbed] });
           return;
@@ -2956,10 +2956,10 @@ client.on('messageCreate', async (message) => {
         }
 
         const lbEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warning Leaderboard')}** ${verify}`)
           .setDescription(lbEntries.join('\n'))
-          .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.channel.send({ embeds: [lbEmbed] });
         return;
@@ -2997,17 +2997,17 @@ client.on('messageCreate', async (message) => {
         }
 
         const cleanEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
           .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`0\``)
-          .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await message.channel.send({ embeds: [cleanEmbed] });
         return;
       }
 
       const warningsEmbed = new EmbedBuilder()
-        .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
         .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``);
 
@@ -3061,21 +3061,21 @@ client.on('messageCreate', async (message) => {
               value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
               inline: false 
             });
-            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use -deletewarn @user <num> to remove', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+            warningsEmbed.setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           } else {
             warningsEmbed.addFields({ 
               name: `${dot} **Disciplinary Log**`, 
               value: `*This user has ${warningsCount} active warning(s) recorded in memory.*`, 
               inline: false 
             });
-            warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+            warningsEmbed.setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           }
         } catch (err) {
           console.error('Error fetching warning history:', err);
-          warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+          warningsEmbed.setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
         }
       } else {
-        warningsEmbed.setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
+        warningsEmbed.setFooter({ text: 'AniPedia Moderation', iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
       }
       warningsEmbed.setTimestamp();
 
@@ -3655,7 +3655,7 @@ client.on('interactionCreate', async (interaction) => {
       // Try DM
       try {
         const dmEmbed = new EmbedBuilder()
-          .setColor(0xF1C40F)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warning Notice')}** ${verify}`)
           .setDescription(`-# *"You received a formal warning in **${guild.name}**."*`)
           .addFields(
@@ -3666,7 +3666,7 @@ client.on('interactionCreate', async (interaction) => {
         if (autoTimeoutApplied) {
           dmEmbed.addFields({ name: `${dot} **${toSmallCaps('Auto-Timeout')}**`, value: `-# \`${autoTimeoutLabel}\``, inline: false });
         }
-        dmEmbed.setTimestamp().setFooter({ text: `AniPedia Moderation • ${guild.name}` });
+        dmEmbed.setTimestamp().setFooter({ text: 'AniPedia Moderation' });
         await targetMember.send({ embeds: [dmEmbed] });
       } catch (err) {}
 
@@ -3679,10 +3679,10 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const warnEmbed = new EmbedBuilder()
-        .setColor(warningsCount >= 5 ? 0x992D22 : warningsCount >= 3 ? 0xE67E22 : 0xF1C40F)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Warning Issued')}** ${verify}`)
         .setDescription(warnDesc)
-        .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await interaction.reply({ embeds: [warnEmbed] });
@@ -3707,17 +3707,17 @@ client.on('interactionCreate', async (interaction) => {
 
       if (warningsCount === 0) {
         const cleanEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
           .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`0\``)
-          .setFooter({ text: 'AniPedia Moderation • Disciplinary Registry', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await interaction.reply({ embeds: [cleanEmbed] });
         return;
       }
 
       const warningsEmbed = new EmbedBuilder()
-        .setColor(warningsCount >= 5 ? 0x992D22 : (warningsCount >= 3 ? 0xE67E22 : 0xF1C40F))
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Disciplinary Record')}** ${verify}`)
         .setDescription(`-# ${dot} **${toSmallCaps('Member')}:** <@${targetMember.id}> (${targetMember.user.username}) • **${toSmallCaps('Warnings')}:** \`${warningsCount}\``);
 
@@ -3766,7 +3766,7 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      warningsEmbed.setFooter({ text: 'AniPedia Moderation • Use -deletewarn to remove', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
+      warningsEmbed.setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
       warningsEmbed.setTimestamp();
       await interaction.reply({ embeds: [warningsEmbed] });
       return;
@@ -3790,10 +3790,10 @@ client.on('interactionCreate', async (interaction) => {
 
       if (top5.length === 0) {
         const emptyLbEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Warning Leaderboard')}** ${verify}`)
           .setDescription(`-# ${dot} **${toSmallCaps('Status')}:** \`100% Peaceful\`\n-# No members have active warnings in Anipedia!`)
-          .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         await interaction.reply({ embeds: [emptyLbEmbed] });
         return;
@@ -3813,10 +3813,10 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const lbEmbed = new EmbedBuilder()
-        .setColor(0x2ECC71)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Warning Leaderboard')}** ${verify}`)
         .setDescription(lbEntries.join('\n'))
-        .setFooter({ text: 'AniPedia Moderation • Top 5 Standings', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
       await interaction.reply({ embeds: [lbEmbed] });
       return;
@@ -3870,7 +3870,7 @@ client.on('interactionCreate', async (interaction) => {
 
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0x3498DB)
+            .setColor(0x2B2D31)
             .setTitle(`**${toSmallCaps('Timeout Notice')}** ${verify}`)
             .setDescription(`-# *"You were placed in timeout in **${guild.name}**."*`)
             .addFields(
@@ -3879,13 +3879,13 @@ client.on('interactionCreate', async (interaction) => {
               { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
             )
             .setTimestamp()
-            .setFooter({ text: `AniPedia Moderation • ${guild.name}` });
+            .setFooter({ text: 'AniPedia Moderation' });
           await targetMember.send({ embeds: [dmEmbed] });
         } catch (err) {}
 
         const caseId = generateCaseId();
         const timeoutEmbed = new EmbedBuilder()
-          .setColor(0x3498DB)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Timeout Issued')}** ${verify}`)
           .setDescription(`-# <@${targetMember.id}> has been **timed out** by <@${user.id}>`)
           .addFields(
@@ -3893,7 +3893,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
           )
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [timeoutEmbed] });
@@ -3940,7 +3940,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const untimeoutEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Timeout Lifted')}** ${verify}`)
           .setDescription(`-# <@${targetMember.id}> has been **untimed out** by <@${user.id}>`)
           .addFields(
@@ -3948,7 +3948,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: '-# Disciplinary period completed or manually lifted', inline: false }
           )
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [untimeoutEmbed] });
@@ -3993,7 +3993,7 @@ client.on('interactionCreate', async (interaction) => {
 
       try {
         const dmEmbed = new EmbedBuilder()
-          .setColor(0xE67E22)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Expulsion Notice')}** ${verify}`)
           .setDescription(`-# *"You were expelled from **${guild.name}**."*`)
           .addFields(
@@ -4001,7 +4001,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Expelled By')}**`, value: `-# **${user.tag}**`, inline: true }
           )
           .setTimestamp()
-          .setFooter({ text: `AniPedia Moderation • ${guild.name}` });
+          .setFooter({ text: 'AniPedia Moderation' });
         await targetMember.send({ embeds: [dmEmbed] });
       } catch (err) {}
 
@@ -4024,7 +4024,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const kickEmbed = new EmbedBuilder()
-          .setColor(0xE67E22)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Kick Issued')}** ${verify}`)
           .setDescription(`-# <@${targetId}> has been **kicked** by <@${user.id}>`)
           .addFields(
@@ -4032,7 +4032,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
           )
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [kickEmbed] });
@@ -4079,7 +4079,7 @@ client.on('interactionCreate', async (interaction) => {
 
       try {
         const dmEmbed = new EmbedBuilder()
-          .setColor(0x992D22)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Permanent Exile Notice')}** ${verify}`)
           .setDescription(`-# *"You have been permanently banished from **${guild.name}**."*`)
           .addFields(
@@ -4087,7 +4087,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Banned By')}**`, value: `-# **${user.tag}**`, inline: true }
           )
           .setTimestamp()
-          .setFooter({ text: `AniPedia Moderation • ${guild.name}` });
+          .setFooter({ text: 'AniPedia Moderation' });
         await targetMember.send({ embeds: [dmEmbed] });
       } catch (err) {}
 
@@ -4110,7 +4110,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const banEmbed = new EmbedBuilder()
-          .setColor(0x992D22)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Ban Issued')}** ${verify}`)
           .setDescription(`-# <@${targetId}> has been **permanently banned** by <@${user.id}>`)
           .addFields(
@@ -4118,7 +4118,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
           )
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [banEmbed] });
@@ -4156,7 +4156,7 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const unbanEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Ban Revoked')}** ${verify}`)
           .setDescription(`-# <@${targetId}> has been **unbanned** by <@${user.id}>`)
           .addFields(
@@ -4164,7 +4164,7 @@ client.on('interactionCreate', async (interaction) => {
             { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
             { name: `${dot} **${toSmallCaps('Reason')}**`, value: '-# Ban restriction lifted', inline: false }
           )
-          .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+          .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await interaction.reply({ embeds: [unbanEmbed] });
@@ -4244,7 +4244,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const caseId = generateCaseId();
       const clearWarnsEmbed = new EmbedBuilder()
-        .setColor(0x2ECC71)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Warnings Cleared')}** ${verify}`)
         .setDescription(`-# <@${targetMember.id}> has been **cleared of all warnings** by <@${user.id}>`)
         .addFields(
@@ -4252,7 +4252,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
           { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${reason}`, inline: false }
         )
-        .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await interaction.reply({ embeds: [clearWarnsEmbed] });
@@ -4371,7 +4371,7 @@ client.on('interactionCreate', async (interaction) => {
       const caseId = generateCaseId();
 
       const deleteWarnEmbed = new EmbedBuilder()
-        .setColor(0x2ECC71)
+        .setColor(0x2B2D31)
         .setTitle(`**${toSmallCaps('Warning Deleted')}** ${verify}`)
         .setDescription(`-# <@${targetMember.id}> warning **${deletedIndexLabel}** has been **deleted** by <@${user.id}>`)
         .addFields(
@@ -4379,7 +4379,7 @@ client.on('interactionCreate', async (interaction) => {
           { name: `${dot} **${toSmallCaps('Enforced By')}**`, value: `-# <@${user.id}>`, inline: true },
           { name: `${dot} **${toSmallCaps('Reason')}**`, value: `-# ${warnReason}`, inline: false }
         )
-        .setFooter({ text: `AniPedia Moderation • Case ${caseId}`, iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
       await interaction.reply({ embeds: [deleteWarnEmbed] });
@@ -4423,7 +4423,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const purgeEmbed = new EmbedBuilder()
-          .setColor(0x3498DB)
+          .setColor(0x2B2D31)
           .setTitle(`**${toSmallCaps('Chat Purged')}** ${verify}`)
           .setDescription(`-# **${deletedCount}** message(s) have been cleanly purged from the channel!`)
           .addFields(
@@ -4435,7 +4435,7 @@ client.on('interactionCreate', async (interaction) => {
           purgeEmbed.addFields({ name: `${dot} **${toSmallCaps('Filtered Member')}**`, value: `-# <@${targetUser.id}>`, inline: true });
         }
 
-        purgeEmbed.setTimestamp().setFooter({ text: 'AniPedia Moderation • Clean Chat Restored', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
+        purgeEmbed.setTimestamp().setFooter({ text: 'AniPedia Moderation', iconURL: guild.iconURL() || client.user.displayAvatarURL() });
         await interaction.reply({ embeds: [purgeEmbed], ephemeral: true });
 
         if (db) {
