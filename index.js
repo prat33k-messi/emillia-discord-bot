@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
@@ -1579,8 +1581,10 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
 // Helper to build IQ Message Payload
 async function buildIqPayload(targetMember, guild) {
   const { tier, score, quote } = rollIqScore();
-  const targetAvatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
-  const displayName = targetMember.displayName || targetMember.user.username;
+  const targetAvatarUrl = targetMember?.user?.displayAvatarURL 
+    ? targetMember.user.displayAvatarURL({ extension: 'png', size: 512 }) 
+    : (targetMember?.displayAvatarURL ? targetMember.displayAvatarURL({ extension: 'png', size: 512 }) : null);
+  const displayName = targetMember?.displayName || targetMember?.username || targetMember?.user?.username || 'User';
   const formattedName = `@${displayName}`;
 
   const buffer = await generateIqCard(targetAvatarUrl, formattedName, tier, score, quote);
