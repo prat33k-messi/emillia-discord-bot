@@ -1359,16 +1359,21 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      const resolvedName = targetMember ? targetMember.user.username : targetQuery;
+      const resolvedName = targetMember ? targetMember.user.username : targetQuery.replace(/[<>@]/g, '').trim();
       if (targetMember) deniedLevel1Users.add(targetMember.id);
-      deniedLevel1Users.add(resolvedName.toLowerCase());
-      deniedLevel1Users.add(targetQuery.toLowerCase());
+      if (resolvedName) {
+        deniedLevel1Users.add(resolvedName.toLowerCase());
+        deniedLevel1Users.add(targetQuery.toLowerCase());
+      }
+
+      const targetDisplay = targetMember ? `<@${targetMember.id}>` : `**${resolvedName || 'User'}**`;
+      const targetThumb = targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : (message.guild?.iconURL() || client.user.displayAvatarURL());
 
       const protoZeroEmbed = new EmbedBuilder()
         .setColor(0xF1C40F)
         .setTitle(`**${toSmallCaps('Protocol Zero Engaged')}** ${verify}`)
-        .setDescription(`<@${targetMember ? targetMember.id : resolvedName}> permissions have been **revoked** by <@${message.author.id}>`)
-        .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : client.user.displayAvatarURL())
+        .setDescription(`${targetDisplay} permissions have been **revoked** by <@${message.author.id}>`)
+        .setThumbnail(targetThumb)
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
@@ -1381,22 +1386,27 @@ client.on('messageCreate', async (message) => {
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
                            message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
-      const resolvedName = targetMember ? targetMember.user.username : targetQuery;
+      const resolvedName = targetMember ? targetMember.user.username : targetQuery.replace(/[<>@]/g, '').trim();
 
       if (targetMember) {
         protocolZeroBlacklist.delete(targetMember.id);
         deniedLevel1Users.delete(targetMember.id);
       }
-      protocolZeroBlacklist.delete(resolvedName.toLowerCase());
-      protocolZeroBlacklist.delete(targetQuery.toLowerCase());
-      deniedLevel1Users.delete(resolvedName.toLowerCase());
-      deniedLevel1Users.delete(targetQuery.toLowerCase());
+      if (resolvedName) {
+        protocolZeroBlacklist.delete(resolvedName.toLowerCase());
+        protocolZeroBlacklist.delete(targetQuery.toLowerCase());
+        deniedLevel1Users.delete(resolvedName.toLowerCase());
+        deniedLevel1Users.delete(targetQuery.toLowerCase());
+      }
+
+      const targetDisplay = targetMember ? `<@${targetMember.id}>` : `**${resolvedName || 'User'}**`;
+      const targetThumb = targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : (message.guild?.iconURL() || client.user.displayAvatarURL());
 
       const protoOneEmbed = new EmbedBuilder()
         .setColor(0xF1C40F)
         .setTitle(`**${toSmallCaps('Protocol One Granted')}** ${verify}`)
-        .setDescription(`<@${targetMember ? targetMember.id : resolvedName}> permissions have been **restored** by <@${message.author.id}>`)
-        .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : client.user.displayAvatarURL())
+        .setDescription(`${targetDisplay} permissions have been **restored** by <@${message.author.id}>`)
+        .setThumbnail(targetThumb)
         .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
