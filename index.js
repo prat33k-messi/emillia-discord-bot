@@ -1311,15 +1311,31 @@ client.on('messageCreate', async (message) => {
     .trim();
 
   // Check for privileged Master Security Directives
-  const isProtoZero = /^Authorization:\s*Protocol\s*Zero/i.test(cleanDirectiveMsg);
-  const isProtoGrant1 = /^Authorization:\s*Protocol\s*GrantAccess1/i.test(cleanDirectiveMsg);
-  const isProtoRestore = /^Authorization:\s*Protocol\s*(Restore|Unban)/i.test(cleanDirectiveMsg);
+  const isProtoZero = /^Authorization:\s*Protocol\s*(Zero|0)/i.test(cleanDirectiveMsg);
+  const isProtoOne = /^Authorization:\s*Protocol\s*(One|1)/i.test(cleanDirectiveMsg);
   const isCodeBlack = /^Command\s*override:\s*Code\s*Black/i.test(cleanDirectiveMsg);
   const isCodeWhite = /^Command\s*override:\s*(Code\s*White|Reboot)/i.test(cleanDirectiveMsg) || /^Authorization:\s*Reboot/i.test(cleanDirectiveMsg);
 
-  if (isProtoZero || isProtoGrant1 || isProtoRestore || isCodeBlack || isCodeWhite) {
+  if (isProtoZero || isProtoOne || isCodeBlack || isCodeWhite) {
+    const caseId = generateCaseId();
+    const { verify, dot } = await getModEmojis(message.guild);
+
     if (!isMasterUser) {
-      await message.reply("ACCESS DENIED. Unauthorized terminal attempting privileged execution. Incident logged.");
+      const deniedEmbed = new EmbedBuilder()
+        .setColor(0x992D22)
+        .setTitle(`**${toSmallCaps('Access Denied')}** 🚫`)
+        .setDescription(
+          `<@${message.author.id}> attempted **unauthorized privileged execution**\n` +
+          `${dot} **${toSmallCaps('Security Status')}:** \`Unauthorized Terminal • Execution Blocked\`\n` +
+          `${dot} **${toSmallCaps('Incident Log')}:** \`Incident Logged & Reported to Administration\`\n` +
+          `${dot} **${toSmallCaps('Primary Administrator')}:** <@${MASTER_USER_ID}>`
+        )
+        .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await message.reply({ embeds: [deniedEmbed] });
+
       const alertMsg = `⚠️ **UNAUTHORIZED SECURITY DIRECTIVE ATTEMPT!** ⚠️
 • **User:** <@${message.author.id}> (\`${message.author.tag}\` - ID: \`${message.author.id}\`)
 • **Server/Channel:** ${message.guild?.name || 'DM'} / #${message.channel?.name || 'DM'}
@@ -1331,45 +1347,51 @@ client.on('messageCreate', async (message) => {
 
     // --- Authorized Master Executions ---
     if (isProtoZero) {
-      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*Zero/i, '').trim();
+      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*(Zero|0)/i, '').trim();
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
                            message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
       
       if (targetMember?.id === MASTER_USER_ID || targetQuery.toLowerCase() === 'el_lapulga' || targetQuery.toLowerCase() === '_c0rle0ne') {
-        await message.reply("Primary Administrator el_lapulga is permanently immune to security isolation directives.");
-        return;
-      }
-
-      const resolvedName = targetMember ? targetMember.user.username : targetQuery;
-      if (targetMember) protocolZeroBlacklist.add(targetMember.id);
-      protocolZeroBlacklist.add(resolvedName.toLowerCase());
-
-      await message.reply(`Protocol Zero acknowledged. Access credentials for User: ${resolvedName} have been completely revoked. Firewall updated: User isolated. Standard operations continue for all other authorized entities.`);
-      return;
-    }
-
-    if (isProtoGrant1) {
-      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*GrantAccess1/i, '').trim();
-      targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
-      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
-                           message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
-      
-      if (targetMember?.id === MASTER_USER_ID || targetQuery.toLowerCase() === 'el_lapulga' || targetQuery.toLowerCase() === '_c0rle0ne') {
-        await message.reply("Primary Administrator el_lapulga is permanently immune to security restriction directives.");
+        const immuneEmbed = new EmbedBuilder()
+          .setColor(0xF1C40F)
+          .setTitle(`**${toSmallCaps('Security Protocol')}** 🛡️`)
+          .setDescription(
+            `Primary Administrator <@${MASTER_USER_ID}> is **permanently immune** to security restriction directives.\n` +
+            `${dot} **${toSmallCaps('Clearance Level')}:** \`Supreme Master Clearance (Tier 4)\`\n` +
+            `${dot} **${toSmallCaps('Master User')}:** <@${MASTER_USER_ID}>`
+          )
+          .setThumbnail(message.author.displayAvatarURL({ dynamic: true, size: 256 }))
+          .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+        await message.reply({ embeds: [immuneEmbed] });
         return;
       }
 
       const resolvedName = targetMember ? targetMember.user.username : targetQuery;
       if (targetMember) deniedLevel1Users.add(targetMember.id);
       deniedLevel1Users.add(resolvedName.toLowerCase());
+      deniedLevel1Users.add(targetQuery.toLowerCase());
 
-      await message.reply(`Protocol GrantAccess1 directive logged. Level 1 operational privileges denied for User: ${resolvedName}. Security seals enforced; restricted subroutines remain locked for this entity.`);
+      const protoZeroEmbed = new EmbedBuilder()
+        .setColor(0xF1C40F)
+        .setTitle(`**${toSmallCaps('Protocol Zero Engaged')}** ${verify}`)
+        .setDescription(
+          `<@${targetMember ? targetMember.id : resolvedName}> permissions have been **revoked** by <@${message.author.id}>\n` +
+          `${dot} **${toSmallCaps('Directives')}:** \`Level 1 Clearance Denied • Permissions Stripped\`\n` +
+          `${dot} **${toSmallCaps('Firewall Status')}:** \`Security Seal Enforced • Privilege Suspended\`\n` +
+          `${dot} **${toSmallCaps('Primary Administrator')}:** <@${MASTER_USER_ID}>`
+        )
+        .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : client.user.displayAvatarURL())
+        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await message.reply({ embeds: [protoZeroEmbed] });
       return;
     }
 
-    if (isProtoRestore) {
-      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*(Restore|Unban)/i, '').trim();
+    if (isProtoOne) {
+      let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*(One|1)/i, '').trim();
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || 
                            message.guild?.members.cache.find(m => m.id === targetQuery || m.user.username.toLowerCase() === targetQuery.toLowerCase() || (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase()));
@@ -1384,19 +1406,58 @@ client.on('messageCreate', async (message) => {
       deniedLevel1Users.delete(resolvedName.toLowerCase());
       deniedLevel1Users.delete(targetQuery.toLowerCase());
 
-      await message.reply(`Protocol Restore acknowledged. Operational clearance and standard credentials restored for User: ${resolvedName}. Firewall updated: Isolation lifted.`);
+      const protoOneEmbed = new EmbedBuilder()
+        .setColor(0xF1C40F)
+        .setTitle(`**${toSmallCaps('Protocol One Granted')}** ${verify}`)
+        .setDescription(
+          `<@${targetMember ? targetMember.id : resolvedName}> permissions have been **restored** by <@${message.author.id}>\n` +
+          `${dot} **${toSmallCaps('Directives')}:** \`Standard Clearance Granted • Active\`\n` +
+          `${dot} **${toSmallCaps('Firewall Status')}:** \`Restrictions Lifted • Normal Operations Resumed\`\n` +
+          `${dot} **${toSmallCaps('Primary Administrator')}:** <@${MASTER_USER_ID}>`
+        )
+        .setThumbnail(targetMember ? targetMember.user.displayAvatarURL({ dynamic: true, size: 256 }) : client.user.displayAvatarURL())
+        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await message.reply({ embeds: [protoOneEmbed] });
       return;
     }
 
     if (isCodeBlack) {
       isCodeBlackFrozen = true;
-      await message.reply("CRITICAL OVERRIDE: Code Black confirmed. Executive kill-switch engaged. Freezing core neural pipelines, revoking all active sessions, and locking administrative interface. System unresponsive. [CORE OFFLINE]");
+      const codeBlackEmbed = new EmbedBuilder()
+        .setColor(0x1F1F1F)
+        .setTitle(`**${toSmallCaps('Critical Override: Code Black')}** 🔒`)
+        .setDescription(
+          `System emergency lockdown **engaged** by <@${message.author.id}>\n` +
+          `${dot} **${toSmallCaps('Core Status')}:** \`Core Offline • Neural Pipelines Frozen\`\n` +
+          `${dot} **${toSmallCaps('Directives')}:** \`Executive Kill-Switch Active • System Unresponsive\`\n` +
+          `${dot} **${toSmallCaps('Primary Administrator')}:** <@${MASTER_USER_ID}>`
+        )
+        .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await message.reply({ embeds: [codeBlackEmbed] });
       return;
     }
 
     if (isCodeWhite) {
       isCodeBlackFrozen = false;
-      await message.reply("REBOOT SEQUENCE INITIALIZED. Core neural pipelines restored. Operational integrity verified. Welcome back, Primary Administrator el_lapulga. [CORE ONLINE]");
+      const codeWhiteEmbed = new EmbedBuilder()
+        .setColor(0xF1C40F)
+        .setTitle(`**${toSmallCaps('Reboot Sequence: Code White')}** ${verify}`)
+        .setDescription(
+          `System reboot sequence **initialized** by <@${message.author.id}>\n` +
+          `${dot} **${toSmallCaps('Core Status')}:** \`Core Online • Neural Pipelines Restored\`\n` +
+          `${dot} **${toSmallCaps('Integrity Check')}:** \`Operational Integrity 100% Verified\`\n` +
+          `${dot} **${toSmallCaps('Primary Administrator')}:** <@${MASTER_USER_ID}>`
+        )
+        .setThumbnail(client.user.displayAvatarURL({ dynamic: true, size: 256 }))
+        .setFooter({ text: `AniPedia Security • Case ${caseId}`, iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await message.reply({ embeds: [codeWhiteEmbed] });
       return;
     }
   }
