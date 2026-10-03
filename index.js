@@ -1767,9 +1767,9 @@ client.on('messageCreate', async (message) => {
   if (afkUsers.has(message.author.id)) {
     const afkData = afkUsers.get(message.author.id);
     const timeSinceAfk = Date.now() - (afkData.afkSince || 0);
-    const isSettingAfk = message.content.trim().toLowerCase().startsWith('-afk');
+    const isSettingAfk = message.content.trim().toLowerCase().startsWith('-afks') || message.content.trim().toLowerCase().startsWith('-afk');
 
-    // Only remove AFK if not currently executing -afk and at least 3 seconds have passed
+    // Only remove AFK if not currently executing -afks and at least 3 seconds have passed
     if (!isSettingAfk && timeSinceAfk > 3000) {
       afkUsers.delete(message.author.id);
       if (db) {
@@ -2094,7 +2094,7 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     const preCheckWords = lowerQuery.split(/\s+/);
     const commandKeywords = [
-      'afk',
+      'afks', 'afk',
       'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
       'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
@@ -3048,8 +3048,8 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     // 2. UTILITY COMMANDS (AFK, HELP, PING, RESET, PROFILE, LEADERBOARD, WARNS)
     // ==========================================
-    if (words[0] === 'afk' || lowerQuery.startsWith('afk')) {
-      let reason = cleanQuery.replace(/^afk\s*/i, '').trim();
+    if (words[0] === 'afks' || words[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk')) {
+      let reason = cleanQuery.replace(/^afks?\s*/i, '').trim();
       if (!reason) reason = 'No reason specified';
 
       const afkSince = Date.now();
