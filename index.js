@@ -1438,193 +1438,137 @@ function rollIqScore() {
 
 // Helper to generate dynamic IQ Card Canvas
 async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
-  const width = 850;
-  const height = 450;
+  const width = 700;
+  const height = 350;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
-  const cardRadius = 24;
+  const radius = 24;
 
   // 1. Base card clipping
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(0, 0, width, height, cardRadius);
+    ctx.roundRect(0, 0, width, height, radius);
   } else {
     ctx.rect(0, 0, width, height);
   }
   ctx.clip();
 
-  // 2. Background Gradient
-  const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-  bgGrad.addColorStop(0, '#090a12');
-  bgGrad.addColorStop(0.5, '#121424');
-  bgGrad.addColorStop(1, '#090a12');
-  ctx.fillStyle = bgGrad;
+  // 2. Dark base
+  ctx.fillStyle = '#0a0d14';
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = 'rgba(191, 90, 242, 0.03)';
-  ctx.fillRect(0, 0, width, height);
+  const halfW = width / 2;
+  const cx = halfW;
+  const cy = height / 2;
 
-  // 3. Outer Border Glow
-  ctx.save();
-  ctx.shadowColor = '#bf5af2';
-  ctx.shadowBlur = 18;
-  ctx.strokeStyle = '#bf5af2';
-  ctx.lineWidth = 3;
-  ctx.strokeRect(6, 6, width - 12, height - 12);
-  ctx.restore();
-
-  // 4. Top Quote Banner Box
-  const quoteBoxX = 40;
-  const quoteBoxY = 24;
-  const quoteBoxW = width - 80;
-  const quoteBoxH = 80;
-  const quoteBoxRadius = 14;
-
-  ctx.save();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.035)';
-  ctx.beginPath();
-  if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(quoteBoxX, quoteBoxY, quoteBoxW, quoteBoxH, quoteBoxRadius);
-  } else {
-    ctx.rect(quoteBoxX, quoteBoxY, quoteBoxW, quoteBoxH);
-  }
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(191, 90, 242, 0.25)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.restore();
-
-  ctx.fillStyle = '#f5d0fe';
-  let quoteFontSize = 18;
-  ctx.font = `italic 600 ${quoteFontSize}px "Segoe UI", Arial, sans-serif`;
-  ctx.textAlign = 'center';
-
-  let quoteLines = wrapText(ctx, `“${quote}”`, quoteBoxW - 40);
-  if (quoteLines.length > 2) {
-    quoteFontSize = 15;
-    ctx.font = `italic 600 ${quoteFontSize}px "Segoe UI", Arial, sans-serif`;
-    quoteLines = wrapText(ctx, `“${quote}”`, quoteBoxW - 40);
-  }
-
-  const lineSpacing = quoteFontSize + 6;
-  const quoteStartY = quoteBoxY + (quoteBoxH - (quoteLines.length * lineSpacing)) / 2 + quoteFontSize - 2;
-  quoteLines.forEach((line, idx) => {
-    ctx.fillText(line, width / 2, quoteStartY + (idx * lineSpacing));
-  });
-
-  // 5. Dual Avatars
-  const avatarSize = 185;
-  const avatarRadius = 18;
-  const leftX = 70;
-  const rightX = width - 70 - avatarSize;
-  const avatarY = 125;
-
-  // Left Avatar (User)
+  // 3. Draw Left Side (User Avatar)
   try {
     if (userAvatarUrl) {
       const userImg = await loadImage(userAvatarUrl);
-      ctx.save();
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(leftX, avatarY, avatarSize, avatarSize, avatarRadius);
-      } else {
-        ctx.rect(leftX, avatarY, avatarSize, avatarSize);
-      }
-      ctx.clip();
-      drawCoverImage(ctx, userImg, leftX, avatarY, avatarSize, avatarSize);
-      ctx.restore();
+      drawCoverImage(ctx, userImg, 0, 0, halfW, height);
     }
   } catch (err) {
     console.error("Failed to load user avatar for IQ card:", err);
   }
 
-  ctx.save();
-  ctx.shadowColor = '#bf5af2';
-  ctx.shadowBlur = 12;
-  ctx.strokeStyle = '#bf5af2';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(leftX, avatarY, avatarSize, avatarSize, avatarRadius);
-  } else {
-    ctx.rect(leftX, avatarY, avatarSize, avatarSize);
-  }
-  ctx.stroke();
-  ctx.restore();
-
-  // Right Avatar (Anime Character)
+  // 4. Draw Right Side (Anime Character Image)
   const charImgPath = path.join(__dirname, 'assets', 'iq', tier.image);
   try {
     if (fs.existsSync(charImgPath)) {
       const charImg = await loadImage(charImgPath);
-      ctx.save();
-      ctx.beginPath();
-      if (typeof ctx.roundRect === 'function') {
-        ctx.roundRect(rightX, avatarY, avatarSize, avatarSize, avatarRadius);
-      } else {
-        ctx.rect(rightX, avatarY, avatarSize, avatarSize);
-      }
-      ctx.clip();
-      drawCoverImage(ctx, charImg, rightX, avatarY, avatarSize, avatarSize);
-      ctx.restore();
+      drawCoverImage(ctx, charImg, halfW, 0, halfW, height);
     }
   } catch (err) {
     console.error("Failed to load anime character image for IQ card:", err);
   }
 
+  // 5. Bottom text readability gradient
+  const bottomGrad = ctx.createLinearGradient(0, height * 0.65, 0, height);
+  bottomGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+  bottomGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
+  bottomGrad.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
+  ctx.fillStyle = bottomGrad;
+  ctx.fillRect(0, height * 0.65, width, height * 0.35);
+
+  const rx = 58;
+  const ry = 46;
+  const purpleNeon = '#bf5af2';
+  const purpleCore = '#f5d0fe';
+
+  // 6. Vertical dividing purple neon lines meeting rhombus vertices
   ctx.save();
-  ctx.shadowColor = '#f1c40f';
-  ctx.shadowBlur = 14;
-  ctx.strokeStyle = '#f1c40f';
-  ctx.lineWidth = 3;
+  ctx.strokeStyle = purpleNeon;
+  ctx.shadowColor = purpleNeon;
+  ctx.shadowBlur = 6;
+  ctx.lineWidth = 2.5;
+
+  // Top line
   ctx.beginPath();
-  if (typeof ctx.roundRect === 'function') {
-    ctx.roundRect(rightX, avatarY, avatarSize, avatarSize, avatarRadius);
-  } else {
-    ctx.rect(rightX, avatarY, avatarSize, avatarSize);
-  }
+  ctx.moveTo(cx, 0);
+  ctx.lineTo(cx, cy - ry);
+  ctx.stroke();
+
+  // Bottom line
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + ry);
+  ctx.lineTo(cx, height);
   ctx.stroke();
   ctx.restore();
 
-  // 6. Center IQ Badge
-  const centerX = width / 2;
-  const centerY = avatarY + avatarSize / 2;
-
+  // 7. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
-  ctx.shadowColor = '#f1c40f';
-  ctx.shadowBlur = 22;
-  ctx.beginPath();
-  ctx.arc(centerX, centerY, 58, 0, Math.PI * 2);
-  ctx.fillStyle = '#0f111e';
+  drawRhombus(ctx, cx, cy, rx, ry);
+  ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 8;
   ctx.fill();
-  ctx.lineWidth = 3.5;
-  ctx.strokeStyle = '#f1c40f';
+  ctx.restore();
+
+  // 8. Rhombus Purple Neon Border
+  ctx.save();
+  drawRhombus(ctx, cx, cy, rx, ry);
+  ctx.shadowColor = purpleNeon;
+  ctx.shadowBlur = 8;
+  ctx.strokeStyle = purpleNeon;
+  ctx.lineWidth = 2.8;
+  ctx.stroke();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = purpleCore;
+  ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
 
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 32px "Segoe UI", Arial, sans-serif';
+  // 9. Percentage number inside Rhombus
+  ctx.save();
   ctx.textAlign = 'center';
-  ctx.fillText(`${score}%`, centerX, centerY - 2);
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 28px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+  ctx.shadowColor = '#000000';
+  ctx.shadowBlur = 4;
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#000000';
+  ctx.strokeText(`${score}%`, cx, cy + 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`${score}%`, cx, cy + 1);
+  ctx.restore();
 
-  ctx.fillStyle = '#f1c40f';
-  ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-  ctx.fillText('IQ LEVEL', centerX, centerY + 22);
+  // 10. Labels at bottom
+  ctx.save();
+  ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.shadowColor = '#000000';
+  ctx.shadowBlur = 5;
 
-  // 7. Labels below Avatars
-  ctx.fillStyle = '#c084fc';
-  ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(userName, leftX + avatarSize / 2, avatarY + avatarSize + 32);
+  // Left user name
+  ctx.fillStyle = '#f5d0fe';
+  ctx.fillText(userName, halfW / 2, height - 16);
 
+  // Right character name
   ctx.fillStyle = '#fde047';
-  ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(`${tier.charName} (Tier ${tier.tier})`, rightX + avatarSize / 2, avatarY + avatarSize + 32);
-
-  // 8. Bottom Footer / Rarity
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
-  ctx.font = '14px "Segoe UI", Arial, sans-serif';
-  ctx.fillText(`.anipedia  •  Tier ${tier.tier}: ${tier.title} (${tier.rarity})`, width / 2, height - 20);
+  ctx.fillText(`${tier.charName} (Tier ${tier.tier})`, halfW + halfW / 2, height - 16);
+  ctx.restore();
 
   ctx.restore();
 
@@ -1643,12 +1587,10 @@ async function buildIqPayload(targetMember, guild) {
   const buffer = await generateIqCard(targetAvatarUrl, formattedName, tier, score, quote);
   const attachment = new AttachmentBuilder(buffer, { name: 'iq.png' });
 
-  const { purpFlames } = await getBestieEmojis(guild);
-
   const embed = new EmbedBuilder()
-    .setColor(0xBF5AF2)
-    .setDescription(`${purpFlames} **Tier ${tier.tier}: ${tier.title}** ${purpFlames}`)
-    .setFooter({ text: `AniPedia IQ Assessment • Rarity: ${tier.rarity}` })
+    .setColor(0x2B2D31)
+    .setDescription(`> “${quote}”`)
+    .setFooter({ text: `AniPedia IQ Assessment • Tier ${tier.tier}: ${tier.title} (${tier.rarity})` })
     .setImage('attachment://iq.png');
 
   return { embeds: [embed], files: [attachment] };
