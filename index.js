@@ -1880,10 +1880,10 @@ client.on('messageCreate', async (message) => {
       const { verify } = await getModEmojis(message.guild);
       const durationStr = formatAfkDuration(timeSinceAfk);
 
-      let removeAfkDesc = `> ${verify} <@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
+      let removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
       if (afkData.mentions && afkData.mentions.length > 0) {
         const uniqueMentioners = [...new Set(afkData.mentions.map(m => `<@${m.authorId}>`))];
-        removeAfkDesc += `\n> Mentioned by • ${uniqueMentioners.join(', ')}`;
+        removeAfkDesc += `\nMentioned by • ${uniqueMentioners.join(', ')}`;
       }
 
       const removeAfkEmbed = new EmbedBuilder()
@@ -1919,12 +1919,11 @@ client.on('messageCreate', async (message) => {
         const lastReplyTime = afkMentionCooldowns.get(mentionedId) || 0;
         if (Date.now() - lastReplyTime > 5000) {
           afkMentionCooldowns.set(mentionedId, Date.now());
-          const { dot } = await getModEmojis(message.guild);
           const afkSinceUnix = Math.floor(afkData.afkSince / 1000);
 
           const afkMentionEmbed = new EmbedBuilder()
             .setColor(0x2B2D31)
-            .setDescription(`> ${dot} <@${mentionedId}> • is currently **AFK** — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`);
+            .setDescription(`<@${mentionedId}> • is currently **AFK** — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`);
 
           await message.reply({ embeds: [afkMentionEmbed] }).catch(() => {});
         }
@@ -3169,11 +3168,9 @@ client.on('messageCreate', async (message) => {
         }).catch(err => console.error("Error saving AFK to Firestore:", err));
       }
 
-      const { dot } = await getModEmojis(message.guild);
-
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`> ${dot} <@${message.author.id}> • You are now **AFK** — ${reason}`);
+        .setDescription(`<@${message.author.id}> • You are now **AFK** — ${reason}`);
 
       await message.reply({ embeds: [setAfkEmbed] });
       return;
@@ -3870,11 +3867,9 @@ client.on('interactionCreate', async (interaction) => {
         }).catch(err => console.error("Error saving AFK in slash to Firestore:", err));
       }
 
-      const { dot } = await getModEmojis(guild);
-
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`> ${dot} <@${user.id}> • You are now **AFK** — ${reason}`);
+        .setDescription(`<@${user.id}> • You are now **AFK** — ${reason}`);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
       return;
