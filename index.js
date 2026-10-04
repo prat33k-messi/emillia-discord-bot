@@ -1483,20 +1483,12 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
     console.error("Failed to load anime character image for IQ card:", err);
   }
 
-  // 5. Bottom text readability gradient
-  const bottomGrad = ctx.createLinearGradient(0, height * 0.65, 0, height);
-  bottomGrad.addColorStop(0, 'rgba(0, 0, 0, 0)');
-  bottomGrad.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
-  bottomGrad.addColorStop(1, 'rgba(0, 0, 0, 0.85)');
-  ctx.fillStyle = bottomGrad;
-  ctx.fillRect(0, height * 0.65, width, height * 0.35);
-
   const rx = 58;
   const ry = 46;
   const purpleNeon = '#bf5af2';
   const purpleCore = '#f5d0fe';
 
-  // 6. Vertical dividing purple neon lines meeting rhombus vertices
+  // 5. Vertical dividing purple neon lines meeting rhombus vertices
   ctx.save();
   ctx.strokeStyle = purpleNeon;
   ctx.shadowColor = purpleNeon;
@@ -1516,7 +1508,7 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   ctx.stroke();
   ctx.restore();
 
-  // 7. Rhombus Semi-Transparent Dark Glass Backdrop
+  // 6. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
   ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
@@ -1525,7 +1517,7 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   ctx.fill();
   ctx.restore();
 
-  // 8. Rhombus Purple Neon Border
+  // 7. Rhombus Purple Neon Border
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
   ctx.shadowColor = purpleNeon;
@@ -1540,7 +1532,7 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   ctx.stroke();
   ctx.restore();
 
-  // 9. Percentage number inside Rhombus
+  // 8. Percentage number inside Rhombus
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -1552,22 +1544,6 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   ctx.strokeText(`${score}%`, cx, cy + 1);
   ctx.fillStyle = '#ffffff';
   ctx.fillText(`${score}%`, cx, cy + 1);
-  ctx.restore();
-
-  // 10. Labels at bottom
-  ctx.save();
-  ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.shadowColor = '#000000';
-  ctx.shadowBlur = 5;
-
-  // Left user name
-  ctx.fillStyle = '#f5d0fe';
-  ctx.fillText(userName, halfW / 2, height - 16);
-
-  // Right character name
-  ctx.fillStyle = '#fde047';
-  ctx.fillText(`${tier.charName} (Tier ${tier.tier})`, halfW + halfW / 2, height - 16);
   ctx.restore();
 
   ctx.restore();
