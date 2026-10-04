@@ -3060,11 +3060,11 @@ client.on('messageCreate', async (message) => {
         }).catch(err => console.error("Error saving AFK to Firestore:", err));
       }
 
-      const { verify } = await getModEmojis(message.guild);
+      const { dot } = await getModEmojis(message.guild);
 
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`> ${verify} <@${message.author.id}> • You are now **AFK** — ${reason}`);
+        .setDescription(`> ${dot} <@${message.author.id}> • You are now **AFK** — ${reason}`);
 
       await message.reply({ embeds: [setAfkEmbed] });
       return;
@@ -3755,11 +3755,11 @@ client.on('interactionCreate', async (interaction) => {
         }).catch(err => console.error("Error saving AFK in slash to Firestore:", err));
       }
 
-      const { verify } = await getModEmojis(guild);
+      const { dot } = await getModEmojis(guild);
 
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`> ${verify} <@${user.id}> • You are now **AFK** — ${reason}`);
+        .setDescription(`> ${dot} <@${user.id}> • You are now **AFK** — ${reason}`);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
       return;
