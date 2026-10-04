@@ -2012,6 +2012,14 @@ client.on('messageCreate', async (message) => {
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
     if (!hasCommandWord) {
+      if (startsWithPrefix) {
+        const { dot } = await getModEmojis(message.guild);
+        const invalidCmdEmbed = new EmbedBuilder()
+          .setColor(0x2B2D31)
+          .setDescription(`> ${dot} Invalid command. Use \`-help\` for available commands.`);
+        await message.reply({ embeds: [invalidCmdEmbed] }).catch(() => {});
+        return;
+      }
       return; // Silently ignore — no typing, no response
     }
 
@@ -3541,15 +3549,21 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
 
   } catch (error) {
     console.error("Message processing error:", error);
-    let errorMsg = "M-mou! 😰 Something went wrong and I got a bit confused! ";
-    if (error.message?.includes('rate_limit') || error.status === 429) {
-      errorMsg += "I'm receiving too many questions right now! Let me rest for a tiny bit~ ⏳🌸";
-    } else if (error.message?.includes('timeout')) {
-      errorMsg += "It took too long to think and I lost my connection! Please try again~ ❄️✨";
-    } else {
-      errorMsg += "An error occurred, but I will try harder next time! Please ask me again~ 🌸";
+    try {
+      const { dot } = await getModEmojis(message.guild);
+      let errorMsg = "Something went wrong while executing this command.";
+      if (error.message?.includes('rate_limit') || error.status === 429) {
+        errorMsg = "Rate limit reached. Please try again in a moment.";
+      } else if (error.message?.includes('timeout')) {
+        errorMsg = "Command timed out. Please try again.";
+      }
+      const errEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setDescription(`> ${dot} ${errorMsg}`);
+      await message.reply({ embeds: [errEmbed] }).catch(() => {});
+    } catch (e) {
+      console.error("Error sending error embed:", e);
     }
-    await message.reply(errorMsg);
   }
 });
 
