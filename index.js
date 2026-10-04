@@ -1749,7 +1749,7 @@ async function buildIqPayload(targetMember, guild) {
   const embed = new EmbedBuilder()
     .setColor(0x2B2D31)
     .setDescription(`> “${quote}”`)
-    .setFooter({ text: `AniPedia IQ Assessment • Tier ${tier.tier}: ${tier.title} (${tier.rarity})` })
+    .setFooter({ text: `AniPedia IQ Assessment • ${tier.rarity}` })
     .setImage('attachment://iq.png');
 
   return { embeds: [embed], files: [attachment] };
