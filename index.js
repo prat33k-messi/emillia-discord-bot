@@ -778,13 +778,14 @@ function rollAuraPercent() {
 }
 
 // Helper to build Aura Message Payload with embed and image attachment
-async function buildAuraPayload(targetMember) {
+async function buildAuraPayload(targetMember, guild) {
   const { percent: auraPercent, rarity: rarityText } = rollAuraPercent();
   const tier = getAuraTheme(auraPercent);
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const buffer = await generateAuraCard(avatarUrl, auraPercent);
   const attachment = new AttachmentBuilder(buffer, { name: 'aura.png' });
 
+  const { purpFlames } = await getBestieEmojis(guild || targetMember.guild);
   const cursiveText = toCursiveDigits(auraPercent) + '%';
 
   const embed = new EmbedBuilder()
@@ -793,7 +794,7 @@ async function buildAuraPayload(targetMember) {
       name: `Aura of ${targetMember.displayName || targetMember.user.username}`, 
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
     })
-    .setDescription(`*${cursiveText}*`)
+    .setDescription(`${purpFlames} ${cursiveText} ${purpFlames}`)
     .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
     .setImage('attachment://aura.png');
 
@@ -3462,7 +3463,7 @@ client.on('messageCreate', async (message) => {
     // --- Aura Command (-auras only) ---
     if (words.includes('auras') || cleanQuery === 'auras' || cleanQuery.startsWith('auras ') || lowerQuery === 'auras' || lowerQuery.startsWith('auras ')) {
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
-      const auraPayload = await buildAuraPayload(targetMember);
+      const auraPayload = await buildAuraPayload(targetMember, message.guild);
       await message.channel.send(auraPayload);
       return;
     }
@@ -4764,7 +4765,7 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'auras') {
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
-      const auraPayload = await buildAuraPayload(targetMember);
+      const auraPayload = await buildAuraPayload(targetMember, guild);
       await interaction.editReply(auraPayload);
       return;
     }
