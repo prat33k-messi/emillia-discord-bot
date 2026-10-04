@@ -1779,19 +1779,15 @@ client.on('messageCreate', async (message) => {
       const { verify } = await getModEmojis(message.guild);
       const durationStr = formatAfkDuration(timeSinceAfk);
 
-      let removeAfkDesc = `> ${verify} <@${message.author.id}> I have removed your **AFK** • \`${durationStr}\`\n`;
+      let removeAfkDesc = `> ${verify} <@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
       if (afkData.mentions && afkData.mentions.length > 0) {
         const uniqueMentioners = [...new Set(afkData.mentions.map(m => `<@${m.authorId}>`))];
-        removeAfkDesc += `> Mentioned by • ${uniqueMentioners.join(', ')}\n`;
+        removeAfkDesc += `\n> Mentioned by • ${uniqueMentioners.join(', ')}`;
       }
-      removeAfkDesc += `──────────────────────────`;
 
       const removeAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setTitle(`**${toSmallCaps('AFK Removed')}**`)
-        .setDescription(removeAfkDesc)
-        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
+        .setDescription(removeAfkDesc);
 
       await message.reply({ embeds: [removeAfkEmbed] }).catch(() => {});
     }
@@ -1827,14 +1823,7 @@ client.on('messageCreate', async (message) => {
 
           const afkMentionEmbed = new EmbedBuilder()
             .setColor(0x2B2D31)
-            .setTitle(`**${toSmallCaps('AFK Notice')}**`)
-            .setDescription(
-              `> ${dot} <@${mentionedId}> is on **AFK** • <t:${afkSinceUnix}:R>\n` +
-              `> Reason • \`${afkData.reason || 'No reason specified'}\`\n` +
-              `──────────────────────────`
-            )
-            .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
-            .setTimestamp();
+            .setDescription(`> ${dot} <@${mentionedId}> • is currently **AFK** — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`);
 
           await message.reply({ embeds: [afkMentionEmbed] }).catch(() => {});
         }
@@ -3071,19 +3060,11 @@ client.on('messageCreate', async (message) => {
         }).catch(err => console.error("Error saving AFK to Firestore:", err));
       }
 
-      const { dot } = await getModEmojis(message.guild);
-      const afkSinceUnix = Math.floor(afkSince / 1000);
+      const { verify } = await getModEmojis(message.guild);
 
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setTitle(`**${toSmallCaps('AFK Status Set')}**`)
-        .setDescription(
-          `> ${dot} <@${message.author.id}> has been set to **AFK** • <t:${afkSinceUnix}:R>\n` +
-          `> Reason • \`${reason}\`\n` +
-          `──────────────────────────`
-        )
-        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
+        .setDescription(`> ${verify} <@${message.author.id}> • You are now **AFK** — ${reason}`);
 
       await message.reply({ embeds: [setAfkEmbed] });
       return;
@@ -3774,19 +3755,11 @@ client.on('interactionCreate', async (interaction) => {
         }).catch(err => console.error("Error saving AFK in slash to Firestore:", err));
       }
 
-      const { dot } = await getModEmojis(guild);
-      const afkSinceUnix = Math.floor(afkSince / 1000);
+      const { verify } = await getModEmojis(guild);
 
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setTitle(`**${toSmallCaps('AFK Status Set')}**`)
-        .setDescription(
-          `> ${dot} <@${user.id}> has been set to **AFK** • <t:${afkSinceUnix}:R>\n` +
-          `> Reason • \`${reason}\`\n` +
-          `──────────────────────────`
-        )
-        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
+        .setDescription(`> ${verify} <@${user.id}> • You are now **AFK** — ${reason}`);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
       return;
