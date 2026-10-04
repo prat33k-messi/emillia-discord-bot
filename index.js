@@ -1273,143 +1273,326 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-// 7 IQ Tiers Configuration with Custom Archetypes & Quotes
+// 20 IQ Tiers Configuration with Custom Archetypes & Quotes (5% increments)
 const IQ_TIERS = [
   {
     tier: 1,
     min: 0,
-    max: 10,
-    weight: 20,
-    title: 'Single Brain Cell',
+    max: 5,
+    weight: 5,
+    title: 'Single Brain Cell / Bargain Hunter',
     charName: 'Saitama',
     image: 'tier1.png',
     rarity: 'Common',
     quotes: [
-      "I fail in English? That's unpossible!",
-      "My two brain cells are fighting for 3rd place.",
-      "Purification! Purification! Why is the math test still covered in numbers?!",
-      "I stared at the sun and the sun blinked first. I win.",
-      "If I eat the flashcard, does the knowledge go straight into my bloodstream?",
-      "Thinking makes that dial-up internet screeching sound inside my skull.",
-      "The teacher asked for the hypotenuse, so I punched the desk.",
+      "I missed bargain day at the supermarket... nothing else matters anymore.",
+      "100 push-ups, 100 sit-ups, 100 squats, and a 10km run. No AC allowed.",
+      "Is it okay to punch first and ask questions never?",
       "No thoughts, head entirely empty, smooth like an egg."
     ]
   },
   {
     tier: 2,
-    min: 11,
-    max: 30,
-    weight: 35,
-    title: 'Meat-Powered Brain',
+    min: 6,
+    max: 10,
+    weight: 5,
+    title: 'Meat-Powered Brain / Zero Thoughts',
     charName: 'Monkey D. Luffy',
     image: 'tier2.png',
     rarity: 'Common',
     quotes: [
-      "Thinking makes my forehead hot. Let's solve this with barbecue.",
-      "Wait, repeat that whole sentence, but this time don't use words.",
-      "I have a bulletproof 3-step master plan: Run in, yell really loud, and hit things.",
-      "Is this going to be on the test? Because I already sold my pencil for a drumstick.",
-      "Look, if punching it didn't work, it just means I didn't punch it hard enough.",
-      "I didn't lose—the enemy's face just hurt my knuckles so bad I needed a nap.",
+      "Thinking hurts my head. Can we just eat meat and punch things?",
+      "I refuse your refusal! Join my crew right now!",
+      "Mystery ingredient? As long as it's meat, I'm eating it!",
       "My brain runs on 90% beef, 10% adrenaline, and 0% critical thinking."
     ]
   },
   {
     tier: 3,
-    min: 31,
-    max: 50,
-    weight: 50,
-    title: 'Average Human / Pure Survival',
-    charName: 'Zenitsu Agatsuma',
+    min: 11,
+    max: 15,
+    weight: 5,
+    title: 'Muffin Button Thinker / Pure Brawn',
+    charName: 'Son Goku',
     image: 'tier3.png',
-    rarity: 'Uncommon',
+    rarity: 'Common',
     quotes: [
-      "My brain runs exclusively on panic and unverified rumors.",
-      "I don't need a strategy, I need an excuse to go home right now.",
-      "If surviving this means I get bread with jam tomorrow, I’ll fight God.",
-      "I’m screaming because that is statistically the safest thing I can do!",
-      "Look, I didn't come here to be the protagonist, I came here to not die horribly.",
-      "Common sense took one look at this situation and filed for early retirement.",
-      "My ultimate special technique is called: Apologizing Loudly While Backing Away."
+      "Marriage is a type of food, right? Sounds delicious!",
+      "My brain told me to dodge, but my fists wanted to see what would happen.",
+      "Wait, did someone press the muffin button?",
+      "If we yell really loud for three episodes, our power level goes up!"
     ]
   },
   {
     tier: 4,
-    min: 51,
-    max: 70,
-    weight: 60,
-    title: 'Street Smart / Shameless Cheater',
-    charName: 'Satoru Gojo',
+    min: 16,
+    max: 20,
+    weight: 5,
+    title: 'Panicked Survivor / Sleep-Mode Genius',
+    charName: 'Zenitsu Agatsuma',
     image: 'tier4.png',
-    rarity: 'Rare',
+    rarity: 'Common',
     quotes: [
-      "Throughout heaven and earth, I alone am the honored slacker.",
-      "Your next line will be: 'Wait, did you just cheat?' ...And yes, I did.",
-      "I didn't study at all. I just guessed with immense charisma.",
-      "Why outsmart your enemy when you can just make the situation so absurd they give up?",
-      "Rules exist solely so I can find hilarious loopholes around them.",
-      "I am the strongest, which means technicalities are for losers.",
-      "Don't worry, I have a backup plan! (Runs in the opposite direction at full sprint)"
+      "I'm going to die! Look at my skin, I'm already pale and deceased!",
+      "Please don't wake me up, I'm literally only useful when I'm unconscious.",
+      "Marry me! I don't know who you are, but I need life insurance!",
+      "My brain runs exclusively on panic and unverified rumors."
     ]
   },
   {
     tier: 5,
-    min: 71,
-    max: 85,
-    weight: 45,
-    title: 'Tactical Genius / Certified Overthinker',
-    charName: 'L Lawliet',
+    min: 21,
+    max: 25,
+    weight: 5,
+    title: 'Ramen-Fueled Instinct / Unpredictable Shinobi',
+    charName: 'Naruto Uzumaki',
     image: 'tier5.png',
-    rarity: 'Epic',
+    rarity: 'Uncommon',
     quotes: [
-      "What a drag... I already predicted your next 40 mistakes, including that haircut.",
-      "I was hoping to take a 4-hour nap, but your sheer stupidity forced my brain to wake up.",
-      "Your trap was actually pretty decent. Too bad you built it right inside my PowerPoint presentation.",
-      "I am not overthinking, you're just violently underthinking.",
-      "I solved the entire confrontation 10 minutes ago, I was just waiting for you to finish your villain speech.",
-      "I calculated a 99.4% victory rate, and the remaining 0.6% is just in case you do something completely brainless."
+      "If you don't like your destiny, use talk-no-jutsu until it changes!",
+      "Ramen is life. The remaining 90% of my brain is just extra shadow clones.",
+      "Believe it! Even if my battle plan makes zero logical sense!",
+      "I skipped homework to practice balancing on trees with my feet."
     ]
   },
   {
     tier: 6,
-    min: 86,
-    max: 95,
-    weight: 25,
-    title: 'Mastermind / Calculating Strategist',
-    charName: 'Sosuke Aizen',
+    min: 26,
+    max: 30,
+    weight: 5,
+    title: 'Psychic Overload / Simple-Minded Pure Soul',
+    charName: 'Shigeo "Mob" Kageyama',
     image: 'tier6.png',
-    rarity: 'Legendary',
+    rarity: 'Uncommon',
     quotes: [
-      "The fish that keeps its mouth closed never gets caught by the hook.",
-      "Everything is proceeding exactly as planned... including you dropping your pencil just now.",
-      "Since when were you under the impression that you were using your own brain?",
-      "A fool speaks because he must say something; I stay silent because I've already laid the trap.",
-      "I will take a potato chip... AND FIGURE OUT YOUR ENTIRE TAX HISTORY.",
-      "If you actually used your brain for once, you wouldn't gain weight eating cake.",
-      "I didn't just read your mind; I rewrote the script you're reading from.",
-      "You thought you were playing 4D chess, but we're actually playing Uno and I have four Wild Draw Fours.",
-      "Your defeat was finalized during season 1; you're just catching up now."
+      "I want to be popular with girls, but I only know how to bend spoons with my mind.",
+      "My psychic power is 100%, but my social skills are at a solid 0%.",
+      "Master Reigen said salt solves all supernatural problems.",
+      "I joined the Body Improvement Club because muscles don't cause psychic explosions."
     ]
   },
   {
     tier: 7,
-    min: 96,
-    max: 100,
-    weight: 10,
-    title: 'The Sovereign Mind / Elizabethan Polymath',
-    charName: 'Senku Ishigami',
+    min: 31,
+    max: 35,
+    weight: 5,
+    title: 'Viking Schemer / Cynical Tactician',
+    charName: 'Askeladd',
     image: 'tier7.png',
+    rarity: 'Uncommon',
+    quotes: [
+      "Everyone is a slave to something. You're a slave to your own terrible decisions.",
+      "A real warrior doesn't need a sword, just a good excuse to manipulate everyone around him.",
+      "I spent twenty years plotting schemes just to deal with loud Vikings every single day.",
+      "Strategy? Tell everyone what they want to hear and watch them destroy each other."
+    ]
+  },
+  {
+    tier: 8,
+    min: 36,
+    max: 40,
+    weight: 5,
+    title: 'Existential Panic / Certified Meltdown',
+    charName: 'Shinji Ikari',
+    image: 'tier8.png',
+    rarity: 'Uncommon',
+    quotes: [
+      "I don't want to get in the robot... but the robot is playing existential jazz music.",
+      "Everybody is mad at me, so I'll just sit on this train forever.",
+      "I have analyzed all possibilities and decided to curl up in a ball.",
+      "I mustn't run away! ...Okay, maybe just a brisk jog away."
+    ]
+  },
+  {
+    tier: 9,
+    min: 41,
+    max: 45,
+    weight: 5,
+    title: 'Short-Circuited Brain / Wheeee Mode',
+    charName: 'Denki Kaminari',
+    image: 'tier9.png',
+    rarity: 'Rare',
+    quotes: [
+      "I used too much voltage... Wheeee! (thumbs up with dead eyes)",
+      "My brain short-circuited so hard I forgot my own name. Yay!",
+      "Being dumb is fine as long as you're electrically charged!",
+      "I tried to charge my phone with my fingers and set the dorm on fire."
+    ]
+  },
+  {
+    tier: 10,
+    min: 46,
+    max: 50,
+    weight: 5,
+    title: 'Directionally Impaired / Lost Swordsman',
+    charName: 'Roronoa Zoro',
+    image: 'tier10.png',
+    rarity: 'Rare',
+    quotes: [
+      "I didn't get lost. The path decided to wander off in the wrong direction.",
+      "North? South? All I know is three swords and cutting whatever is in front of me.",
+      "I walked in a straight line and somehow ended up on a different continent.",
+      "The compass is clearly broken. It pointed straight towards where I wasn't going."
+    ]
+  },
+  {
+    tier: 11,
+    min: 51,
+    max: 55,
+    weight: 5,
+    title: 'Love-Struck Chef / Black Leg Strategist',
+    charName: 'Sanji',
+    image: 'tier11.png',
+    rarity: 'Rare',
+    quotes: [
+      "Cooking is an art, but my brain completely melts whenever a pretty lady walks by.",
+      "I don't need a map, I just follow the scent of good food and beautiful women.",
+      "Hands are meant only for cooking and holding ladies' hands... feet are for kicking idiots.",
+      "Mellorine~! My IQ drops by 90% in the presence of Nami-san and Robin-chan!"
+    ]
+  },
+  {
+    tier: 12,
+    min: 56,
+    max: 60,
+    weight: 5,
+    title: 'Pint-Sized Prodigy / Don\'t Call Me Short!',
+    charName: 'Edward Elric',
+    image: 'tier12.png',
+    rarity: 'Rare',
+    quotes: [
+      "WHO ARE YOU CALLING A MICROSCOPIC FLEA WHO CAN'T REACH THE TOP SHELF?!",
+      "Equivalent exchange: I give you sarcasm, you give me peace and quiet.",
+      "Drinking milk is a government conspiracy to make me tall. I refuse.",
+      "I can transmute iron from blood, but I still can't ride the rollercoaster."
+    ]
+  },
+  {
+    tier: 13,
+    min: 61,
+    max: 65,
+    weight: 5,
+    title: 'Limitless Flexer / Shameless Troll',
+    charName: 'Satoru Gojo',
+    image: 'tier13.png',
+    rarity: 'Epic',
+    quotes: [
+      "Don't worry, I'm the strongest. Also I ate your premium desserts.",
+      "My domain expansion is called: Doing Whatever I Want Without Consequences.",
+      "Are you crying? Would a sweet treat fix your entire cursed existence?",
+      "Throughout heaven and earth, I alone am the honored slacker."
+    ]
+  },
+  {
+    tier: 14,
+    min: 66,
+    max: 70,
+    weight: 5,
+    title: 'Calculated Assassin / Sweet-Toothed Tactician',
+    charName: 'Killua Zoldyck',
+    image: 'tier14.png',
+    rarity: 'Epic',
+    quotes: [
+      "I calculated 14 ways to assassinate you, but I bought chocolate balls instead.",
+      "Idiot. If you're going to die, do it somewhere quiet.",
+      "Electricity doesn't hurt when your whole family is completely unhinged.",
+      "I spent my entire childhood learning torture techniques and you can't even open a jar."
+    ]
+  },
+  {
+    tier: 15,
+    min: 71,
+    max: 75,
+    weight: 5,
+    title: '4D Chess Tactician / Tactical Crybaby',
+    charName: 'Armin Arlert',
+    image: 'tier15.png',
+    rarity: 'Epic',
+    quotes: [
+      "I will formulate a 12-step plan while crying hysterically in the corner.",
+      "To defeat monsters, we must abandon humanity... or just nuke the harbor.",
+      "My physical strength is zero, but my psychological warfare is lethal.",
+      "If we talk through our feelings first, we can optimize the battlefield strategy."
+    ]
+  },
+  {
+    tier: 16,
+    min: 76,
+    max: 80,
+    weight: 5,
+    title: 'Mad Scientist / Microwave Time Lord',
+    charName: 'Rintaro Okabe',
+    image: 'tier16.png',
+    rarity: 'Epic',
+    quotes: [
+      "It is I, Hououin Kyouma! The mad scientist whose microwave controls the universe!",
+      "El Psy Kongroo. Do not question the call, the Organization is listening!",
+      "I time-traveled 400 times just to make sure Dr Pepper was still in stock.",
+      "Chaos is the natural order, and I am its lab-coated architect!"
+    ]
+  },
+  {
+    tier: 17,
+    min: 81,
+    max: 85,
+    weight: 5,
+    title: 'Ancient Mage / 1,000-Year Procrastinator',
+    charName: 'Frieren',
+    image: 'tier17.png',
+    rarity: 'Legendary',
+    quotes: [
+      "It's only been 80 years, why are you rushing me to finish this grimoire?",
+      "This mimic chest has a 99% chance of eating me, but what if there's a rare spell inside?",
+      "I collected a spell that makes sweet clothes smell like sour grapes. Pure genius.",
+      "Human lifespans are so short, you barely have time to read the prologue of a good grimoire."
+    ]
+  },
+  {
+    tier: 18,
+    min: 86,
+    max: 90,
+    weight: 5,
+    title: 'Sugar-Addicted Detective / Certified Croucher',
+    charName: 'L Lawliet',
+    image: 'tier18.png',
+    rarity: 'Legendary',
+    quotes: [
+      "If you sit normally, your deductive reasoning decreases by approximately 40%.",
+      "There is a 99.8% chance you are guilty, but I need more strawberry cake to confirm.",
+      "I don't gain weight because my brain burns all the calories through overthinking.",
+      "I solved the entire confrontation 10 minutes ago, I was just waiting for you to finish."
+    ]
+  },
+  {
+    tier: 19,
+    min: 91,
+    max: 95,
+    weight: 5,
+    title: 'All According to Keikaku / Chess Grandmaster',
+    charName: 'Sosuke Aizen',
+    image: 'tier19.png',
     rarity: 'Mythic',
     quotes: [
-      "Even the leviathan escapes the net when it keeps its jaws sealed—yet thou babblest away thy doom.",
-      "Doubt that the stars are fire, doubt that the sun doth move, but doubt not thy mind is an empty vessel.",
-      "Thy wit is like a blunt poniard—it hath neither point nor edge, yet thou thrusteth it with great vigor.",
-      "Give every man thy ear, but few thy voice; the silent sovereign rules where loud fools perish.",
-      "More of your conversation would infect my brain, for thou art an intellectual peasant in a velvet doublet.",
-      "The cosmos whispereth its grand design unto mine ear, whilst thou strugglest to decipher thine own alphabet.",
-      "I have calculated the arc of fate itself; alas, it predicteth that thou art bound to remain utterly hopeless.",
-      "Thou speakest an infinite deal of nothing, whilst my mere idle thoughts shatter the heavens with divine geometry.",
-      "Banish thy crude notions, knave—nature's laws bend not to thy pathetic pleas, but to my pristine intellect."
+      "Since when were you under the impression that you were using your own brain?",
+      "Everything that has happened so far was part of my 500-year schedule.",
+      "Admiration is the furthest thing from understanding, but it makes great theater.",
+      "Your defeat was finalized during season 1; you're just catching up now."
+    ]
+  },
+  {
+    tier: 20,
+    min: 96,
+    max: 100,
+    weight: 5,
+    title: 'Sovereign Mastermind / Zero Margin for Error',
+    charName: 'Lelouch vi Britannia',
+    image: 'tier20.png',
+    rarity: 'Mythic',
+    quotes: [
+      "Checkmate. I anticipated your move before you were even conceived.",
+      "The only ones who should kill are those who are prepared to be killed... dramatically.",
+      "I commanded an entire empire while maintaining top grades in high school.",
+      "I have calculated every variable down to the millimeter. Yield."
     ]
   }
 ];
