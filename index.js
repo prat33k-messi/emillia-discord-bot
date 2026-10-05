@@ -2119,7 +2119,12 @@ client.on('messageCreate', async (message) => {
         const invalidCmdEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
           .setDescription(`> ${dot} Invalid command. Use \`-help\` for available commands.`);
-        await message.reply({ embeds: [invalidCmdEmbed] }).catch(() => {});
+        const replyMsg = await message.reply({ embeds: [invalidCmdEmbed] }).catch(() => {});
+        if (replyMsg) {
+          setTimeout(() => {
+            replyMsg.delete().catch(() => {});
+          }, 2000);
+        }
         return;
       }
       return; // Silently ignore — no typing, no response
