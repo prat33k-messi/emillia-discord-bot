@@ -3284,16 +3284,15 @@ client.on('messageCreate', async (message) => {
       const { verify, dot } = await getModEmojis(message.guild);
 
       const helpEmbed = new EmbedBuilder()
-        .setColor(0x9B59B6)
-        .setTitle('Emillia — Command Guide')
+        .setColor(0x2B2D31)
+        .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
-          `*I am here to protect Anipedia with active moderation and discipline!* ⚔️\n\n` +
           `Staff Hierarchy & Permissions\n` +
           `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
-            name: `Disciplinary & Warnings`,
+            name: `${toSmallCaps('Disciplinary & Warnings')}`,
             value: [
               `• \`-warn @user <reason>\` — Warn User`,
               `• \`-deletewarn @user [number]\` — Delete Warning`,
@@ -3305,7 +3304,7 @@ client.on('messageCreate', async (message) => {
             inline: false
           },
           {
-            name: `Punishments & Restrictions`,
+            name: `${toSmallCaps('Punishments & Restrictions')}`,
             value: [
               `• \`-timeout @user [10m/2h/1d] <reason>\` — Timeout Member`,
               `• \`-untimeout @user\` — Remove Timeout`,
@@ -3316,7 +3315,7 @@ client.on('messageCreate', async (message) => {
             inline: false
           },
           {
-            name: `General Commands`,
+            name: `${toSmallCaps('General Commands')}`,
             value: [
               `• \`-afk [reason]\` — Set AFK Status`,
               `• \`-aura [@user]\` — Check Spiritual Aura`,
@@ -3330,7 +3329,7 @@ client.on('messageCreate', async (message) => {
             inline: false
           }
         )
-        .setFooter({ text: 'AniPedia Moderation • Built by Aerion-sama' })
+        .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
       await message.reply({ embeds: [helpEmbed] });
       return;
@@ -4777,16 +4776,15 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
-        .setColor(0x9B59B6)
-        .setTitle('Emillia — Command Guide')
+        .setColor(0x2B2D31)
+        .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
-          `*I am here to protect Anipedia with active moderation and discipline!* ⚔️\n\n` +
           `Staff Hierarchy & Permissions\n` +
           `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
-            name: `Disciplinary & Warnings`,
+            name: `${toSmallCaps('Disciplinary & Warnings')}`,
             value: [
               `• \`/warn <user> [reason]\` — Warn User`,
               `• \`/deletewarn <user> [number]\` — Delete Warning`,
@@ -4798,7 +4796,7 @@ client.on('interactionCreate', async (interaction) => {
             inline: false
           },
           {
-            name: `Punishments & Restrictions`,
+            name: `${toSmallCaps('Punishments & Restrictions')}`,
             value: [
               `• \`/timeout <user> [duration] [reason]\` — Timeout Member`,
               `• \`/untimeout <user>\` — Remove Timeout`,
@@ -4809,7 +4807,7 @@ client.on('interactionCreate', async (interaction) => {
             inline: false
           },
           {
-            name: `General & Fun Commands`,
+            name: `${toSmallCaps('General & Fun Commands')}`,
             value: [
               `• \`/afk [reason]\` — Set AFK Status`,
               `• \`/aura [user]\` — Check Spiritual Aura Card`,
@@ -4821,7 +4819,7 @@ client.on('interactionCreate', async (interaction) => {
             inline: false
           }
         )
-        .setFooter({ text: 'AniPedia Moderation • Built by Aerion-sama', iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+        .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
       await interaction.reply({ embeds: [helpEmbed] });
       return;
