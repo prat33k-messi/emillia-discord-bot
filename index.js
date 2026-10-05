@@ -465,55 +465,6 @@ function toSmallCaps(str) {
 async function getModEmojis(guild) {
   let verify = '';
   let dot = '•';
-
-  try {
-    if (guild && guild.emojis && typeof guild.emojis.fetch === 'function') {
-      await guild.emojis.fetch().catch(() => {});
-    }
-  } catch (e) {}
-
-  // 1. Search in guild custom emojis
-  if (guild && guild.emojis && guild.emojis.cache) {
-    const guildEmojis = Array.from(guild.emojis.cache.values());
-    
-    // Find dot emoji (prioritizing ani_dot)
-    const foundDot = guildEmojis.find(e => 
-      e.name.toLowerCase() === 'ani_dot' ||
-      e.name.toLowerCase().includes('ani_dot') ||
-      e.id === '1088773420906467390' ||
-      e.name.toLowerCase() === 'dot' ||
-      e.name.toLowerCase() === 'point' ||
-      e.name.toLowerCase() === 'bullet' ||
-      e.name.toLowerCase().includes('dot') ||
-      e.name.toLowerCase().includes('point') ||
-      e.name.toLowerCase().includes('bullet') ||
-      e.name.includes('1088773420906467390')
-    );
-    if (foundDot) {
-      dot = foundDot.toString();
-    }
-  }
-
-  // 2. If not found in guild, check global client emojis cache across all bot servers
-  if (dot === '•' && client && client.emojis && client.emojis.cache) {
-    const clientEmojis = Array.from(client.emojis.cache.values());
-    const foundDot = clientEmojis.find(e => 
-      e.name.toLowerCase() === 'ani_dot' ||
-      e.name.toLowerCase().includes('ani_dot') ||
-      e.id === '1088773420906467390' ||
-      e.name.toLowerCase() === 'dot' ||
-      e.name.toLowerCase() === 'point' ||
-      e.name.toLowerCase() === 'bullet' ||
-      e.name.toLowerCase().includes('dot') ||
-      e.name.toLowerCase().includes('point') ||
-      e.name.toLowerCase().includes('bullet') ||
-      e.name.includes('1088773420906467390')
-    );
-    if (foundDot) {
-      dot = foundDot.toString();
-    }
-  }
-
   return { verify, dot };
 }
 
@@ -2158,7 +2109,7 @@ client.on('messageCreate', async (message) => {
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
@@ -2221,11 +2172,6 @@ client.on('messageCreate', async (message) => {
     if (cached) {
       userMemories = [...cached.facts];
       userWarnings = cached.warnings || 0;
-    }
-
-    if (userWarnings >= 3 && username !== '_c0rle0ne' && !isModCommand) {
-      await message.reply("My creator Aerion-sama has told me not to talk to people who break the rules repeatedly. I'm sorry! 🌸");
-      return;
     }
 
     if (isJailbreakAttempt && username !== '_c0rle0ne' && !isModCommand) {
@@ -3341,45 +3287,45 @@ client.on('messageCreate', async (message) => {
         .setColor(0x9B59B6)
         .setTitle('Emillia — Command Guide')
         .setDescription(
-          `*${dot} I am here to protect **Anipedia** with active moderation and discipline!* ⚔️\n\n` +
-          `**Staff Hierarchy & Permissions**\n` +
+          `*I am here to protect Anipedia with active moderation and discipline!* ⚔️\n\n` +
+          `Staff Hierarchy & Permissions\n` +
           `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
-            name: `${dot} Disciplinary & Warnings`,
+            name: `Disciplinary & Warnings`,
             value: [
-              `${dot} \`-warn @user <reason>\` — Warn User`,
-              `${dot} \`-deletewarn @user [number]\` — Delete Warning`,
-              `${dot} \`-clearwarns @user\` — Clear All Warnings`,
-              `${dot} \`-warns @user\` — View Warning History`,
-              `${dot} \`-leaderboard\` / \`-warns leaderboard\` — Top 5 Most Warned`,
-              `${dot} \`-purge <1-100> [@user]\` — Purge Channel Messages`
+              `• \`-warn @user <reason>\` — Warn User`,
+              `• \`-deletewarn @user [number]\` — Delete Warning`,
+              `• \`-clearwarns @user\` — Clear All Warnings`,
+              `• \`-warns @user\` — View Warning History`,
+              `• \`-leaderboard\` / \`-warns leaderboard\` — Top 5 Most Warned`,
+              `• \`-purge <1-100> [@user]\` — Purge Channel Messages`
             ].join('\n'),
             inline: false
           },
           {
-            name: `${dot} Punishments & Restrictions`,
+            name: `Punishments & Restrictions`,
             value: [
-              `${dot} \`-timeout @user [10m/2h/1d] <reason>\` — Timeout Member`,
-              `${dot} \`-untimeout @user\` — Remove Timeout`,
-              `${dot} \`-kick @user <reason>\` — Kick Member`,
-              `${dot} \`-ban @user <reason>\` — Ban Member`,
-              `${dot} \`-unban <user_id>\` — Unban by ID`
+              `• \`-timeout @user [10m/2h/1d] <reason>\` — Timeout Member`,
+              `• \`-untimeout @user\` — Remove Timeout`,
+              `• \`-kick @user <reason>\` — Kick Member`,
+              `• \`-ban @user <reason>\` — Ban Member`,
+              `• \`-unban <user_id>\` — Unban by ID`
             ].join('\n'),
             inline: false
           },
           {
-            name: `${dot} General Commands`,
+            name: `General Commands`,
             value: [
-              `${dot} \`-afk [reason]\` — Set AFK Status`,
-              `${dot} \`-auras [@user]\` — Check Spiritual Aura`,
-              `${dot} \`-bestie <@user>\` — Check Besties Compatibility`,
-              `${dot} \`-av [@user]\` — View User Avatar`,
-              `${dot} \`-iq [@user]\` — Test User IQ Score`,
-              `${dot} \`-profile\` — View User Profile`,
-              `${dot} \`-ping\` — Check Bot Latency`,
-              `${dot} \`-reset\` — **Reset Memory *(Aerion-sama)* **`
+              `• \`-afk [reason]\` — Set AFK Status`,
+              `• \`-aura [@user]\` — Check Spiritual Aura`,
+              `• \`-bestie <@user>\` — Check Besties Compatibility`,
+              `• \`-av [@user]\` — View User Avatar`,
+              `• \`-iq [@user]\` — Test User IQ Score`,
+              `• \`-profile\` — View User Profile`,
+              `• \`-ping\` — Check Bot Latency`,
+              `• \`-reset\` — Reset Memory *(Aerion-sama)*`
             ].join('\n'),
             inline: false
           }
@@ -3460,9 +3406,28 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Aura Command (-auras only) ---
-    if (words.includes('auras') || cleanQuery === 'auras' || cleanQuery.startsWith('auras ') || lowerQuery === 'auras' || lowerQuery.startsWith('auras ')) {
-      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
+    // --- Aura Command (-aura & -auras) ---
+    const isAuraCmd = words[0] === 'aura' || words[0] === 'auras' || 
+                      cleanQuery === 'aura' || cleanQuery === 'auras' || 
+                      cleanQuery.startsWith('aura ') || cleanQuery.startsWith('auras ') || 
+                      lowerQuery === 'aura' || lowerQuery === 'auras' || 
+                      lowerQuery.startsWith('aura ') || lowerQuery.startsWith('auras ');
+
+    if (isAuraCmd) {
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^(auras?)\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m => 
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+      if (!targetMember) {
+        targetMember = message.member;
+      }
       const auraPayload = await buildAuraPayload(targetMember, message.guild);
       await message.channel.send(auraPayload);
       return;
@@ -4760,9 +4725,9 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 12. /auras
+    // 12. /auras & /aura
     // ------------------------------------------
-    if (commandName === 'auras') {
+    if (commandName === 'auras' || commandName === 'aura') {
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const auraPayload = await buildAuraPayload(targetMember, guild);
@@ -4815,43 +4780,43 @@ client.on('interactionCreate', async (interaction) => {
         .setColor(0x9B59B6)
         .setTitle('Emillia — Command Guide')
         .setDescription(
-          `*${dot} I am here to protect **Anipedia** with active moderation and discipline!* ⚔️\n\n` +
-          `**Staff Hierarchy & Permissions**\n` +
+          `*I am here to protect Anipedia with active moderation and discipline!* ⚔️\n\n` +
+          `Staff Hierarchy & Permissions\n` +
           `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
-            name: `${dot} Disciplinary & Warnings`,
+            name: `Disciplinary & Warnings`,
             value: [
-              `${dot} \`/warn <user> [reason]\` — Warn User`,
-              `${dot} \`/deletewarn <user> [number]\` — Delete Warning`,
-              `${dot} \`/clearwarns <user> [reason]\` — Clear All Warnings`,
-              `${dot} \`/warns [user]\` — View Warning History`,
-              `${dot} \`/leaderboard\` — Top 5 Most Warned`,
-              `${dot} \`/purge <amount> [user]\` — Purge Channel Messages`
+              `• \`/warn <user> [reason]\` — Warn User`,
+              `• \`/deletewarn <user> [number]\` — Delete Warning`,
+              `• \`/clearwarns <user> [reason]\` — Clear All Warnings`,
+              `• \`/warns [user]\` — View Warning History`,
+              `• \`/leaderboard\` — Top 5 Most Warned`,
+              `• \`/purge <amount> [user]\` — Purge Channel Messages`
             ].join('\n'),
             inline: false
           },
           {
-            name: `${dot} Punishments & Restrictions`,
+            name: `Punishments & Restrictions`,
             value: [
-              `${dot} \`/timeout <user> [duration] [reason]\` — Timeout Member`,
-              `${dot} \`/untimeout <user>\` — Remove Timeout`,
-              `${dot} \`/kick <user> [reason]\` — Kick Member`,
-              `${dot} \`/ban <user> [reason]\` — Ban Member`,
-              `${dot} \`/unban <user_id>\` — Unban by ID`
+              `• \`/timeout <user> [duration] [reason]\` — Timeout Member`,
+              `• \`/untimeout <user>\` — Remove Timeout`,
+              `• \`/kick <user> [reason]\` — Kick Member`,
+              `• \`/ban <user> [reason]\` — Ban Member`,
+              `• \`/unban <user_id>\` — Unban by ID`
             ].join('\n'),
             inline: false
           },
           {
-            name: `${dot} General & Fun Commands`,
+            name: `General & Fun Commands`,
             value: [
-              `${dot} \`/afk [reason]\` — Set AFK Status`,
-              `${dot} \`/auras [user]\` — Check Spiritual Aura Card`,
-              `${dot} \`/besties <user>\` — Check Besties Compatibility`,
-              `${dot} \`/avatar [user]\` — View User Avatar`,
-              `${dot} \`/iq [user]\` — Test User IQ Score`,
-              `${dot} \`/help\` — Show Command Guide`
+              `• \`/afk [reason]\` — Set AFK Status`,
+              `• \`/aura [user]\` — Check Spiritual Aura Card`,
+              `• \`/besties <user>\` — Check Besties Compatibility`,
+              `• \`/avatar [user]\` — View User Avatar`,
+              `• \`/iq [user]\` — Test User IQ Score`,
+              `• \`/help\` — Show Command Guide`
             ].join('\n'),
             inline: false
           }
