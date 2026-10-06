@@ -742,11 +742,11 @@ async function buildAuraPayload(targetMember, guild) {
   const embed = new EmbedBuilder()
     .setColor(tier.embedColor)
     .setAuthor({ 
-      name: `Aura of ${targetMember.displayName || targetMember.user.username}`, 
+      name: `${toSmallCaps('Aura of')} ${targetMember.displayName || targetMember.user.username}`, 
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
     })
     .setDescription(`${purpFlames} ${cursiveText} ${purpFlames}`)
-    .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
+    .setFooter({ text: `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}` })
     .setImage('attachment://aura.png');
 
   return { embeds: [embed], files: [attachment] };
@@ -821,11 +821,11 @@ async function buildAvatarPayload(targetMember) {
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
     .setAuthor({ 
-      name: `Avatar of ${targetMember.displayName || targetMember.user.username}`, 
+      name: `${toSmallCaps('Avatar of')} ${targetMember.displayName || targetMember.user.username}`, 
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
     })
     .setImage('attachment://avatar.png')
-    .setFooter({ text: 'AniPedia • Avatar Viewer' });
+    .setFooter({ text: `${toSmallCaps('AniPedia')} • ${toSmallCaps('Avatar Viewer')}` });
 
   return { embeds: [embed], files: [attachment] };
 }
@@ -1165,7 +1165,7 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
     .setDescription(leftTier)
-    .setFooter({ text: `AniPedia Compatibility • Rarity: ${rarityText}` })
+    .setFooter({ text: `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}` })
     .setImage('attachment://besties.png');
 
   return { embeds: [embed], files: [attachment] };
@@ -1669,7 +1669,7 @@ async function buildIqPayload(targetMember, guild) {
   const embed = new EmbedBuilder()
     .setColor(0x2B2D31)
     .setDescription(`> “${quote}”`)
-    .setFooter({ text: `AniPedia IQ Assessment • ${tier.rarity}` })
+    .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ${toSmallCaps(tier.rarity)}` })
     .setImage('attachment://iq.png');
 
   return { embeds: [embed], files: [attachment] };
@@ -1763,10 +1763,10 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
       .setColor(0x2B2D31)
       .setTitle(`${titleMap[action] || action}`)
       .addFields(
-        { name: `${dot} Target User`, value: `${targetTag} \`(${targetId})\``, inline: false },
-        { name: `${dot} Moderator`, value: `${moderatorTag}`, inline: true },
+        { name: `${dot} ${toSmallCaps('Target User')}`, value: `${targetTag} \`(${targetId})\``, inline: false },
+        { name: `${dot} ${toSmallCaps('Moderator')}`, value: `${moderatorTag}`, inline: true },
         ...formattedExtra,
-        { name: `${dot} Reason`, value: `>>> ${reason || 'No reason specified'}`, inline: false }
+        { name: `${dot} ${toSmallCaps('Reason')}`, value: `>>> ${reason || 'No reason specified'}`, inline: false }
       )
       .setTimestamp()
       .setFooter({ text: 'AniPedia Moderation' });
@@ -1803,7 +1803,7 @@ client.on('messageCreate', async (message) => {
       let removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
       if (afkData.mentions && afkData.mentions.length > 0) {
         const uniqueMentioners = [...new Set(afkData.mentions.map(m => `<@${m.authorId}>`))];
-        removeAfkDesc += `\nMentioned by • ${uniqueMentioners.join(', ')}`;
+        removeAfkDesc += `\n${toSmallCaps('Mentioned by')} • ${uniqueMentioners.join(', ')}`;
       }
 
       const removeAfkEmbed = new EmbedBuilder()
@@ -1843,7 +1843,7 @@ client.on('messageCreate', async (message) => {
 
           const afkMentionEmbed = new EmbedBuilder()
             .setColor(0x2B2D31)
-            .setDescription(`<@${mentionedId}> • is currently **AFK** — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`);
+            .setDescription(`<@${mentionedId}> • ${toSmallCaps('is currently AFK')} — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`);
 
           await message.reply({ embeds: [afkMentionEmbed] }).catch(() => {});
         }
@@ -2396,9 +2396,9 @@ client.on('messageCreate', async (message) => {
           .setTitle(`${toSmallCaps('Warnings Cleared')}`)
           .setDescription(
             `> <@${targetMember.id}> — (${targetMember.user.username})\n` +
-            `> By • <@${message.author.id}>\n` +
+            `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
             `> Cleared • \`${previousWarningsCount} warning(s) reset\`\n` +
-            `> Reason • ${reason || 'No reason specified'}\n` +
+            `> ${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
@@ -2444,10 +2444,10 @@ client.on('messageCreate', async (message) => {
           await message.delete().catch(() => {});
 
           const { verify, dot } = await getModEmojis(message.guild);
-          let purgeDesc = `> Messages Purged • \`${deletedCount} message(s)\`\n` +
-            `> By • <@${message.author.id}>`;
+          let purgeDesc = `> ${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\`\n` +
+            `> ${toSmallCaps('By')} • <@${message.author.id}>`;
           if (targetMember) {
-            purgeDesc += `\n> Filtered Member • <@${targetMember.id}>`;
+            purgeDesc += `\n> ${toSmallCaps('Filtered Member')} • <@${targetMember.id}>`;
           }
           purgeDesc += `\n──────────────────────────`;
 
@@ -2620,9 +2620,9 @@ client.on('messageCreate', async (message) => {
           .setTitle(`${toSmallCaps('Warning Deleted')}`)
           .setDescription(
             `> <@${targetMember.id}> — Warning **${deletedIndexLabel}**\n` +
-            `> By • <@${message.author.id}>\n` +
-            `> Remaining • \`#${warningsCount} warning(s)\`\n` +
-            `> Reason • ${warnReason}\n` +
+            `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+            `> ${toSmallCaps('Remaining')} • \`#${warningsCount} warning(s)\`\n` +
+            `> ${toSmallCaps('Reason')} • ${warnReason}\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
@@ -2657,8 +2657,8 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Timeout Lifted')}`)
             .setDescription(
               `> <@${targetMember.id}> — (${targetMember.user.username})\n` +
-              `> By • <@${message.author.id}>\n` +
-              `> Status • \`Timeout Removed\`\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+              `> ${toSmallCaps('Status')} • \`Timeout Removed\`\n` +
               `──────────────────────────`
             )
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
@@ -2705,8 +2705,8 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Ban Revoked')}`)
             .setDescription(
               `> <@${targetId}> \`(${targetId})\`\n` +
-              `> By • <@${message.author.id}>\n` +
-              `> Status • \`Ban Revoked\`\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+              `> ${toSmallCaps('Status')} • \`Ban Revoked\`\n` +
               `──────────────────────────`
             )
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
@@ -2795,10 +2795,10 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           let dmWarnDesc = `> <@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-            `> By • <@${message.author.id}>\n` +
-            `> Warnings • \`#${warningsCount}\``;
+            `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+            `> ${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
           if (autoTimeoutApplied) {
-            dmWarnDesc += `\n> Auto-Timeout • \`${autoTimeoutLabel}\``;
+            dmWarnDesc += `\n> ${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
           }
           dmWarnDesc += `\n──────────────────────────`;
 
@@ -2817,10 +2817,10 @@ client.on('messageCreate', async (message) => {
         const caseId = generateCaseId();
 
         let warnDesc = `> <@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-          `> By • <@${message.author.id}>\n` +
-          `> Warnings • \`#${warningsCount}\``;
+          `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+          `> ${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
         if (autoTimeoutApplied) {
-          warnDesc += `\n> Auto-Timeout • \`${autoTimeoutLabel}\``;
+          warnDesc += `\n> ${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
         }
         warnDesc += `\n──────────────────────────`;
 
@@ -2871,8 +2871,8 @@ client.on('messageCreate', async (message) => {
           let dmSent = true;
           try {
             let dmTimeoutDesc = `> <@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
-              `> By • <@${message.author.id}>\n` +
-              `> Duration • \`${durationInfo.label}\`\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+              `> ${toSmallCaps('Duration')} • \`${durationInfo.label}\`\n` +
               `──────────────────────────`;
 
             const dmEmbed = new EmbedBuilder()
@@ -2893,8 +2893,8 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Timeout Issued')}`)
             .setDescription(
               `> <@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
-              `> By • <@${message.author.id}>\n` +
-              `> Duration • \`${durationInfo.label}\`\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+              `> ${toSmallCaps('Duration')} • \`${durationInfo.label}\`\n` +
               `──────────────────────────`
             )
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
@@ -2928,8 +2928,8 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Kicked from Server')}`)
             .setDescription(
               `> <@${targetId}>\n` +
-              `> By • <@${message.author.tag}>\n` +
-              `> Reason • ${reason || 'No reason specified'}\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.tag}>\n` +
+              `> ${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
               `──────────────────────────`
             )
             .setTimestamp()
@@ -2965,9 +2965,9 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Kick Issued')}`)
             .setDescription(
               `> <@${targetId}>\n` +
-              `> By • <@${message.author.id}>\n` +
-              `> Reason • ${reason || 'No reason specified'}\n` +
-              `> Messages Purged • \`${deletedCount} message(s)\`\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+              `> ${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
+              `> ${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\`\n` +
               `──────────────────────────`
             )
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
@@ -3001,8 +3001,8 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Permanent Exile Notice')}`)
             .setDescription(
               `> <@${targetId}>\n` +
-              `> By • <@${message.author.tag}>\n` +
-              `> Reason • ${reason || 'No reason specified'}\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.tag}>\n` +
+              `> ${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
               `──────────────────────────`
             )
             .setTimestamp()
@@ -3038,9 +3038,9 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Ban Issued')}`)
             .setDescription(
               `> <@${targetId}>\n` +
-              `> By • <@${message.author.id}>\n` +
-              `> Reason • ${reason || 'No reason specified'}\n` +
-              `> Messages Purged • \`${deletedCount} message(s)\`\n` +
+              `> ${toSmallCaps('By')} • <@${message.author.id}>\n` +
+              `> ${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
+              `> ${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\`\n` +
               `──────────────────────────`
             )
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
@@ -3090,7 +3090,7 @@ client.on('messageCreate', async (message) => {
 
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`<@${message.author.id}> • You are now **AFK** — ${reason}`);
+        .setDescription(`<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
 
       await message.reply({ embeds: [setAfkEmbed] });
       return;
@@ -3194,7 +3194,7 @@ client.on('messageCreate', async (message) => {
           .setTitle(`${toSmallCaps('Warning History')}`)
           .setDescription(
             `> <@${targetMember.id}> (${targetMember.user.username})\n` +
-            `> Total Warnings • \`0\`\n` +
+            `> ${toSmallCaps('Total Warnings')} • \`0\`\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
@@ -3208,7 +3208,7 @@ client.on('messageCreate', async (message) => {
         .setTitle(`${toSmallCaps('Warning History')}`)
         .setDescription(
           `> <@${targetMember.id}> (${targetMember.user.username})\n` +
-          `> Total Warnings • \`#${warningsCount}\`\n` +
+          `> ${toSmallCaps('Total Warnings')} • \`#${warningsCount}\`\n` +
           `──────────────────────────`
         );
 
@@ -3299,37 +3299,37 @@ client.on('messageCreate', async (message) => {
           {
             name: `${toSmallCaps('Disciplinary & Warnings')}`,
             value: [
-              `• \`-warn @user <reason>\` — Warn User`,
-              `• \`-deletewarn @user [number]\` — Delete Warning`,
-              `• \`-clearwarns @user\` — Clear All Warnings`,
-              `• \`-warns @user\` — View Warning History`,
-              `• \`-leaderboard\` / \`-warns leaderboard\` — Top 5 Most Warned`,
-              `• \`-purge <1-100> [@user]\` — Purge Channel Messages`
+              `• \`-warn @user <reason>\` — ${toSmallCaps('Warn User')}`,
+              `• \`-deletewarn @user [number]\` — ${toSmallCaps('Delete Warning')}`,
+              `• \`-clearwarns @user\` — ${toSmallCaps('Clear All Warnings')}`,
+              `• \`-warns @user\` — ${toSmallCaps('View Warning History')}`,
+              `• \`-leaderboard\` / \`-warns leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
+              `• \`-purge <1-100> [@user]\` — ${toSmallCaps('Purge Channel Messages')}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${toSmallCaps('Punishments & Restrictions')}`,
             value: [
-              `• \`-timeout @user [10m/2h/1d] <reason>\` — Timeout Member`,
-              `• \`-untimeout @user\` — Remove Timeout`,
-              `• \`-kick @user <reason>\` — Kick Member`,
-              `• \`-ban @user <reason>\` — Ban Member`,
-              `• \`-unban <user_id>\` — Unban by ID`
+              `• \`-timeout @user [10m/2h/1d] <reason>\` — ${toSmallCaps('Timeout Member')}`,
+              `• \`-untimeout @user\` — ${toSmallCaps('Remove Timeout')}`,
+              `• \`-kick @user <reason>\` — ${toSmallCaps('Kick Member')}`,
+              `• \`-ban @user <reason>\` — ${toSmallCaps('Ban Member')}`,
+              `• \`-unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${toSmallCaps('General Commands')}`,
             value: [
-              `• \`-afk [reason]\` — Set AFK Status`,
-              `• \`-aura [@user]\` — Check Spiritual Aura`,
-              `• \`-bestie <@user>\` — Check Besties Compatibility`,
-              `• \`-av [@user]\` — View User Avatar`,
-              `• \`-iq [@user]\` — Test User IQ Score`,
-              `• \`-profile\` — View User Profile`,
-              `• \`-ping\` — Check Bot Latency`,
-              `• \`-reset\` — Reset Memory *(Aerion-sama)*`
+              `• \`-afk [reason]\` — ${toSmallCaps('Set AFK Status')}`,
+              `• \`-aura [@user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
+              `• \`-bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
+              `• \`-av [@user]\` — ${toSmallCaps('View User Avatar')}`,
+              `• \`-iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
+              `• \`-profile\` — ${toSmallCaps('View User Profile')}`,
+              `• \`-ping\` — ${toSmallCaps('Check Bot Latency')}`,
+              `• \`-reset\` — ${toSmallCaps('Reset Memory')} *(Aerion-sama)*`
             ].join('\n'),
             inline: false
           }
@@ -3807,7 +3807,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`<@${user.id}> • You are now **AFK** — ${reason}`);
+        .setDescription(`<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
       return;
@@ -3910,10 +3910,10 @@ client.on('interactionCreate', async (interaction) => {
       // Try DM
       try {
         let dmWarnDesc = `> <@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-          `> By • <@${user.id}>\n` +
-          `> Warnings • \`#${warningsCount}\``;
+          `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+          `> ${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
         if (autoTimeoutApplied) {
-          dmWarnDesc += `\n> Auto-Timeout • \`${autoTimeoutLabel}\``;
+          dmWarnDesc += `\n> ${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
         }
         dmWarnDesc += `\n──────────────────────────`;
 
@@ -3928,10 +3928,10 @@ client.on('interactionCreate', async (interaction) => {
 
       const caseId = generateCaseId();
       let warnDesc = `> <@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-        `> By • <@${user.id}>\n` +
-        `> Warnings • \`#${warningsCount}\``;
+        `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+        `> ${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
       if (autoTimeoutApplied) {
-        warnDesc += `\n> Auto-Timeout • \`${autoTimeoutLabel}\``;
+        warnDesc += `\n> ${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
       }
       warnDesc += `\n──────────────────────────`;
 
@@ -3968,7 +3968,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Warning History')}`)
           .setDescription(
             `> <@${targetMember.id}> (${targetMember.user.username})\n` +
-            `> Total Warnings • \`0\`\n` +
+            `> ${toSmallCaps('Total Warnings')} • \`0\`\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -3982,7 +3982,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(`${toSmallCaps('Warning History')}`)
         .setDescription(
           `> <@${targetMember.id}> (${targetMember.user.username})\n` +
-          `> Total Warnings • \`#${warningsCount}\`\n` +
+          `> ${toSmallCaps('Total Warnings')} • \`#${warningsCount}\`\n` +
           `──────────────────────────`
         );
 
@@ -4135,8 +4135,8 @@ client.on('interactionCreate', async (interaction) => {
 
         try {
           let dmTimeoutDesc = `> <@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
-            `> By • <@${user.id}>\n` +
-            `> Duration • \`${durationInfo.label}\`\n` +
+            `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+            `> ${toSmallCaps('Duration')} • \`${durationInfo.label}\`\n` +
             `──────────────────────────`;
 
           const dmEmbed = new EmbedBuilder()
@@ -4154,8 +4154,8 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Timeout Issued')}`)
           .setDescription(
             `> <@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
-            `> By • <@${user.id}>\n` +
-            `> Duration • \`${durationInfo.label}\`\n` +
+            `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+            `> ${toSmallCaps('Duration')} • \`${durationInfo.label}\`\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4209,8 +4209,8 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Timeout Lifted')}`)
           .setDescription(
             `> <@${targetMember.id}> — (${targetMember.user.username})\n` +
-            `> By • <@${user.id}>\n` +
-            `> Status • \`Timeout Removed\`\n` +
+            `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+            `> ${toSmallCaps('Status')} • \`Timeout Removed\`\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4262,8 +4262,8 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Expulsion Notice')}`)
           .setDescription(
             `> <@${targetId}>\n` +
-            `> By • <@${user.tag}>\n` +
-            `> Reason • ${reason}\n` +
+            `> ${toSmallCaps('By')} • <@${user.tag}>\n` +
+            `> ${toSmallCaps('Reason')} • ${reason}\n` +
             `──────────────────────────`
           )
           .setTimestamp()
@@ -4294,9 +4294,9 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Kick Issued')}`)
           .setDescription(
             `> <@${targetId}>\n` +
-            `> By • <@${user.id}>\n` +
-            `> Reason • ${reason}\n` +
-            `> Messages Purged • \`${deletedCount} message(s)\`\n` +
+            `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+            `> ${toSmallCaps('Reason')} • ${reason}\n` +
+            `> ${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\`\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4350,8 +4350,8 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Permanent Exile Notice')}`)
           .setDescription(
             `> <@${targetId}>\n` +
-            `> By • <@${user.tag}>\n` +
-            `> Reason • ${reason}\n` +
+            `> ${toSmallCaps('By')} • <@${user.tag}>\n` +
+            `> ${toSmallCaps('Reason')} • ${reason}\n` +
             `──────────────────────────`
           )
           .setTimestamp()
@@ -4382,9 +4382,9 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Ban Issued')}`)
           .setDescription(
             `> <@${targetId}>\n` +
-            `> By • <@${user.id}>\n` +
-            `> Reason • ${reason}\n` +
-            `> Messages Purged • \`${deletedCount} message(s)\`\n` +
+            `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+            `> ${toSmallCaps('Reason')} • ${reason}\n` +
+            `> ${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\`\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4429,8 +4429,8 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Ban Revoked')}`)
           .setDescription(
             `> <@${targetId}> \`(${targetId})\`\n` +
-            `> By • <@${user.id}>\n` +
-            `> Status • \`Ban Revoked\`\n` +
+            `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+            `> ${toSmallCaps('Status')} • \`Ban Revoked\`\n` +
             `──────────────────────────`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4517,9 +4517,9 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(`${toSmallCaps('Warnings Cleared')}`)
         .setDescription(
           `> <@${targetMember.id}> — (${targetMember.user.username})\n` +
-          `> By • <@${user.id}>\n` +
+          `> ${toSmallCaps('By')} • <@${user.id}>\n` +
           `> Cleared • \`${previousWarningsCount} warning(s) reset\`\n` +
-          `> Reason • ${reason}\n` +
+          `> ${toSmallCaps('Reason')} • ${reason}\n` +
           `──────────────────────────`
         )
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4645,9 +4645,9 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(`${toSmallCaps('Warning Deleted')}`)
         .setDescription(
           `> <@${targetMember.id}> — Warning **${deletedIndexLabel}**\n` +
-          `> By • <@${user.id}>\n` +
-          `> Remaining • \`#${warningsCount} warning(s)\`\n` +
-          `> Reason • ${warnReason}\n` +
+          `> ${toSmallCaps('By')} • <@${user.id}>\n` +
+          `> ${toSmallCaps('Remaining')} • \`#${warningsCount} warning(s)\`\n` +
+          `> ${toSmallCaps('Reason')} • ${warnReason}\n` +
           `──────────────────────────`
         )
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4693,10 +4693,10 @@ client.on('interactionCreate', async (interaction) => {
           }
         }
 
-        let purgeDesc = `> Messages Purged • \`${deletedCount} message(s)\`\n` +
-          `> By • <@${user.id}>`;
+        let purgeDesc = `> ${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\`\n` +
+          `> ${toSmallCaps('By')} • <@${user.id}>`;
         if (targetUser) {
-          purgeDesc += `\n> Filtered Member • <@${targetUser.id}>`;
+          purgeDesc += `\n> ${toSmallCaps('Filtered Member')} • <@${targetUser.id}>`;
         }
         purgeDesc += `\n──────────────────────────`;
 
@@ -4791,35 +4791,35 @@ client.on('interactionCreate', async (interaction) => {
           {
             name: `${toSmallCaps('Disciplinary & Warnings')}`,
             value: [
-              `• \`/warn <user> [reason]\` — Warn User`,
-              `• \`/deletewarn <user> [number]\` — Delete Warning`,
-              `• \`/clearwarns <user> [reason]\` — Clear All Warnings`,
-              `• \`/warns [user]\` — View Warning History`,
-              `• \`/leaderboard\` — Top 5 Most Warned`,
-              `• \`/purge <amount> [user]\` — Purge Channel Messages`
+              `• \`/warn <user> [reason]\` — ${toSmallCaps('Warn User')}`,
+              `• \`/deletewarn <user> [number]\` — ${toSmallCaps('Delete Warning')}`,
+              `• \`/clearwarns <user> [reason]\` — ${toSmallCaps('Clear All Warnings')}`,
+              `• \`/warns [user]\` — ${toSmallCaps('View Warning History')}`,
+              `• \`/leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
+              `• \`/purge <amount> [user]\` — ${toSmallCaps('Purge Channel Messages')}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${toSmallCaps('Punishments & Restrictions')}`,
             value: [
-              `• \`/timeout <user> [duration] [reason]\` — Timeout Member`,
-              `• \`/untimeout <user>\` — Remove Timeout`,
-              `• \`/kick <user> [reason]\` — Kick Member`,
-              `• \`/ban <user> [reason]\` — Ban Member`,
-              `• \`/unban <user_id>\` — Unban by ID`
+              `• \`/timeout <user> [duration] [reason]\` — ${toSmallCaps('Timeout Member')}`,
+              `• \`/untimeout <user>\` — ${toSmallCaps('Remove Timeout')}`,
+              `• \`/kick <user> [reason]\` — ${toSmallCaps('Kick Member')}`,
+              `• \`/ban <user> [reason]\` — ${toSmallCaps('Ban Member')}`,
+              `• \`/unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${toSmallCaps('General & Fun Commands')}`,
             value: [
-              `• \`/afk [reason]\` — Set AFK Status`,
-              `• \`/aura [user]\` — Check Spiritual Aura Card`,
-              `• \`/besties <user>\` — Check Besties Compatibility`,
-              `• \`/avatar [user]\` — View User Avatar`,
-              `• \`/iq [user]\` — Test User IQ Score`,
-              `• \`/help\` — Show Command Guide`
+              `• \`/afk [reason]\` — ${toSmallCaps('Set AFK Status')}`,
+              `• \`/aura [user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
+              `• \`/besties <user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
+              `• \`/avatar [user]\` — ${toSmallCaps('View User Avatar')}`,
+              `• \`/iq [user]\` — ${toSmallCaps('Test User IQ Score')}`,
+              `• \`/help\` — ${toSmallCaps('Show Command Guide')}`
             ].join('\n'),
             inline: false
           }
