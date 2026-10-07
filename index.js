@@ -811,10 +811,6 @@ async function buildAvatarPayload(targetMember) {
 
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
-    .setAuthor({ 
-      name: `${toSmallCaps('Avatar of')} ${targetMember.displayName || targetMember.user.username}`, 
-      iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
-    })
     .setImage('attachment://avatar.png')
     .setFooter({ text: `${toSmallCaps('AniPedia')} • ${toSmallCaps('Avatar Viewer')}` });
 
@@ -2323,33 +2319,68 @@ client.on('messageCreate', async (message) => {
       if (actionKeyword === 'clearwarns') {
         const reason = getReason(cleanQuery, 'clearwarns', targetMember);
         let previousWarningsCount = 0;
+        let deletedWarnDocsCount = 0;
+        let logsSnapshot = null;
+
         if (db) {
           try {
-            // Delete all previous 'warn' logs for this user from moderation_logs
-            const logsSnapshot = await db.collection('moderation_logs')
+            logsSnapshot = await db.collection('moderation_logs')
               .where('targetId', '==', targetMember.id)
               .get();
 
-            const batch = db.batch();
-            let deletedWarnDocsCount = 0;
+            const warnDocs = [];
             logsSnapshot.forEach(doc => {
               if (doc.data().action === 'warn') {
-                batch.delete(doc.ref);
-                deletedWarnDocsCount++;
+                warnDocs.push(doc);
               }
             });
-            if (deletedWarnDocsCount > 0) {
-              await batch.commit();
+            deletedWarnDocsCount = warnDocs.length;
+
+            const userRef = db.collection('memories').doc(targetUsername);
+            const userDoc = await userRef.get();
+            if (userDoc.exists) {
+              previousWarningsCount = userDoc.data().warnings || 0;
+            }
+          } catch (err) {
+            console.error("Firestore clearwarns check error:", err);
+          }
+        } else {
+          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+          previousWarningsCount = cachedMem.warnings || 0;
+        }
+
+        const totalWarns = Math.max(previousWarningsCount, deletedWarnDocsCount);
+        const { verify, dot } = await getModEmojis(message.guild);
+
+        if (totalWarns === 0) {
+          const zeroWarnsEmbed = new EmbedBuilder()
+            .setColor(0x2B2D31)
+            .setDescription(`${dot} <@${targetMember.id}> has **0** active warnings.`)
+            .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() });
+
+          const replyMsg = await message.reply({ embeds: [zeroWarnsEmbed] }).catch(() => {});
+          if (replyMsg && typeof replyMsg.delete === 'function') {
+            setTimeout(() => replyMsg.delete().catch(() => {}), 3000);
+          }
+          return;
+        }
+
+        if (db) {
+          try {
+            const batch = db.batch();
+            if (logsSnapshot) {
+              logsSnapshot.forEach(doc => {
+                if (doc.data().action === 'warn') {
+                  batch.delete(doc.ref);
+                }
+              });
+              if (deletedWarnDocsCount > 0) {
+                await batch.commit();
+              }
             }
 
             const userRef = db.collection('memories').doc(targetUsername);
-            await db.runTransaction(async (t) => {
-              const doc = await t.get(userRef);
-              if (doc.exists) {
-                previousWarningsCount = doc.data().warnings || 0;
-              }
-              t.set(userRef, { warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-            });
+            await userRef.set({ warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
 
             await db.collection('moderation_logs').add({
               action: 'clearwarns',
@@ -2369,11 +2400,9 @@ client.on('messageCreate', async (message) => {
           }
         } else {
           const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-          previousWarningsCount = cachedMem.warnings || 0;
           preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
         }
 
-        const { verify, dot } = await getModEmojis(message.guild);
         const caseId = generateCaseId();
 
         const clearWarnsEmbed = new EmbedBuilder()
@@ -2382,16 +2411,15 @@ client.on('messageCreate', async (message) => {
           .setDescription(
             `<@${targetMember.id}> — (${targetMember.user.username})\n` +
             `${toSmallCaps('By')} • <@${message.author.id}>\n` +
-            `Cleared • \`${previousWarningsCount} warning(s) reset\`\n` +
-            `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
-            `──────────────────────────`
+            `Cleared • \`${totalWarns} warning(s) reset\`\n` +
+            `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}`
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
         await message.channel.send({ embeds: [clearWarnsEmbed] });
         logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: `${dot} Warnings Cleared`, value: `\`${previousWarningsCount} warnings reset to 0\``, inline: true }
+          { name: `${dot} Warnings Cleared`, value: `\`${totalWarns} warnings reset to 0\``, inline: true }
         ]);
         return;
 
@@ -3229,14 +3257,14 @@ client.on('messageCreate', async (message) => {
               historyText += `-# [#${i + 1}] ${reason} • ${dot} \`${moderator}\` • ${timeFormatted}\n`;
             }
             warningsEmbed.addFields({ 
-              name: `${dot} ${toSmallCaps('Warning Log')}`, 
+              name: `${dot} **Warning Log**`, 
               value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
               inline: false 
             });
             warningsEmbed.setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
           } else {
             warningsEmbed.addFields({ 
-              name: `${dot} ${toSmallCaps('Warning Log')}`, 
+              name: `${dot} **Warning Log**`, 
               value: `*This user has ${warningsCount} active warning(s) recorded in memory.*`, 
               inline: false 
             });
@@ -3649,7 +3677,10 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
       const errEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
         .setDescription(`${dot} ${errorMsg}`);
-      await message.reply({ embeds: [errEmbed] }).catch(() => {});
+      const replyMsg = await message.reply({ embeds: [errEmbed] }).catch(() => {});
+      if (replyMsg && typeof replyMsg.delete === 'function') {
+        setTimeout(() => replyMsg.delete().catch(() => {}), 3000);
+      }
     } catch (e) {
       console.error("Error sending error embed:", e);
     }
@@ -3988,7 +4019,7 @@ client.on('interactionCreate', async (interaction) => {
               historyText += `-# [#${i + 1}] ${r} • ${dot} \`${mod}\` • ${timeFormatted}\n`;
             }
             warningsEmbed.addFields({ 
-              name: `${dot} ${toSmallCaps('Warning Log')}`, 
+              name: `${dot} **Warning Log**`, 
               value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
               inline: false 
             });
@@ -4422,31 +4453,63 @@ client.on('interactionCreate', async (interaction) => {
 
       const targetUsername = targetMember.user.username;
       let previousWarningsCount = 0;
+      let count = 0;
+      let logsSnapshot = null;
 
       if (db) {
         try {
-          const logsSnapshot = await db.collection('moderation_logs')
+          logsSnapshot = await db.collection('moderation_logs')
             .where('targetId', '==', targetMember.id)
             .get();
 
-          const batch = db.batch();
-          let count = 0;
           logsSnapshot.forEach(doc => {
             if (doc.data().action === 'warn') {
-              batch.delete(doc.ref);
               count++;
             }
           });
-          if (count > 0) await batch.commit();
 
           const userRef = db.collection('memories').doc(targetUsername);
-          await db.runTransaction(async (t) => {
-            const doc = await t.get(userRef);
-            if (doc.exists) {
-              previousWarningsCount = doc.data().warnings || 0;
-            }
-            t.set(userRef, { warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-          });
+          const userDoc = await userRef.get();
+          if (userDoc.exists) {
+            previousWarningsCount = userDoc.data().warnings || 0;
+          }
+        } catch (err) {
+          console.error("Firestore clearwarns slash check error:", err);
+        }
+      } else {
+        const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
+        previousWarningsCount = cachedMem.warnings || 0;
+      }
+
+      const totalWarns = Math.max(previousWarningsCount, count);
+
+      if (totalWarns === 0) {
+        const zeroWarnsEmbed = new EmbedBuilder()
+          .setColor(0x2B2D31)
+          .setDescription(`${dot} <@${targetMember.id}> has **0** active warnings.`)
+          .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() });
+
+        await interaction.reply({ embeds: [zeroWarnsEmbed] });
+        setTimeout(() => {
+          interaction.deleteReply().catch(() => {});
+        }, 3000);
+        return;
+      }
+
+      if (db) {
+        try {
+          const batch = db.batch();
+          if (logsSnapshot) {
+            logsSnapshot.forEach(doc => {
+              if (doc.data().action === 'warn') {
+                batch.delete(doc.ref);
+              }
+            });
+            if (count > 0) await batch.commit();
+          }
+
+          const userRef = db.collection('memories').doc(targetUsername);
+          await userRef.set({ warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
 
           await db.collection('moderation_logs').add({
             action: 'clearwarns',
@@ -4466,7 +4529,6 @@ client.on('interactionCreate', async (interaction) => {
         }
       } else {
         const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-        previousWarningsCount = cachedMem.warnings || 0;
         preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
       }
 
@@ -4477,7 +4539,7 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription(
           `<@${targetMember.id}> — (${targetMember.user.username})\n` +
           `${toSmallCaps('By')} • <@${user.id}>\n` +
-          `Cleared • \`${previousWarningsCount} warning(s) reset\`\n` +
+          `Cleared • \`${totalWarns} warning(s) reset\`\n` +
           `${toSmallCaps('Reason')} • ${reason}`
         )
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4485,7 +4547,7 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.reply({ embeds: [clearWarnsEmbed] });
       logToEmilliaLog(guild, 'clearwarns', targetMember.user.tag, targetMember.id, user.tag, reason, [
-        { name: `${dot} ${toSmallCaps('Warnings Cleared')}`, value: `-# \`${previousWarningsCount} warnings reset to 0\``, inline: true }
+        { name: `${dot} ${toSmallCaps('Warnings Cleared')}`, value: `-# \`${totalWarns} warnings reset to 0\``, inline: true }
       ]);
       return;
     }
