@@ -1192,10 +1192,9 @@ const IQ_TIERS = [
     image: 'tier1.png',
     rarity: 'Common',
     quotes: [
-      "I missed bargain day at the supermarket... nothing else matters anymore.",
-      "100 push-ups, 100 sit-ups, 100 squats, and a 10km run. No AC allowed.",
-      "Is it okay to punch first and ask questions never?",
-      "No thoughts, head entirely empty, smooth like an egg."
+      "{user}, your brain is on clearance, and even that sale ended yesterday.",
+      "Saitama has one braincell. You're sharing it with him and still losing.",
+      "One punch could end your thought process, and it would still be less effort than the thinking."
     ]
   },
   {
@@ -1208,10 +1207,9 @@ const IQ_TIERS = [
     image: 'tier2.png',
     rarity: 'Common',
     quotes: [
-      "Thinking hurts my head. Can we just eat meat and punch things?",
-      "I refuse your refusal! Join my crew right now!",
-      "Mystery ingredient? As long as it's meat, I'm eating it!",
-      "My brain runs on 90% beef, 10% adrenaline, and 0% critical thinking."
+      "{user}, you're rubber-brained, so every idea just bounces off.",
+      "Your plan has two steps: punch it, then eat it. The second one is the smarter one.",
+      "Luffy once asked for directions and then forgot the answer mid-sentence. You'd lose to him in a trivia game."
     ]
   },
   {
@@ -1224,10 +1222,9 @@ const IQ_TIERS = [
     image: 'tier3.png',
     rarity: 'Common',
     quotes: [
-      "Marriage is a type of food, right? Sounds delicious!",
-      "My brain told me to dodge, but my fists wanted to see what would happen.",
-      "Wait, did someone press the muffin button?",
-      "If we yell really loud for three episodes, our power level goes up!"
+      "{user} yelled for three episodes straight and still didn't learn anything.",
+      "Your brain has one setting: Super Saiyan. It does nothing for your IQ.",
+      "Goku can fight gods, but ask him what a tax return is and he panics. You'd panic with him."
     ]
   },
   {
@@ -1240,10 +1237,9 @@ const IQ_TIERS = [
     image: 'tier4.png',
     rarity: 'Common',
     quotes: [
-      "I'm going to die! Look at my skin, I'm already pale and deceased!",
-      "Please don't wake me up, I'm literally only useful when I'm unconscious.",
-      "Marry me! I don't know who you are, but I need life insurance!",
-      "My brain runs exclusively on panic and unverified rumors."
+      "{user}, you're only smart when unconscious, and nobody has tested that yet.",
+      "Your battle plan is to scream, run, and cry. Somehow it's still not going well.",
+      "Zenitsu at least has one good move. You're still looking for yours."
     ]
   },
   {
@@ -1256,10 +1252,9 @@ const IQ_TIERS = [
     image: 'tier5.png',
     rarity: 'Uncommon',
     quotes: [
-      "If you don't like your destiny, use talk-no-jutsu until it changes!",
-      "Ramen is life. The remaining 90% of my brain is just extra shadow clones.",
-      "Believe it! Even if my battle plan makes zero logical sense!",
-      "I skipped homework to practice balancing on trees with my feet."
+      "{user}, you believe in talk-no-jutsu. Unfortunately you only talk, and nobody is listening.",
+      "Ramen taught you everything you know, and it wasn't much.",
+      "Your plans have the same structure as Naruto's: make a clone, charge in, hope for the best."
     ]
   },
   {
@@ -1272,10 +1267,9 @@ const IQ_TIERS = [
     image: 'tier6.png',
     rarity: 'Uncommon',
     quotes: [
-      "I want to be popular with girls, but I only know how to bend spoons with my mind.",
-      "My psychic power is 100%, but my social skills are at a solid 0%.",
-      "Master Reigen said salt solves all supernatural problems.",
-      "I joined the Body Improvement Club because muscles don't cause psychic explosions."
+      "{user}, you have 100% power and 0% idea what to do with it.",
+      "Your brain is on a 100% stress meter and the explosion is just awkwardness.",
+      "Mob joined a muscle club to fix his problems, and you joined a debate club to lose."
     ]
   },
   {
@@ -1288,10 +1282,9 @@ const IQ_TIERS = [
     image: 'tier7.png',
     rarity: 'Uncommon',
     quotes: [
-      "Everyone is a slave to something. You're a slave to your own terrible decisions.",
-      "A real warrior doesn't need a sword, just a good excuse to manipulate everyone around him.",
-      "I spent twenty years plotting schemes just to deal with loud Vikings every single day.",
-      "Strategy? Tell everyone what they want to hear and watch them destroy each other."
+      "{user}, you're cunning, but you only trick yourself.",
+      "Askeladd lies for a living. You lie and then believe it too.",
+      "You're a schemer with no scheme, which makes you just a guy with a smirk."
     ]
   },
   {
@@ -1304,10 +1297,9 @@ const IQ_TIERS = [
     image: 'tier8.png',
     rarity: 'Uncommon',
     quotes: [
-      "I don't want to get in the robot... but the robot is playing existential jazz music.",
-      "Everybody is mad at me, so I'll just sit on this train forever.",
-      "I have analyzed all possibilities and decided to curl up in a ball.",
-      "I mustn't run away! ...Okay, maybe just a brisk jog away."
+      "{user}, you analyzed every option and picked the worst one: freezing in place.",
+      "You'd pilot the robot for about three seconds before asking if you could go home.",
+      "Shinji needs a therapist. You need a therapist, a nap, and a second opinion."
     ]
   },
   {
@@ -1320,10 +1312,9 @@ const IQ_TIERS = [
     image: 'tier9.png',
     rarity: 'Rare',
     quotes: [
-      "I used too much voltage... Wheeee! (thumbs up with dead eyes)",
-      "My brain short-circuited so hard I forgot my own name. Yay!",
-      "Being dumb is fine as long as you're electrically charged!",
-      "I tried to charge my phone with my fingers and set the dorm on fire."
+      "{user}, your brain has fried more than once, and no one is asking for a refund.",
+      "Wheee! That's the sound of your last braincell leaving.",
+      "Denki shorted out on purpose once. You do it by accident every day."
     ]
   },
   {
@@ -1336,10 +1327,9 @@ const IQ_TIERS = [
     image: 'tier10.png',
     rarity: 'Rare',
     quotes: [
-      "I didn't get lost. The path decided to wander off in the wrong direction.",
-      "North? South? All I know is three swords and cutting whatever is in front of me.",
-      "I walked in a straight line and somehow ended up on a different continent.",
-      "The compass is clearly broken. It pointed straight towards where I wasn't going."
+      "{user}, you took a wrong turn on a straight road. Impressive.",
+      "Your sense of direction and your IQ are both lost somewhere on the Grand Line.",
+      "You'd get lost in your own bedroom, then blame the path."
     ]
   },
   {
@@ -1352,10 +1342,9 @@ const IQ_TIERS = [
     image: 'tier11.png',
     rarity: 'Rare',
     quotes: [
-      "Cooking is an art, but my brain completely melts whenever a pretty lady walks by.",
-      "I don't need a map, I just follow the scent of good food and beautiful women.",
-      "Hands are meant only for cooking and holding ladies' hands... feet are for kicking idiots.",
-      "Mellorine~! My IQ drops by 90% in the presence of Nami-san and Robin-chan!"
+      "{user}, you can cook, but only when nobody pretty walks by.",
+      "Your IQ drops by 90% around attractive people, and you still think you're doing great.",
+      "Sanji would lose a fight but win at cooking, which is exactly your whole résumé."
     ]
   },
   {
@@ -1368,10 +1357,9 @@ const IQ_TIERS = [
     image: 'tier12.png',
     rarity: 'Rare',
     quotes: [
-      "WHO ARE YOU CALLING A MICROSCOPIC FLEA WHO CAN'T REACH THE TOP SHELF?!",
-      "Equivalent exchange: I give you sarcasm, you give me peace and quiet.",
-      "Drinking milk is a government conspiracy to make me tall. I refuse.",
-      "I can transmute iron from blood, but I still can't ride the rollercoaster."
+      "{user}, you tried equivalent exchange and traded your common sense for ego.",
+      "Don't call you short? You're not even the shortest thing about your plan.",
+      "Edward is a prodigy, and you're the guy who copied his homework and still failed."
     ]
   },
   {
@@ -1384,10 +1372,9 @@ const IQ_TIERS = [
     image: 'tier13.png',
     rarity: 'Epic',
     quotes: [
-      "Don't worry, I'm the strongest. Also I ate your premium desserts.",
-      "My domain expansion is called: Doing Whatever I Want Without Consequences.",
-      "Are you crying? Would a sweet treat fix your entire cursed existence?",
-      "Throughout heaven and earth, I alone am the honored slacker."
+      "{user}, you're the strongest in the room. Unfortunately it's a very small room.",
+      "Limitless? Your ego is. Your attention span is not.",
+      "Gojo ate your dessert and you still thanked him. That's the real IQ test."
     ]
   },
   {
@@ -1400,10 +1387,9 @@ const IQ_TIERS = [
     image: 'tier14.png',
     rarity: 'Epic',
     quotes: [
-      "I calculated 14 ways to assassinate you, but I bought chocolate balls instead.",
-      "Idiot. If you're going to die, do it somewhere quiet.",
-      "Electricity doesn't hurt when your whole family is completely unhinged.",
-      "I spent my entire childhood learning torture techniques and you can't even open a jar."
+      "{user}, you've got the brains of an assassin and the self-control of a kid in a candy shop.",
+      "You calculated 14 ways to win and still got distracted by chocolate.",
+      "Killua survived electric shocks. You can't survive a group chat."
     ]
   },
   {
@@ -1416,10 +1402,9 @@ const IQ_TIERS = [
     image: 'tier15.png',
     rarity: 'Epic',
     quotes: [
-      "I will formulate a 12-step plan while crying hysterically in the corner.",
-      "To defeat monsters, we must abandon humanity... or just nuke the harbor.",
-      "My physical strength is zero, but my psychological warfare is lethal.",
-      "If we talk through our feelings first, we can optimize the battlefield strategy."
+      "{user}, you're brilliant on paper, and then you cry on the field.",
+      "Your plan is flawless. Your confidence is not.",
+      "Armin outsmarts titans. You outsmart nobody, but you do cry about it."
     ]
   },
   {
@@ -1432,10 +1417,9 @@ const IQ_TIERS = [
     image: 'tier16.png',
     rarity: 'Epic',
     quotes: [
-      "It is I, Hououin Kyouma! The mad scientist whose microwave controls the universe!",
-      "El Psy Kongroo. Do not question the call, the Organization is listening!",
-      "I time-traveled 400 times just to make sure Dr Pepper was still in stock.",
-      "Chaos is the natural order, and I am its lab-coated architect!"
+      "{user}, the Organization is watching, mostly because you keep announcing your plans to them.",
+      "You're a mad scientist whose only experiment is the microwave.",
+      "El Psy Kongroo. Translation: please stop talking to your phone."
     ]
   },
   {
@@ -1448,10 +1432,9 @@ const IQ_TIERS = [
     image: 'tier17.png',
     rarity: 'Legendary',
     quotes: [
-      "It's only been 80 years, why are you rushing me to finish this grimoire?",
-      "This mimic chest has a 99% chance of eating me, but what if there's a rare spell inside?",
-      "I collected a spell that makes sweet clothes smell like sour grapes. Pure genius.",
-      "Human lifespans are so short, you barely have time to read the prologue of a good grimoire."
+      "{user}, you're smart, but you'd put off saving the world for a 50-year nap.",
+      "A thousand years of wisdom and you still opened the mimic chest.",
+      "You'll finish that task in about eighty years, which is fast by Frieren's standards."
     ]
   },
   {
@@ -1464,10 +1447,9 @@ const IQ_TIERS = [
     image: 'tier18.png',
     rarity: 'Legendary',
     quotes: [
-      "If you sit normally, your deductive reasoning decreases by approximately 40%.",
-      "There is a 99.8% chance you are guilty, but I need more strawberry cake to confirm.",
-      "I don't gain weight because my brain burns all the calories through overthinking.",
-      "I solved the entire confrontation 10 minutes ago, I was just waiting for you to finish."
+      "{user}, you're 99.8% likely to be a genius and 100% likely to be sitting wrong.",
+      "Your brain runs on sugar and your posture is a crime scene.",
+      "L would solve the case in a day, then spend the second day deciding what cake to eat."
     ]
   },
   {
@@ -1480,10 +1462,9 @@ const IQ_TIERS = [
     image: 'tier19.png',
     rarity: 'Mythic',
     quotes: [
-      "Since when were you under the impression that you were using your own brain?",
-      "Everything that has happened so far was part of my 500-year schedule.",
-      "Admiration is the furthest thing from understanding, but it makes great theater.",
-      "Your defeat was finalized during season 1; you're just catching up now."
+      "{user}, this was all part of your plan, including the part where you got roasted.",
+      "You've been playing chess since birth. The other side was just a confused pigeon.",
+      "Aizen outsmarted a whole Soul Society. You just outsmarted a Discord server."
     ]
   },
   {
@@ -1496,10 +1477,9 @@ const IQ_TIERS = [
     image: 'tier20.png',
     rarity: 'Mythic',
     quotes: [
-      "Checkmate. I anticipated your move before you were even conceived.",
-      "The only ones who should kill are those who are prepared to be killed... dramatically.",
-      "I commanded an entire empire while maintaining top grades in high school.",
-      "I have calculated every variable down to the millimeter. Yield."
+      "{user}, checkmate. The roasting bot is the only one who lost.",
+      "You commanded an empire and still got top grades. Annoying.",
+      "Lelouch said \"all hail Britannia.\" The server says \"all hail {user}.\""
     ]
   }
 ];
@@ -1521,7 +1501,7 @@ function rollIqScore() {
   const fallbackTier = IQ_TIERS[0];
   return {
     tier: fallbackTier,
-    score: Math.floor(Math.random() * 11),
+    score: Math.floor(Math.random() * 6),
     quote: fallbackTier.quotes[0]
   };
 }
@@ -1650,12 +1630,15 @@ async function buildIqPayload(targetMember, guild) {
   const displayName = targetMember?.displayName || targetMember?.username || targetMember?.user?.username || 'User';
   const formattedName = `@${displayName}`;
 
+  const userMention = targetMember?.id ? `<@${targetMember.id}>` : displayName;
+  const formattedQuote = quote.replace(/\{user\}/g, userMention);
+
   const buffer = await generateIqCard(targetAvatarUrl, formattedName, tier, score, quote);
   const attachment = new AttachmentBuilder(buffer, { name: 'iq.png' });
 
   const embed = new EmbedBuilder()
     .setColor(0x2B2D31)
-    .setDescription(`“${quote}”`)
+    .setDescription(formattedQuote)
     .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ${toSmallCaps(tier.rarity)}` })
     .setImage('attachment://iq.png');
 
