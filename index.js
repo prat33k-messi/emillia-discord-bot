@@ -317,6 +317,41 @@ function isModerator(member) {
   return getMemberTier(member) >= 1;
 }
 
+// Helper to check if a member has the 'Active' role or above (or is Staff / Owner / Master)
+function canUseAfk(member) {
+  if (!member) return false;
+
+  // Master User & Server Owner always authorized
+  if (member.id === MASTER_USER_ID) return true;
+  if (member.guild && member.guild.ownerId === member.id) return true;
+
+  // Staff (Moderator, Supervisor, Royal Hand, Shogun)
+  if (getMemberTier(member) >= 1) return true;
+
+  // Check roles in member
+  if (member.roles && member.roles.cache) {
+    // Check if member explicitly has any role named or containing 'active'
+    const hasActiveRole = member.roles.cache.some(r => {
+      const name = (r.name || '').toLowerCase().trim();
+      return name === 'active' || name.includes('active');
+    });
+    if (hasActiveRole) return true;
+
+    // Check if member has a role higher in hierarchy than the Active role
+    if (member.guild && member.guild.roles && member.guild.roles.cache) {
+      const activeRole = member.guild.roles.cache.find(r => {
+        const name = (r.name || '').toLowerCase().trim();
+        return name === 'active' || name.includes('active');
+      });
+      if (activeRole && member.roles.highest && member.roles.highest.position >= activeRole.position) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 // ==========================================
 // ANTI-ROGUE ROLE & COPY WATCHDOG
 // ==========================================
@@ -3050,6 +3085,9 @@ client.on('messageCreate', async (message) => {
     // 2. UTILITY COMMANDS (AFK, HELP, PING, RESET, PROFILE, LEADERBOARD, WARNS)
     // ==========================================
     if (words[0] === 'afks' || words[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk')) {
+      if (!canUseAfk(message.member)) {
+        return; // Silent ignore — no response, no warning
+      }
       let reason = cleanQuery.replace(/^afks?\s*/i, '').trim();
       if (!reason) reason = 'No reason specified';
 
@@ -3770,6 +3808,10 @@ client.on('interactionCreate', async (interaction) => {
     // 0. /afk
     // ------------------------------------------
     if (commandName === 'afk') {
+      if (!canUseAfk(member)) {
+        await interaction.reply({ content: "You must have the 'Active' role or above to use AFK.", ephemeral: true }).catch(() => {});
+        return;
+      }
       const reason = options.getString('reason') || 'No reason specified';
       const afkSince = Date.now();
       afkUsers.set(user.id, {
