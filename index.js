@@ -2129,6 +2129,12 @@ client.on('messageCreate', async (message) => {
       return; // Silently ignore — no typing, no response
     }
 
+    // If unauthorized user attempts to use AFK, silently ignore before sending typing indicator
+    const isAfkAttempt = preCheckWords[0] === 'afks' || preCheckWords[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk');
+    if (isAfkAttempt && !canUseAfk(message.member)) {
+      return; // Silently ignore — no typing indicator, no message, no warning
+    }
+
     // Show typing animation only when Emillia will actually respond
     await message.channel.sendTyping();
 
