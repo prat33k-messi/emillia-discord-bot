@@ -416,11 +416,17 @@ async function getModEmojis(guild) {
   return { verify, dot };
 }
 
+let cachedAikoEmojis = { aiko1: '', aiko2: '', aiko3: '' };
+
 // Helper to fetch Aiko custom emojis (aiko1, aiko2, aiko3)
 async function getAikoEmojis(guild) {
-  let aiko1 = '';
-  let aiko2 = '';
-  let aiko3 = '';
+  if (cachedAikoEmojis.aiko1 && cachedAikoEmojis.aiko2 && cachedAikoEmojis.aiko3) {
+    return cachedAikoEmojis;
+  }
+
+  let aiko1 = cachedAikoEmojis.aiko1 || '';
+  let aiko2 = cachedAikoEmojis.aiko2 || '';
+  let aiko3 = cachedAikoEmojis.aiko3 || '';
 
   try {
     if (guild && guild.emojis && typeof guild.emojis.fetch === 'function') {
@@ -429,8 +435,13 @@ async function getAikoEmojis(guild) {
   } catch (e) {}
 
   try {
-    if (client && client.application && client.application.emojis && typeof client.application.emojis.fetch === 'function') {
-      await client.application.emojis.fetch().catch(() => {});
+    if (client) {
+      if (client.application && typeof client.application.fetch === 'function') {
+        await client.application.fetch().catch(() => {});
+      }
+      if (client.application?.emojis && typeof client.application.emojis.fetch === 'function') {
+        await client.application.emojis.fetch().catch(() => {});
+      }
     }
   } catch (e) {}
 
@@ -442,23 +453,85 @@ async function getAikoEmojis(guild) {
 
   const searchPool = Array.from(new Map(allEmojis.map(e => [e.id, e])).values());
 
-  const found1 = searchPool.find(e => {
-    const n = e.name.toLowerCase();
-    return n === 'aiko1' || n === 'aiko_1' || n.includes('aiko1') || n === 'aiko';
-  });
-  if (found1) aiko1 = found1.toString();
+  if (!aiko1) {
+    const found1 = searchPool.find(e => {
+      const n = e.name.toLowerCase();
+      return n === 'aiko1' || n === 'aiko_1' || n.includes('aiko1');
+    });
+    if (found1) aiko1 = found1.toString();
+  }
 
-  const found2 = searchPool.find(e => {
-    const n = e.name.toLowerCase();
-    return n === 'aiko2' || n === 'aiko_2' || n.includes('aiko2');
-  });
-  if (found2) aiko2 = found2.toString();
+  if (!aiko2) {
+    const found2 = searchPool.find(e => {
+      const n = e.name.toLowerCase();
+      return n === 'aiko2' || n === 'aiko_2' || n.includes('aiko2');
+    });
+    if (found2) aiko2 = found2.toString();
+  }
 
-  const found3 = searchPool.find(e => {
-    const n = e.name.toLowerCase();
-    return n === 'aiko3' || n === 'aiko_3' || n.includes('aiko3');
-  });
-  if (found3) aiko3 = found3.toString();
+  if (!aiko3) {
+    const found3 = searchPool.find(e => {
+      const n = e.name.toLowerCase();
+      return n === 'aiko3' || n === 'aiko_3' || n.includes('aiko3');
+    });
+    if (found3) aiko3 = found3.toString();
+  }
+
+  // If not found in Discord, auto-upload from local assets/aiko files
+  const aiko1Path = path.join(__dirname, 'assets', 'aiko', 'aiko1.webp');
+  const aiko2Path = path.join(__dirname, 'assets', 'aiko', 'aiko2.webp');
+  const aiko3Path = path.join(__dirname, 'assets', 'aiko', 'aiko3.webp');
+
+  if (!aiko1 && fs.existsSync(aiko1Path)) {
+    try {
+      let created = null;
+      if (guild?.emojis && typeof guild.emojis.create === 'function') {
+        created = await guild.emojis.create({ attachment: aiko1Path, name: 'aiko1' }).catch(() => null);
+      }
+      if (!created && client?.application?.emojis && typeof client.application.emojis.create === 'function') {
+        created = await client.application.emojis.create({ attachment: aiko1Path, name: 'aiko1' }).catch(() => null);
+      }
+      if (created) aiko1 = created.toString();
+    } catch (err) {
+      console.error("Auto-upload aiko1 failed:", err);
+    }
+  }
+
+  if (!aiko2 && fs.existsSync(aiko2Path)) {
+    try {
+      let created = null;
+      if (guild?.emojis && typeof guild.emojis.create === 'function') {
+        created = await guild.emojis.create({ attachment: aiko2Path, name: 'aiko2' }).catch(() => null);
+      }
+      if (!created && client?.application?.emojis && typeof client.application.emojis.create === 'function') {
+        created = await client.application.emojis.create({ attachment: aiko2Path, name: 'aiko2' }).catch(() => null);
+      }
+      if (created) aiko2 = created.toString();
+    } catch (err) {
+      console.error("Auto-upload aiko2 failed:", err);
+    }
+  }
+
+  if (!aiko3 && fs.existsSync(aiko3Path)) {
+    try {
+      let created = null;
+      if (guild?.emojis && typeof guild.emojis.create === 'function') {
+        created = await guild.emojis.create({ attachment: aiko3Path, name: 'aiko3' }).catch(() => null);
+      }
+      if (!created && client?.application?.emojis && typeof client.application.emojis.create === 'function') {
+        created = await client.application.emojis.create({ attachment: aiko3Path, name: 'aiko3' }).catch(() => null);
+      }
+      if (created) aiko3 = created.toString();
+    } catch (err) {
+      console.error("Auto-upload aiko3 failed:", err);
+    }
+  }
+
+  cachedAikoEmojis = { aiko1, aiko2, aiko3 };
+  console.log("Resolved Aiko emojis:", cachedAikoEmojis);
+  if (!aiko1 || !aiko2 || !aiko3) {
+    console.log("Available guild emojis:", guild?.emojis?.cache ? Array.from(guild.emojis.cache.values()).map(e => e.name).join(', ') : 'none');
+  }
 
   return { aiko1, aiko2, aiko3 };
 }
