@@ -527,13 +527,28 @@ async function getAikoEmojis(guild) {
     }
   }
 
-  cachedAikoEmojis = { aiko1, aiko2, aiko3 };
+  // Helper to extract emoji URL from string <a?:name:id> or fallback to cdn
+  function getEmojiUrl(emojiStr, fallbackPath) {
+    if (emojiStr) {
+      const match = emojiStr.match(/<a?:[a-zA-Z0-9_]+:(\d+)>/);
+      if (match && match[1]) {
+        return `https://cdn.discordapp.com/emojis/${match[1]}.webp?size=160&quality=lossless`;
+      }
+    }
+    return '';
+  }
+
+  const url1 = getEmojiUrl(aiko1);
+  const url2 = getEmojiUrl(aiko2);
+  const url3 = getEmojiUrl(aiko3);
+
+  cachedAikoEmojis = { aiko1, aiko2, aiko3, url1, url2, url3 };
   console.log("Resolved Aiko emojis:", cachedAikoEmojis);
   if (!aiko1 || !aiko2 || !aiko3) {
     console.log("Available guild emojis:", guild?.emojis?.cache ? Array.from(guild.emojis.cache.values()).map(e => e.name).join(', ') : 'none');
   }
 
-  return { aiko1, aiko2, aiko3 };
+  return { aiko1, aiko2, aiko3, url1, url2, url3 };
 }
 
 // Helper to generate unique Case ID for moderation embeds
@@ -1845,7 +1860,7 @@ client.on('messageCreate', async (message) => {
       }
 
       const { verify } = await getModEmojis(message.guild);
-      const { aiko1 } = await getAikoEmojis(message.guild);
+      const { aiko1, url1 } = await getAikoEmojis(message.guild);
       const durationStr = formatAfkDuration(timeSinceAfk);
 
       let removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)${aiko1 ? ' ' + aiko1 : ''}`;
@@ -1857,6 +1872,7 @@ client.on('messageCreate', async (message) => {
       const removeAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
         .setDescription(removeAfkDesc);
+      if (url1) removeAfkEmbed.setThumbnail(url1);
 
       await message.reply({ embeds: [removeAfkEmbed] }).catch(() => {});
     }
@@ -2471,7 +2487,7 @@ client.on('messageCreate', async (message) => {
         }
 
         const caseId = generateCaseId();
-        const { aiko1 } = await getAikoEmojis(message.guild);
+        const { aiko1, url1 } = await getAikoEmojis(message.guild);
 
         const clearWarnsEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
@@ -2484,6 +2500,7 @@ client.on('messageCreate', async (message) => {
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
+        if (url1) clearWarnsEmbed.setThumbnail(url1);
 
         await message.channel.send({ embeds: [clearWarnsEmbed] });
         logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
@@ -2729,7 +2746,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const { verify, dot } = await getModEmojis(message.guild);
-          const { aiko2 } = await getAikoEmojis(message.guild);
+          const { aiko2, url2 } = await getAikoEmojis(message.guild);
           const caseId = generateCaseId();
 
           const untimeoutEmbed = new EmbedBuilder()
@@ -2742,6 +2759,7 @@ client.on('messageCreate', async (message) => {
             )
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
+          if (url2) untimeoutEmbed.setThumbnail(url2);
 
           await message.channel.send({ embeds: [untimeoutEmbed] });
           logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
@@ -2892,7 +2910,7 @@ client.on('messageCreate', async (message) => {
 
         // Send embed response in channel
         const caseId = generateCaseId();
-        const { aiko2 } = await getAikoEmojis(message.guild);
+        const { aiko2, url2 } = await getAikoEmojis(message.guild);
 
         let warnDesc = `<@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
           `${toSmallCaps('By')} • <@${message.author.id}>\n` +
@@ -2907,6 +2925,7 @@ client.on('messageCreate', async (message) => {
           .setDescription(warnDesc)
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
+        if (url2) warnEmbed.setThumbnail(url2);
 
         await message.channel.send({ embeds: [warnEmbed] });
         logToEmilliaLog(message.guild, 'warn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
@@ -2963,7 +2982,7 @@ client.on('messageCreate', async (message) => {
           }
 
           const caseId = generateCaseId();
-          const { aiko3 } = await getAikoEmojis(message.guild);
+          const { aiko3, url3 } = await getAikoEmojis(message.guild);
 
           const timeoutEmbed = new EmbedBuilder()
             .setColor(0x2B2D31)
@@ -2975,6 +2994,7 @@ client.on('messageCreate', async (message) => {
             )
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
+          if (url3) timeoutEmbed.setThumbnail(url3);
 
           await message.channel.send({ embeds: [timeoutEmbed] });
           logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
@@ -3163,10 +3183,11 @@ client.on('messageCreate', async (message) => {
         }).catch(err => console.error("Error saving AFK to Firestore:", err));
       }
 
-      const { aiko2 } = await getAikoEmojis(message.guild);
+      const { aiko2, url2 } = await getAikoEmojis(message.guild);
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
         .setDescription(`<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}${aiko2 ? ' ' + aiko2 : ''}`);
+      if (url2) setAfkEmbed.setThumbnail(url2);
 
       await message.reply({ embeds: [setAfkEmbed] });
       return;
@@ -3184,7 +3205,7 @@ client.on('messageCreate', async (message) => {
 
       if (isLeaderboard) {
         const { verify, dot } = await getModEmojis(message.guild);
-        const { aiko2 } = await getAikoEmojis(message.guild);
+        const { aiko2, url2 } = await getAikoEmojis(message.guild);
 
         // Collect all users with warnings > 0
         const usersWithWarnings = [];
@@ -3208,6 +3229,7 @@ client.on('messageCreate', async (message) => {
             .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
+          if (url2) emptyLbEmbed.setThumbnail(url2);
           await message.channel.send({ embeds: [emptyLbEmbed] });
           return;
         }
@@ -3231,6 +3253,7 @@ client.on('messageCreate', async (message) => {
           .setDescription(lbEntries.join('\n'))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
+        if (url2) lbEmbed.setThumbnail(url2);
         await message.channel.send({ embeds: [lbEmbed] });
         return;
       }
@@ -3856,7 +3879,7 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   const { verify, dot } = await getModEmojis(guild);
-  const { aiko1, aiko2, aiko3 } = await getAikoEmojis(guild);
+  const { aiko1, aiko2, aiko3, url1, url2, url3 } = await getAikoEmojis(guild);
   const modTier = getMemberTier(member);
 
   try {
@@ -3891,6 +3914,7 @@ client.on('interactionCreate', async (interaction) => {
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
         .setDescription(`<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}${aiko2 ? ' ' + aiko2 : ''}`);
+      if (url2) setAfkEmbed.setThumbnail(url2);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
       return;
@@ -4022,6 +4046,7 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription(warnDesc)
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
+      if (url2) warnEmbed.setThumbnail(url2);
 
       await interaction.reply({ embeds: [warnEmbed] });
       logToEmilliaLog(guild, 'warn', targetMember.user.tag, targetMember.id, user.tag, reason, [
@@ -4139,6 +4164,7 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
+        if (url2) emptyLbEmbed.setThumbnail(url2);
         await interaction.reply({ embeds: [emptyLbEmbed] });
         return;
       }
@@ -4162,6 +4188,7 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription(lbEntries.join('\n'))
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
+      if (url2) lbEmbed.setThumbnail(url2);
       await interaction.reply({ embeds: [lbEmbed] });
       return;
     }
@@ -4237,6 +4264,7 @@ client.on('interactionCreate', async (interaction) => {
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
+        if (url3) timeoutEmbed.setThumbnail(url3);
 
         await interaction.reply({ embeds: [timeoutEmbed] });
         logToEmilliaLog(guild, 'timeout', targetMember.user.tag, targetMember.id, user.tag, reason, [
@@ -4291,6 +4319,7 @@ client.on('interactionCreate', async (interaction) => {
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
+        if (url2) untimeoutEmbed.setThumbnail(url2);
 
         await interaction.reply({ embeds: [untimeoutEmbed] });
         logToEmilliaLog(guild, 'untimeout', targetMember.user.tag, targetMember.id, user.tag, `Untimeout by ${user.tag}`);
@@ -4625,6 +4654,7 @@ client.on('interactionCreate', async (interaction) => {
         )
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
+      if (url1) clearWarnsEmbed.setThumbnail(url1);
 
       await interaction.reply({ embeds: [clearWarnsEmbed] });
       logToEmilliaLog(guild, 'clearwarns', targetMember.user.tag, targetMember.id, user.tag, reason, [
