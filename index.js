@@ -1860,10 +1860,10 @@ client.on('messageCreate', async (message) => {
       }
 
       const { verify } = await getModEmojis(message.guild);
-      const { aiko1, url1 } = await getAikoEmojis(message.guild);
+      const { url1 } = await getAikoEmojis(message.guild);
       const durationStr = formatAfkDuration(timeSinceAfk);
 
-      let removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)${aiko1 ? ' ' + aiko1 : ''}`;
+      let removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
       if (afkData.mentions && afkData.mentions.length > 0) {
         const uniqueMentioners = [...new Set(afkData.mentions.map(m => `<@${m.authorId}>`))];
         removeAfkDesc += `\n${toSmallCaps('Mentioned by')} • ${uniqueMentioners.join(', ')}`;
@@ -2487,11 +2487,11 @@ client.on('messageCreate', async (message) => {
         }
 
         const caseId = generateCaseId();
-        const { aiko1, url1 } = await getAikoEmojis(message.guild);
+        const { url1 } = await getAikoEmojis(message.guild);
 
         const clearWarnsEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warnings Cleared')}${aiko1 ? ' ' + aiko1 : ''}`)
+          .setTitle(`${toSmallCaps('Warnings Cleared')}`)
           .setDescription(
             `<@${targetMember.id}> — (${targetMember.user.username})\n` +
             `${toSmallCaps('By')} • <@${message.author.id}>\n` +
@@ -2746,12 +2746,12 @@ client.on('messageCreate', async (message) => {
           }
 
           const { verify, dot } = await getModEmojis(message.guild);
-          const { aiko2, url2 } = await getAikoEmojis(message.guild);
+          const { url2 } = await getAikoEmojis(message.guild);
           const caseId = generateCaseId();
 
           const untimeoutEmbed = new EmbedBuilder()
             .setColor(0x2B2D31)
-            .setTitle(`${toSmallCaps('Timeout Lifted')}${aiko2 ? ' ' + aiko2 : ''}`)
+            .setTitle(`${toSmallCaps('Timeout Lifted')}`)
             .setDescription(
               `<@${targetMember.id}> — (${targetMember.user.username})\n` +
               `${toSmallCaps('By')} • <@${message.author.id}>\n` +
@@ -2910,7 +2910,7 @@ client.on('messageCreate', async (message) => {
 
         // Send embed response in channel
         const caseId = generateCaseId();
-        const { aiko2, url2 } = await getAikoEmojis(message.guild);
+        const { url2 } = await getAikoEmojis(message.guild);
 
         let warnDesc = `<@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
           `${toSmallCaps('By')} • <@${message.author.id}>\n` +
@@ -2921,7 +2921,7 @@ client.on('messageCreate', async (message) => {
 
         const warnEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warning has been issued')}${aiko2 ? ' ' + aiko2 : ''}`)
+          .setTitle(`${toSmallCaps('Warning has been issued')}`)
           .setDescription(warnDesc)
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
@@ -2982,11 +2982,11 @@ client.on('messageCreate', async (message) => {
           }
 
           const caseId = generateCaseId();
-          const { aiko3, url3 } = await getAikoEmojis(message.guild);
+          const { url3 } = await getAikoEmojis(message.guild);
 
           const timeoutEmbed = new EmbedBuilder()
             .setColor(0x2B2D31)
-            .setTitle(`${toSmallCaps('Timeout Issued')}${aiko3 ? ' ' + aiko3 : ''}`)
+            .setTitle(`${toSmallCaps('Timeout Issued')}`)
             .setDescription(
               `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
               `${toSmallCaps('By')} • <@${message.author.id}>\n` +
@@ -3183,10 +3183,10 @@ client.on('messageCreate', async (message) => {
         }).catch(err => console.error("Error saving AFK to Firestore:", err));
       }
 
-      const { aiko2, url2 } = await getAikoEmojis(message.guild);
+      const { url2 } = await getAikoEmojis(message.guild);
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}${aiko2 ? ' ' + aiko2 : ''}`);
+        .setDescription(`<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
       if (url2) setAfkEmbed.setThumbnail(url2);
 
       await message.reply({ embeds: [setAfkEmbed] });
@@ -3205,7 +3205,7 @@ client.on('messageCreate', async (message) => {
 
       if (isLeaderboard) {
         const { verify, dot } = await getModEmojis(message.guild);
-        const { aiko2, url2 } = await getAikoEmojis(message.guild);
+        const { url2 } = await getAikoEmojis(message.guild);
 
         // Collect all users with warnings > 0
         const usersWithWarnings = [];
@@ -3225,7 +3225,7 @@ client.on('messageCreate', async (message) => {
         if (top5.length === 0) {
           const emptyLbEmbed = new EmbedBuilder()
             .setColor(0x2B2D31)
-            .setTitle(`${toSmallCaps('Warning Leaderboard')}${aiko2 ? ' ' + aiko2 : ''}`)
+            .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
             .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
@@ -3249,7 +3249,7 @@ client.on('messageCreate', async (message) => {
 
         const lbEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warning Leaderboard')}${aiko2 ? ' ' + aiko2 : ''}`)
+          .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
           .setDescription(lbEntries.join('\n'))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
@@ -3913,7 +3913,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setDescription(`<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}${aiko2 ? ' ' + aiko2 : ''}`);
+        .setDescription(`<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
       if (url2) setAfkEmbed.setThumbnail(url2);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
@@ -4042,7 +4042,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const warnEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setTitle(`${toSmallCaps('Warning has been issued')}${aiko2 ? ' ' + aiko2 : ''}`)
+        .setTitle(`${toSmallCaps('Warning has been issued')}`)
         .setDescription(warnDesc)
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
@@ -4160,7 +4160,7 @@ client.on('interactionCreate', async (interaction) => {
       if (top5.length === 0) {
         const emptyLbEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warning Leaderboard')}${aiko2 ? ' ' + aiko2 : ''}`)
+          .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
           .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
@@ -4184,7 +4184,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const lbEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setTitle(`${toSmallCaps('Warning Leaderboard')}${aiko2 ? ' ' + aiko2 : ''}`)
+        .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
         .setDescription(lbEntries.join('\n'))
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
@@ -4256,7 +4256,7 @@ client.on('interactionCreate', async (interaction) => {
         const caseId = generateCaseId();
         const timeoutEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Timeout Issued')}${aiko3 ? ' ' + aiko3 : ''}`)
+          .setTitle(`${toSmallCaps('Timeout Issued')}`)
           .setDescription(
             `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
             `${toSmallCaps('By')} • <@${user.id}>\n` +
@@ -4311,7 +4311,7 @@ client.on('interactionCreate', async (interaction) => {
         const caseId = generateCaseId();
         const untimeoutEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Timeout Lifted')}${aiko2 ? ' ' + aiko2 : ''}`)
+          .setTitle(`${toSmallCaps('Timeout Lifted')}`)
           .setDescription(
             `<@${targetMember.id}> — (${targetMember.user.username})\n` +
             `${toSmallCaps('By')} • <@${user.id}>\n` +
@@ -4645,7 +4645,7 @@ client.on('interactionCreate', async (interaction) => {
       const caseId = generateCaseId();
       const clearWarnsEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
-        .setTitle(`${toSmallCaps('Warnings Cleared')}${aiko1 ? ' ' + aiko1 : ''}`)
+        .setTitle(`${toSmallCaps('Warnings Cleared')}`)
         .setDescription(
           `<@${targetMember.id}> — (${targetMember.user.username})\n` +
           `${toSmallCaps('By')} • <@${user.id}>\n` +
