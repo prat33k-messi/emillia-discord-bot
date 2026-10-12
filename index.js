@@ -1860,7 +1860,6 @@ client.on('messageCreate', async (message) => {
       }
 
       const { verify } = await getModEmojis(message.guild);
-      const { url1 } = await getAikoEmojis(message.guild);
       const durationStr = formatAfkDuration(timeSinceAfk);
 
       let removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
@@ -1872,7 +1871,6 @@ client.on('messageCreate', async (message) => {
       const removeAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
         .setDescription(removeAfkDesc);
-      if (url1) removeAfkEmbed.setThumbnail(url1);
 
       await message.reply({ embeds: [removeAfkEmbed] }).catch(() => {});
     }
@@ -3183,11 +3181,9 @@ client.on('messageCreate', async (message) => {
         }).catch(err => console.error("Error saving AFK to Firestore:", err));
       }
 
-      const { url2 } = await getAikoEmojis(message.guild);
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
         .setDescription(`<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
-      if (url2) setAfkEmbed.setThumbnail(url2);
 
       await message.reply({ embeds: [setAfkEmbed] });
       return;
@@ -3914,7 +3910,6 @@ client.on('interactionCreate', async (interaction) => {
       const setAfkEmbed = new EmbedBuilder()
         .setColor(0x2B2D31)
         .setDescription(`<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
-      if (url2) setAfkEmbed.setThumbnail(url2);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
       return;
