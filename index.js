@@ -2520,24 +2520,27 @@ client.on('messageCreate', async (message) => {
           
           let messagesToDelete;
           if (targetMember) {
-            messagesToDelete = fetched.filter(m => m.author.id === targetMember.id && m.id !== message.id).first(purgeAmount);
+            messagesToDelete = fetched.filter(m => m.author.id === targetMember.id && m.id !== message.id);
           } else {
-            messagesToDelete = fetched.filter(m => m.id !== message.id).first(purgeAmount);
+            messagesToDelete = fetched.filter(m => m.id !== message.id);
           }
+
+          // Take requested amount
+          const toDelete = messagesToDelete.first(purgeAmount);
+
+          // Delete the command invocation message first
+          await message.delete().catch(() => {});
 
           let deletedCount = 0;
-          if (messagesToDelete && messagesToDelete.length > 0) {
-            if (messagesToDelete.length === 1) {
-              await messagesToDelete[0].delete().catch(() => {});
+          if (toDelete && toDelete.length > 0) {
+            if (toDelete.length === 1) {
+              await toDelete[0].delete().catch(() => {});
               deletedCount = 1;
             } else {
-              const deleted = await channel.bulkDelete(messagesToDelete, true);
-              deletedCount = deleted.size;
+              const deleted = await message.channel.bulkDelete(toDelete, true);
+              deletedCount = deleted ? deleted.size : toDelete.length;
             }
           }
-
-          // Delete the command invocation message
-          await message.delete().catch(() => {});
 
           const { verify, dot } = await getModEmojis(message.guild);
           let purgeDesc = `${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\`\n` +
@@ -4802,19 +4805,21 @@ client.on('interactionCreate', async (interaction) => {
 
         let messagesToDelete;
         if (targetUser) {
-          messagesToDelete = fetched.filter(m => m.author.id === targetUser.id).first(purgeAmount);
+          messagesToDelete = fetched.filter(m => m.author.id === targetUser.id);
         } else {
-          messagesToDelete = fetched.first(purgeAmount);
+          messagesToDelete = fetched;
         }
 
+        const toDelete = messagesToDelete.first(purgeAmount);
+
         let deletedCount = 0;
-        if (messagesToDelete && messagesToDelete.length > 0) {
-          if (messagesToDelete.length === 1) {
-            await messagesToDelete[0].delete().catch(() => {});
+        if (toDelete && toDelete.length > 0) {
+          if (toDelete.length === 1) {
+            await toDelete[0].delete().catch(() => {});
             deletedCount = 1;
           } else {
-            const deleted = await channel.bulkDelete(messagesToDelete, true);
-            deletedCount = deleted.size;
+            const deleted = await channel.bulkDelete(toDelete, true);
+            deletedCount = deleted ? deleted.size : toDelete.length;
           }
         }
 
