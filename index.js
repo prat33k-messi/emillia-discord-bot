@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
@@ -147,16 +147,16 @@ const slashCommandsData = [
     .addStringOption(opt => opt.setName('user_id').setDescription('The User ID to unban').setRequired(true)),
 
   new SlashCommandBuilder()
-    .setName('clearwarns')
-    .setDescription('Clear all recorded warnings for a member')
-    .addUserOption(opt => opt.setName('user').setDescription('The member whose warnings to clear').setRequired(true))
-    .addStringOption(opt => opt.setName('reason').setDescription('Reason for clearing warnings').setRequired(false)),
+    .setName('clearwarntemp')
+    .setDescription('Lift active warning restrictions & restore nickname early without erasing history')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to clear restrictions for').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for lifting restrictions').setRequired(false)),
 
   new SlashCommandBuilder()
-    .setName('deletewarn')
-    .setDescription('Delete a specific warning from a member')
-    .addUserOption(opt => opt.setName('user').setDescription('The member').setRequired(true))
-    .addIntegerOption(opt => opt.setName('number').setDescription('Warning # to delete (default: latest #1)').setRequired(false)),
+    .setName('clearwarnperm')
+    .setDescription('Permanently reset all warnings and restrictions for a member')
+    .addUserOption(opt => opt.setName('user').setDescription('The member whose warnings to reset').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for permanent reset').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('purge')
@@ -251,14 +251,69 @@ client.once('ready', async () => {
   } catch (err) {
     console.error("Error setting up slash commands on ready:", err);
   }
+
+  // Setup Warned role overwrites and run expiry scheduler
+  try {
+    for (const guild of client.guilds.cache.values()) {
+      await syncWarnedRoleChannelOverwrites(guild);
+    }
+    await checkExpiredWarns();
+    setInterval(checkExpiredWarns, 60 * 1000);
+    console.log("Tiered warn scheduler & Warned role sync initialized.");
+  } catch (err) {
+    console.error("Error initializing warn scheduler/role sync on ready:", err);
+  }
 });
 
 client.on('guildCreate', async (guild) => {
   try {
     // Clear guild-scoped commands on join
     await guild.commands.set([]).catch(() => {});
+    await syncWarnedRoleChannelOverwrites(guild);
   } catch (err) {
     console.error("Error syncing commands on guild join:", err);
+  }
+});
+
+// Listener to ensure Warned role overwrites are automatically applied to any new channel
+client.on('channelCreate', async (channel) => {
+  try {
+    if (!channel.guild) return;
+    const warnedRole = channel.guild.roles.cache.find(r => r.name.toLowerCase() === 'warned');
+    if (warnedRole) {
+      await channel.permissionOverwrites.edit(warnedRole, {
+        AttachFiles: false,
+        EmbedLinks: false,
+        UseExternalEmojis: false,
+        UseExternalStickers: false
+      }, { reason: 'Automated Warned role restrictions for new channel' }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('Error applying Warned overwrite on channelCreate:', err);
+  }
+});
+
+// Listener to enforce [on warn N] nickname tag if a warned member tries to change it
+client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  if (oldMember.nickname === newMember.nickname) return;
+  if (botRenamingUsers.has(newMember.id)) return;
+  if (!db) return;
+
+  try {
+    const stateDoc = await db.collection('user_warn_states').doc(newMember.id).get();
+    if (!stateDoc.exists) return;
+    const state = stateDoc.data();
+
+    if (state.restrictionsActive && state.currentLevel >= 1 && state.currentLevel <= 5) {
+      const expectedTag = `[on warn ${state.currentLevel}]`;
+      const currentNick = newMember.nickname || '';
+      if (!currentNick.endsWith(expectedTag)) {
+        const correctNick = formatWarnNickname(state.originalNickname || newMember.user.displayName, state.currentLevel);
+        await setMemberWarnNickname(newMember, correctNick);
+      }
+    }
+  } catch (err) {
+    console.error('Error enforcing warn nickname tag in guildMemberUpdate:', err);
   }
 });
 
@@ -1805,6 +1860,9 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const colorMap = { 
       'warn': 0xF1C40F, 
       'unwarn': 0x2ECC71, 
+      'clearwarntemp': 0x2ECC71,
+      'clearwarnperm': 0x2ECC71,
+      'warn_expired': 0x3498DB,
       'deletewarn': 0x2ECC71,
       'clearwarns': 0x2ECC71,
       'purge': 0x3498DB,
@@ -1817,6 +1875,9 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     const titleMap = { 
       'warn': 'Moderation Log • User Warned', 
       'unwarn': 'Moderation Log • Warning Removed', 
+      'clearwarntemp': 'Moderation Log • Warning Restrictions Lifted',
+      'clearwarnperm': 'Moderation Log • All Warnings Permanently Reset',
+      'warn_expired': 'Moderation Log • Warning Duration Expired',
       'deletewarn': 'Moderation Log • Warning Deleted',
       'clearwarns': 'Moderation Log • All Warnings Cleared',
       'purge': 'Moderation Log • Messages Purged',
@@ -1849,6 +1910,888 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
   } catch (err) {
     console.error('Error sending to emillia-log channel:', err);
   }
+}
+
+// ==========================================
+// TIERED WARNING SYSTEM HELPERS & SCHEDULER
+// ==========================================
+
+async function logErrorToEmilliaLog(guild, action, targetUserOrId, errorMsg) {
+  try {
+    const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
+    if (!logChannel) return;
+    const { dot } = await getModEmojis(guild);
+    let targetStr = 'N/A';
+    if (targetUserOrId) {
+      if (typeof targetUserOrId === 'string') {
+        targetStr = `<@${targetUserOrId}> \`(${targetUserOrId})\``;
+      } else if (targetUserOrId.user) {
+        targetStr = `${targetUserOrId.user.tag} \`(${targetUserOrId.id})\``;
+      } else if (targetUserOrId.tag) {
+        targetStr = `${targetUserOrId.tag} \`(${targetUserOrId.id})\``;
+      } else {
+        targetStr = String(targetUserOrId);
+      }
+    }
+    const errEmbed = new EmbedBuilder()
+      .setColor(0xE74C3C)
+      .setTitle(`Moderation Notice • ${action} Failed`)
+      .addFields(
+        { name: `${dot} ${toSmallCaps('Target')}`, value: targetStr, inline: true },
+        { name: `${dot} ${toSmallCaps('Details')}`, value: `\`\`\`${errorMsg}\`\`\``, inline: false }
+      )
+      .setTimestamp()
+      .setFooter({ text: 'AniPedia Moderation' });
+    await logChannel.send({ embeds: [errEmbed] });
+  } catch (err) {
+    console.error('Error logging mod error to emillia-log:', err);
+  }
+}
+
+const WARN_LADDER_CONFIG = {
+  1: {
+    name: 'Level 1',
+    timeoutMs: 0,
+    hasRestrictions: false,
+    durationMs: 24 * 60 * 60 * 1000, // 24 hours
+    durationLabel: '24 hours',
+    tag: '[on warn 1]',
+    description: 'Nickname tag applied (No restrictions)'
+  },
+  2: {
+    name: 'Level 2',
+    timeoutMs: 0,
+    hasRestrictions: true,
+    durationMs: 3 * 24 * 60 * 60 * 1000, // 3 days
+    durationLabel: '3 days',
+    tag: '[on warn 2]',
+    description: 'No external emojis/stickers, no GIFs/embed links, no changing nickname, no media uploads'
+  },
+  3: {
+    name: 'Level 3',
+    timeoutMs: 60 * 60 * 1000, // 1 hour
+    timeoutLabel: '1 hour',
+    hasRestrictions: true,
+    durationMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+    durationLabel: '7 days',
+    tag: '[on warn 3]',
+    description: '1 hour timeout + Level 2 restrictions'
+  },
+  4: {
+    name: 'Level 4',
+    timeoutMs: 24 * 60 * 60 * 1000, // 1 day
+    timeoutLabel: '1 day',
+    hasRestrictions: true,
+    durationMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+    durationLabel: '7 days',
+    tag: '[on warn 4]',
+    description: '1 day timeout + Level 2 restrictions'
+  },
+  5: {
+    name: 'Level 5',
+    timeoutMs: 7 * 24 * 60 * 60 * 1000, // 1 week
+    timeoutLabel: '1 week',
+    hasRestrictions: false, // Per specification: only 1-week timeout and nickname tag. Keep Level 4 restrictions if already running.
+    durationMs: 7 * 24 * 60 * 60 * 1000, // 1 week
+    durationLabel: '1 week',
+    tag: '[on warn 5]',
+    description: '1 week timeout'
+  },
+  6: {
+    name: 'Level 6',
+    isBan: true,
+    description: 'Permanent server ban'
+  }
+};
+
+const botRenamingUsers = new Set();
+
+function formatWarnNickname(originalNick, level) {
+  const tag = `[on warn ${level}]`;
+  const cleanOriginal = (originalNick || 'User').replace(/\s*\[on warn \d+\]$/i, '').trim();
+  const maxBaseLen = 32 - 1 - tag.length;
+  const truncatedBase = cleanOriginal.slice(0, Math.max(1, maxBaseLen)).trim();
+  return `${truncatedBase} ${tag}`;
+}
+
+async function setMemberWarnNickname(member, newNickname) {
+  if (!member || !member.manageable) {
+    if (member && member.guild) {
+      await logErrorToEmilliaLog(member.guild, 'Set Nickname', member, 'Missing permissions to modify nickname (target is owner or higher in hierarchy).');
+    }
+    return false;
+  }
+  botRenamingUsers.add(member.id);
+  try {
+    await member.setNickname(newNickname, 'Warn ladder nickname tag update');
+    return true;
+  } catch (err) {
+    if (member && member.guild) {
+      await logErrorToEmilliaLog(member.guild, 'Set Nickname', member, err.message);
+    }
+    return false;
+  } finally {
+    setTimeout(() => botRenamingUsers.delete(member.id), 3000);
+  }
+}
+
+async function restoreMemberOriginalNickname(member, originalNickname) {
+  if (!member || !member.manageable) return false;
+  botRenamingUsers.add(member.id);
+  try {
+    let cleanNick = (originalNickname || '').replace(/\s*\[on warn \d+\]$/i, '').trim();
+    if (!cleanNick) cleanNick = null;
+    await member.setNickname(cleanNick, 'Restoring original nickname after warn expiry / clear');
+    return true;
+  } catch (err) {
+    if (member && member.guild) {
+      await logErrorToEmilliaLog(member.guild, 'Restore Nickname', member, err.message);
+    }
+    return false;
+  } finally {
+    setTimeout(() => botRenamingUsers.delete(member.id), 3000);
+  }
+}
+
+async function getOrCreateWarnedRole(guild) {
+  let role = guild.roles.cache.find(r => r.name.toLowerCase() === 'warned');
+  if (!role) {
+    try {
+      role = await guild.roles.create({
+        name: 'Warned',
+        color: 0x95A5A6,
+        permissions: [],
+        reason: 'Automated Tiered Warning System Role'
+      });
+      console.log(`Created 'Warned' role in guild ${guild.name} (${guild.id})`);
+    } catch (err) {
+      console.error(`Failed to create Warned role in guild ${guild.name}:`, err);
+    }
+  }
+  return role;
+}
+
+async function syncWarnedRoleChannelOverwrites(guild) {
+  try {
+    const warnedRole = await getOrCreateWarnedRole(guild);
+    if (!warnedRole) return;
+
+    for (const channel of guild.channels.cache.values()) {
+      if (!channel.isTextBased() && channel.type !== ChannelType.GuildCategory && !channel.isVoiceBased()) continue;
+
+      const currentOverwrite = channel.permissionOverwrites?.cache?.get(warnedRole.id);
+      const neededFlags = [
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks,
+        PermissionFlagsBits.UseExternalEmojis,
+        PermissionFlagsBits.UseExternalStickers
+      ];
+
+      // Check if all needed flags are already denied to avoid redundant API calls & rate limits
+      const alreadyDenied = currentOverwrite && neededFlags.every(flag => currentOverwrite.deny.has(flag));
+      if (!alreadyDenied) {
+        await channel.permissionOverwrites.edit(warnedRole, {
+          AttachFiles: false,
+          EmbedLinks: false,
+          UseExternalEmojis: false,
+          UseExternalStickers: false
+        }, { reason: 'Automated Warned role restrictions' }).catch(err => {
+          console.warn(`Could not set Warned overwrite on channel ${channel.name}:`, err.message);
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error syncing Warned role channel overwrites:', err);
+  }
+}
+
+async function applyWarnMemberRestrictions(member) {
+  const guild = member.guild;
+  const warnedRole = await getOrCreateWarnedRole(guild);
+  if (warnedRole && !member.roles.cache.has(warnedRole.id)) {
+    try {
+      await member.roles.add(warnedRole, 'Applying Level 2-4 Warned role');
+    } catch (err) {
+      await logErrorToEmilliaLog(guild, 'Apply Warned Role', member, err.message);
+    }
+  }
+
+  // Refinement 4: If a channel explicitly allows Attach Files, Embed Links, External Emojis or External Stickers for another role,
+  // ensure the restriction still takes effect for the warned user with a member-level overwrite
+  for (const channel of guild.channels.cache.values()) {
+    if (!channel.permissionOverwrites) continue;
+    const hasConflictingAllow = channel.permissionOverwrites.cache.some(overwrite => {
+      if (overwrite.type === OverwriteType.Role && overwrite.id !== guild.id && overwrite.id !== warnedRole?.id) {
+        return overwrite.allow.has(PermissionFlagsBits.AttachFiles) ||
+               overwrite.allow.has(PermissionFlagsBits.EmbedLinks) ||
+               overwrite.allow.has(PermissionFlagsBits.UseExternalEmojis) ||
+               overwrite.allow.has(PermissionFlagsBits.UseExternalStickers);
+      }
+      return false;
+    });
+
+    if (hasConflictingAllow) {
+      await channel.permissionOverwrites.edit(member.id, {
+        AttachFiles: false,
+        EmbedLinks: false,
+        UseExternalEmojis: false,
+        UseExternalStickers: false
+      }, { reason: 'Member-level overwrite: Warned restrictions override' }).catch(() => {});
+    }
+  }
+}
+
+async function removeWarnMemberRestrictions(guild, memberOrId) {
+  try {
+    const member = typeof memberOrId === 'string'
+      ? (guild.members.cache.get(memberOrId) || await guild.members.fetch(memberOrId).catch(() => null))
+      : memberOrId;
+
+    const warnedRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'warned');
+    if (member && warnedRole && member.roles.cache.has(warnedRole.id)) {
+      try {
+        await member.roles.remove(warnedRole, 'Restrictions lifted');
+      } catch (err) {
+        await logErrorToEmilliaLog(guild, 'Remove Warned Role', member, err.message);
+      }
+    }
+
+    const userId = member ? member.id : memberOrId;
+    for (const channel of guild.channels.cache.values()) {
+      if (channel.permissionOverwrites?.cache?.has(userId)) {
+        await channel.permissionOverwrites.delete(userId, 'Warned restrictions lifted').catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error('Error removing warn member restrictions:', err);
+  }
+}
+
+async function checkExpiredWarns() {
+  if (!db) return;
+  try {
+    const now = Date.now();
+    const snapshot = await db.collection('user_warn_states')
+      .where('restrictionsActive', '==', true)
+      .get();
+
+    for (const doc of snapshot.docs) {
+      const state = doc.data();
+      if (state.restrictionsExpiry && state.restrictionsExpiry <= now) {
+        console.log(`[Warn Scheduler] Expiring restrictions for user ${state.userId} (Warn Level ${state.currentLevel})`);
+
+        for (const guild of client.guilds.cache.values()) {
+          const member = guild.members.cache.get(state.userId) || await guild.members.fetch(state.userId).catch(() => null);
+          if (member) {
+            await removeWarnMemberRestrictions(guild, member);
+            await restoreMemberOriginalNickname(member, state.originalNickname);
+
+            const { dot } = await getModEmojis(guild);
+            logToEmilliaLog(guild, 'warn_expired', member.user.tag, member.id, client.user.tag, 'Restriction duration concluded automatically', [
+              { name: `${dot} ${toSmallCaps('Level Expired')}`, value: `-# \`Level ${state.currentLevel}\``, inline: true },
+              { name: `${dot} ${toSmallCaps('Status')}`, value: `-# \`Original nickname restored & restrictions lifted\``, inline: true }
+            ]);
+          }
+        }
+
+        if (state.activeWarnId) {
+          await db.collection('warn_records').doc(state.activeWarnId).update({
+            status: 'expired'
+          }).catch(() => {});
+        }
+
+        await doc.ref.update({
+          restrictionsActive: false,
+          activeWarnId: null,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[Warn Scheduler] Error checking expired warns:', err);
+  }
+}
+
+async function executeWarn(source, ctx, targetMember, reason) {
+  const { guild, member, user, replyFn } = ctx;
+  const modTier = getMemberTier(member);
+
+  if (modTier === 0) {
+    await replyFn({ content: "Mou! 🌸 Only staff (Shogun, Community Admins, Supervisor, Moderator) can issue warnings! ❄️", ephemeral: true });
+    return;
+  }
+
+  if (!targetMember) {
+    await replyFn({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+    return;
+  }
+  if (targetMember.id === user.id) {
+    await replyFn({ content: "Mou! 🌸 You cannot warn yourself! ❄️", ephemeral: true });
+    return;
+  }
+
+  const targetTier = getMemberTier(targetMember);
+  if (targetTier >= modTier) {
+    const targetRankName = getTierName(targetTier);
+    const modRankName = getTierName(modTier);
+    await replyFn({ content: `Mou! 🌸 You cannot warn <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    return;
+  }
+
+  let previousLevel = 0;
+  let originalNickname = null;
+  let restrictionsActive = false;
+
+  if (db) {
+    try {
+      const stateDoc = await db.collection('user_warn_states').doc(targetMember.id).get();
+      if (stateDoc.exists) {
+        const sData = stateDoc.data();
+        previousLevel = sData.currentLevel || 0;
+        restrictionsActive = !!sData.restrictionsActive;
+        originalNickname = sData.originalNickname || null;
+      } else {
+        const cached = preloadedMemories.get(targetMember.user.username);
+        if (cached && cached.warnings) {
+          previousLevel = cached.warnings;
+        }
+      }
+    } catch (err) {
+      console.error("Error reading user_warn_states:", err);
+    }
+  }
+
+  const newLevel = previousLevel + 1;
+
+  // Refinement 1: Never save an already-tagged nickname. Keep original while any warn is active.
+  if (!restrictionsActive || !originalNickname) {
+    const rawNick = targetMember.nickname || targetMember.user.displayName || targetMember.user.username;
+    originalNickname = rawNick.replace(/\s*\[on warn \d+\]$/i, '').trim();
+    if (!originalNickname) originalNickname = targetMember.user.username;
+  }
+
+  const { url2 } = await getAikoEmojis(guild);
+  const { dot } = await getModEmojis(guild);
+
+  // LEVEL 6: PERMANENT BAN
+  if (newLevel >= 6) {
+    try {
+      const dmEmbed = new EmbedBuilder()
+        .setColor(0x992D22)
+        .setTitle(`${toSmallCaps('Permanent Exile Notice (Warn Level 6)')}`)
+        .setDescription(
+          `<@${targetMember.id}>\n` +
+          `${toSmallCaps('By')} • <@${user.id}>\n` +
+          `${toSmallCaps('Reason')} • Reached Warn Level 6: ${reason || 'No reason specified'}\n` +
+          `${toSmallCaps('Status')} • \`Permanently Banned\``
+        )
+        .setTimestamp()
+        .setFooter({ text: toSmallCaps('AniPedia Moderation') });
+      await targetMember.send({ embeds: [dmEmbed] });
+    } catch (err) {}
+
+    try {
+      await targetMember.ban({ reason: `Reached Warn Level 6: ${reason || 'No reason specified'}` });
+    } catch (banErr) {
+      await logErrorToEmilliaLog(guild, 'Ban User', targetMember, banErr.message);
+    }
+
+    if (db) {
+      try {
+        await db.collection('warn_records').add({
+          userId: targetMember.id,
+          targetTag: targetMember.user.tag,
+          level: 6,
+          reason: reason || 'Reached Warn Level 6',
+          moderatorId: user.id,
+          moderatorTag: user.tag,
+          timestamp: FieldValue.serverTimestamp(),
+          expiryTimestamp: null,
+          status: 'active'
+        });
+
+        await db.collection('user_warn_states').doc(targetMember.id).set({
+          userId: targetMember.id,
+          username: targetMember.user.username,
+          originalNickname: originalNickname,
+          currentLevel: 6,
+          restrictionsActive: false,
+          activeWarnId: null,
+          restrictionsExpiry: null,
+          lastUpdated: FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        preloadedMemories.set(targetMember.user.username, {
+          ...(preloadedMemories.get(targetMember.user.username) || { facts: [] }),
+          warnings: 6
+        });
+      } catch (err) {
+        console.error("Firestore warn level 6 record error:", err);
+      }
+    }
+
+    const banEmbed = new EmbedBuilder()
+      .setColor(0x2B2D31)
+      .setTitle(`${toSmallCaps('Member Banned (Warn Level 6)')}`)
+      .setDescription(
+        `<@${targetMember.id}> reached **Warn Level 6** and has been permanently banned from the server.\n` +
+        `${toSmallCaps('By')} • <@${user.id}>\n` +
+        `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}`
+      )
+      .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+      .setTimestamp();
+    if (url2) banEmbed.setThumbnail(url2);
+
+    await replyFn({ embeds: [banEmbed] });
+    logToEmilliaLog(guild, 'ban', targetMember.user.tag, targetMember.id, user.tag, `Reached Warn Level 6: ${reason || 'No reason specified'}`, [
+      { name: `${dot} ${toSmallCaps('Action')}`, value: `-# \`Permanent Ban (Ladder Level 6)\``, inline: true }
+    ]);
+    return;
+  }
+
+  // LEVEL 1 to 5
+  const cfg = WARN_LADDER_CONFIG[newLevel];
+  const expiryTimestamp = Date.now() + cfg.durationMs;
+
+  // Nickname Tag
+  const newNick = formatWarnNickname(originalNickname, newLevel);
+  await setMemberWarnNickname(targetMember, newNick);
+
+  // Timeout if required
+  let timeoutApplied = false;
+  if (cfg.timeoutMs > 0) {
+    try {
+      await targetMember.timeout(cfg.timeoutMs, `Warn Level ${newLevel}: ${reason || 'No reason specified'}`);
+      timeoutApplied = true;
+    } catch (tErr) {
+      await logErrorToEmilliaLog(guild, 'Timeout', targetMember, tErr.message);
+    }
+  }
+
+  // Restrictions if required
+  if (cfg.hasRestrictions) {
+    await applyWarnMemberRestrictions(targetMember);
+  }
+
+  // Database update
+  let warnDocId = null;
+  if (db) {
+    try {
+      const warnDocRef = await db.collection('warn_records').add({
+        userId: targetMember.id,
+        targetTag: targetMember.user.tag,
+        level: newLevel,
+        reason: reason || 'No reason specified',
+        moderatorId: user.id,
+        moderatorTag: user.tag,
+        timestamp: FieldValue.serverTimestamp(),
+        expiryTimestamp: expiryTimestamp,
+        durationMs: cfg.durationMs,
+        status: 'active'
+      });
+      warnDocId = warnDocRef.id;
+
+      await db.collection('user_warn_states').doc(targetMember.id).set({
+        userId: targetMember.id,
+        username: targetMember.user.username,
+        originalNickname: originalNickname,
+        currentLevel: newLevel,
+        activeWarnId: warnDocId,
+        restrictionsActive: true,
+        restrictionsExpiry: expiryTimestamp,
+        lastUpdated: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      await db.collection('memories').doc(targetMember.user.username).set({
+        warnings: newLevel,
+        lastUpdated: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      preloadedMemories.set(targetMember.user.username, {
+        ...(preloadedMemories.get(targetMember.user.username) || { facts: [] }),
+        warnings: newLevel
+      });
+    } catch (dbErr) {
+      console.error("Firestore warn write error:", dbErr);
+    }
+  }
+
+  // DM Member
+  try {
+    let dmDesc = `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
+      `${toSmallCaps('By')} • <@${user.id}>\n` +
+      `${toSmallCaps('Warn Level')} • \`#${newLevel}\`\n` +
+      `${toSmallCaps('Duration')} • \`${cfg.durationLabel}\``;
+    if (timeoutApplied) {
+      dmDesc += `\n${toSmallCaps('Timeout')} • \`${cfg.timeoutLabel}\``;
+    }
+    if (cfg.hasRestrictions) {
+      dmDesc += `\n${toSmallCaps('Restrictions')} • \`Warned Role Applied\``;
+    }
+
+    const dmEmbed = new EmbedBuilder()
+      .setColor(0x2B2D31)
+      .setTitle(`${toSmallCaps('Warning Notice')}`)
+      .setDescription(dmDesc)
+      .setTimestamp()
+      .setFooter({ text: toSmallCaps('AniPedia Moderation') });
+    await targetMember.send({ embeds: [dmEmbed] });
+  } catch (dmErr) {}
+
+  let warnDesc = `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
+    `${toSmallCaps('By')} • <@${user.id}>\n` +
+    `${toSmallCaps('Warn Level')} • \`#${newLevel}\`\n` +
+    `${toSmallCaps('Duration')} • \`${cfg.durationLabel}\``;
+  if (timeoutApplied) {
+    warnDesc += `\n${toSmallCaps('Timeout')} • \`${cfg.timeoutLabel}\``;
+  }
+  if (cfg.hasRestrictions) {
+    warnDesc += `\n${toSmallCaps('Restrictions')} • \`Warned Role Applied\``;
+  }
+
+  const warnEmbed = new EmbedBuilder()
+    .setColor(0x2B2D31)
+    .setTitle(`${toSmallCaps('Warning has been issued')}`)
+    .setDescription(warnDesc)
+    .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+    .setTimestamp();
+  if (url2) warnEmbed.setThumbnail(url2);
+
+  await replyFn({ embeds: [warnEmbed] });
+
+  logToEmilliaLog(guild, 'warn', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
+    { name: `${dot} ${toSmallCaps('Warning Level')}`, value: `-# \`Level ${newLevel}\``, inline: true },
+    { name: `${dot} ${toSmallCaps('Duration')}`, value: `-# \`${cfg.durationLabel}\``, inline: true },
+    { name: `${dot} ${toSmallCaps('Punishment')}`, value: `-# \`${cfg.description}\``, inline: false }
+  ]);
+}
+
+async function executeClearWarnTemp(source, ctx, targetMember, reason) {
+  const { guild, member, user, replyFn } = ctx;
+  const modTier = getMemberTier(member);
+
+  if (modTier < 2) {
+    await replyFn({ content: "Mou! 🌸 Only Supervisor, Community Admins, and Shogun can lift warning restrictions! ❄️", ephemeral: true });
+    return;
+  }
+
+  if (!targetMember) {
+    await replyFn({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+    return;
+  }
+
+  const targetTier = getMemberTier(targetMember);
+  if (targetTier >= modTier) {
+    const targetRankName = getTierName(targetTier);
+    const modRankName = getTierName(modTier);
+    await replyFn({ content: `Mou! 🌸 You cannot modify warnings for <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    return;
+  }
+
+  let state = null;
+  if (db) {
+    try {
+      const sDoc = await db.collection('user_warn_states').doc(targetMember.id).get();
+      if (sDoc.exists) state = sDoc.data();
+    } catch (e) {
+      console.error("Error reading state in clearwarntemp:", e);
+    }
+  }
+
+  const currentLevel = state ? (state.currentLevel || 0) : 0;
+  if (currentLevel === 0 && (!state || !state.restrictionsActive)) {
+    const zeroEmbed = new EmbedBuilder()
+      .setColor(0x2B2D31)
+      .setDescription(`<@${targetMember.id}> has **0** active warning restrictions.`)
+      .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() });
+    await replyFn({ embeds: [zeroEmbed] });
+    return;
+  }
+
+  // 1. Remove Warned role & member-level channel overrides
+  await removeWarnMemberRestrictions(guild, targetMember);
+
+  // 2. Clear timeout if timed out
+  if (targetMember.communicationDisabledUntilTimestamp && targetMember.communicationDisabledUntilTimestamp > Date.now()) {
+    try {
+      await targetMember.timeout(null, `Cleared by clearwarntemp: ${reason || 'No reason specified'}`);
+    } catch (tErr) {
+      await logErrorToEmilliaLog(guild, 'Remove Timeout', targetMember, tErr.message);
+    }
+  }
+
+  // 3. Restore original nickname
+  await restoreMemberOriginalNickname(targetMember, state?.originalNickname || null);
+
+  // 4. Update Database: mark active records as expired, preserve currentLevel
+  if (db) {
+    try {
+      const activeWarns = await db.collection('warn_records')
+        .where('userId', '==', targetMember.id)
+        .where('status', '==', 'active')
+        .get();
+
+      const batch = db.batch();
+      activeWarns.forEach(doc => {
+        batch.update(doc.ref, { status: 'expired' });
+      });
+      await batch.commit();
+
+      await db.collection('user_warn_states').doc(targetMember.id).set({
+        restrictionsActive: false,
+        activeWarnId: null,
+        lastUpdated: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      await db.collection('moderation_logs').add({
+        action: 'clearwarntemp',
+        targetId: targetMember.id,
+        targetTag: targetMember.user.tag,
+        moderatorId: user.id,
+        moderatorTag: user.tag,
+        reason: reason || 'Restrictions lifted early via clearwarntemp',
+        currentLevel: currentLevel,
+        timestamp: FieldValue.serverTimestamp()
+      });
+    } catch (dbErr) {
+      console.error("Firestore clearwarntemp error:", dbErr);
+    }
+  }
+
+  const { url1 } = await getAikoEmojis(guild);
+  const { dot } = await getModEmojis(guild);
+
+  const clearEmbed = new EmbedBuilder()
+    .setColor(0x2B2D31)
+    .setTitle(`${toSmallCaps('Warning Restrictions Lifted')}`)
+    .setDescription(
+      `<@${targetMember.id}> — (${targetMember.user.username})\n` +
+      `${toSmallCaps('By')} • <@${user.id}>\n` +
+      `${toSmallCaps('Status')} • \`Restrictions lifted & original nickname restored\`\n` +
+      `${toSmallCaps('Record')} • \`Level ${currentLevel} preserved (next warn: Level ${currentLevel + 1})\`\n` +
+      `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}`
+    )
+    .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+    .setTimestamp();
+  if (url1) clearEmbed.setThumbnail(url1);
+
+  await replyFn({ embeds: [clearEmbed] });
+  logToEmilliaLog(guild, 'clearwarntemp', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
+    { name: `${dot} ${toSmallCaps('Action')}`, value: `-# \`Restrictions & Timeout lifted early\``, inline: true },
+    { name: `${dot} ${toSmallCaps('History')}`, value: `-# \`Preserved at Level ${currentLevel}\``, inline: true }
+  ]);
+}
+
+async function executeClearWarnPerm(source, ctx, targetMember, reason) {
+  const { guild, member, user, replyFn } = ctx;
+  const modTier = getMemberTier(member);
+
+  if (modTier < 3) {
+    await replyFn({ content: "Mou! 🌸 Only Community Admins and Shogun can permanently reset warnings! ❄️", ephemeral: true });
+    return;
+  }
+
+  if (!targetMember) {
+    await replyFn({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+    return;
+  }
+
+  const targetTier = getMemberTier(targetMember);
+  if (targetTier >= modTier) {
+    const targetRankName = getTierName(targetTier);
+    const modRankName = getTierName(modTier);
+    await replyFn({ content: `Mou! 🌸 You cannot modify warnings for <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    return;
+  }
+
+  // 1. Remove Warned role & member-level channel overrides
+  await removeWarnMemberRestrictions(guild, targetMember);
+
+  // 2. Clear timeout if timed out
+  if (targetMember.communicationDisabledUntilTimestamp && targetMember.communicationDisabledUntilTimestamp > Date.now()) {
+    try {
+      await targetMember.timeout(null, `Cleared by clearwarnperm: ${reason || 'No reason specified'}`);
+    } catch (tErr) {
+      await logErrorToEmilliaLog(guild, 'Remove Timeout', targetMember, tErr.message);
+    }
+  }
+
+  // 3. Restore original nickname
+  let state = null;
+  if (db) {
+    try {
+      const sDoc = await db.collection('user_warn_states').doc(targetMember.id).get();
+      if (sDoc.exists) state = sDoc.data();
+    } catch (e) {}
+  }
+  await restoreMemberOriginalNickname(targetMember, state?.originalNickname || null);
+
+  // 4. Update Database: mark all records as cleared, reset level to 0
+  if (db) {
+    try {
+      const allWarns = await db.collection('warn_records')
+        .where('userId', '==', targetMember.id)
+        .get();
+
+      const batch = db.batch();
+      allWarns.forEach(doc => {
+        batch.update(doc.ref, { status: 'cleared' });
+      });
+      await batch.commit();
+
+      await db.collection('user_warn_states').doc(targetMember.id).set({
+        currentLevel: 0,
+        restrictionsActive: false,
+        activeWarnId: null,
+        originalNickname: null,
+        lastUpdated: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      await db.collection('memories').doc(targetMember.user.username).set({
+        warnings: 0,
+        lastUpdated: FieldValue.serverTimestamp()
+      }, { merge: true });
+
+      preloadedMemories.set(targetMember.user.username, {
+        ...(preloadedMemories.get(targetMember.user.username) || { facts: [] }),
+        warnings: 0
+      });
+
+      await db.collection('moderation_logs').add({
+        action: 'clearwarnperm',
+        targetId: targetMember.id,
+        targetTag: targetMember.user.tag,
+        moderatorId: user.id,
+        moderatorTag: user.tag,
+        reason: reason || 'All warnings permanently reset',
+        timestamp: FieldValue.serverTimestamp()
+      });
+    } catch (dbErr) {
+      console.error("Firestore clearwarnperm error:", dbErr);
+    }
+  }
+
+  const { url1 } = await getAikoEmojis(guild);
+  const { dot } = await getModEmojis(guild);
+
+  const permEmbed = new EmbedBuilder()
+    .setColor(0x2B2D31)
+    .setTitle(`${toSmallCaps('All Warnings Permanently Reset')}`)
+    .setDescription(
+      `<@${targetMember.id}> — (${targetMember.user.username})\n` +
+      `${toSmallCaps('By')} • <@${user.id}>\n` +
+      `${toSmallCaps('Status')} • \`All warnings reset to 0 (Next warn: Level 1)\`\n` +
+      `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}`
+    )
+    .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+    .setTimestamp();
+  if (url1) permEmbed.setThumbnail(url1);
+
+  await replyFn({ embeds: [permEmbed] });
+  logToEmilliaLog(guild, 'clearwarnperm', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
+    { name: `${dot} ${toSmallCaps('Action')}`, value: `-# \`All warnings permanently reset to 0\``, inline: true }
+  ]);
+}
+
+async function executeWarns(source, ctx, targetMember) {
+  const { guild, replyFn } = ctx;
+  let warnRecords = [];
+  let userState = null;
+
+  if (db) {
+    try {
+      const sDoc = await db.collection('user_warn_states').doc(targetMember.id).get();
+      if (sDoc.exists) userState = sDoc.data();
+
+      const snapshot = await db.collection('warn_records')
+        .where('userId', '==', targetMember.id)
+        .get();
+
+      snapshot.forEach(doc => {
+        warnRecords.push({ id: doc.id, ...doc.data() });
+      });
+
+      // Fallback to legacy moderation_logs if warn_records is empty
+      if (warnRecords.length === 0) {
+        const legacySnapshot = await db.collection('moderation_logs')
+          .where('targetId', '==', targetMember.id)
+          .get();
+
+        legacySnapshot.forEach(doc => {
+          const d = doc.data();
+          if (d.action === 'warn') {
+            warnRecords.push({
+              id: doc.id,
+              level: 1,
+              reason: d.reason || 'Legacy warning',
+              moderatorId: d.moderatorId || client.user.id,
+              timestamp: d.timestamp,
+              status: 'expired'
+            });
+          }
+        });
+      }
+
+      warnRecords.sort((a, b) => {
+        const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
+        const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
+        return timeB - timeA;
+      });
+    } catch (err) {
+      console.error("Error fetching warns records:", err);
+    }
+  }
+
+  const { url1, url2 } = await getAikoEmojis(guild);
+  const { dot } = await getModEmojis(guild);
+  const currentLevel = userState ? (userState.currentLevel || 0) : 0;
+
+  if (warnRecords.length === 0 && currentLevel === 0) {
+    const cleanEmbed = new EmbedBuilder()
+      .setColor(0x2B2D31)
+      .setTitle(`${toSmallCaps('Warning Record')}`)
+      .setDescription(
+        `<@${targetMember.id}>\n\n` +
+        `**${toSmallCaps('Status')}:** \`100% Clean Record\`\n` +
+        `This member has no recorded warnings in AniPedia!`
+      )
+      .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+      .setTimestamp();
+    if (url1) cleanEmbed.setThumbnail(url1);
+    await replyFn({ embeds: [cleanEmbed] });
+    return;
+  }
+
+  const warnLines = warnRecords.slice(0, 10).map((w, idx) => {
+    let dateStr = 'Recently';
+    if (w.timestamp && typeof w.timestamp.toDate === 'function') {
+      const unixSec = Math.floor(w.timestamp.toDate().getTime() / 1000);
+      dateStr = `<t:${unixSec}:R>`;
+    }
+
+    let statusBadge = '`Active`';
+    if (w.status === 'expired') statusBadge = '`Expired`';
+    else if (w.status === 'cleared') statusBadge = '`Cleared`';
+
+    return `**${toSmallCaps(`Warn ${w.level || idx + 1}`)}** • ${statusBadge}\n` +
+      `- ${toSmallCaps('Reason')}: ${w.reason || 'No reason specified'}\n` +
+      `- ${toSmallCaps('Moderator')}: <@${w.moderatorId}> • ${dateStr}`;
+  });
+
+  const warnsEmbed = new EmbedBuilder()
+    .setColor(0x2B2D31)
+    .setTitle(`${toSmallCaps('Warning Record')}`)
+    .setDescription(
+      `<@${targetMember.id}>\n` +
+      `${toSmallCaps('Current Ladder Level')} • \`Level ${currentLevel}\`\n` +
+      `${toSmallCaps('Active Restrictions')} • \`${userState?.restrictionsActive ? 'Yes' : 'No'}\`\n\n` +
+      warnLines.join('\n\n')
+    )
+    .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+    .setTimestamp();
+  if (url2) warnsEmbed.setThumbnail(url2);
+
+  await replyFn({ embeds: [warnsEmbed] });
 }
 
 client.on('messageCreate', async (message) => {
@@ -2209,14 +3152,13 @@ client.on('messageCreate', async (message) => {
     const preCheckWords = lowerQuery.split(/\s+/);
     const commandKeywords = [
       'afks', 'afk',
-      'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
-      'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
+      'warn', 'unwarn', 'clearwarntemp', 'clearwarnperm',
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean',
       'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
-    const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
+    const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
     if (!hasCommandWord) {
       return; // Silently ignore — no typing, no response, no invalid command notice
@@ -2257,12 +3199,11 @@ client.on('messageCreate', async (message) => {
     // --- Check if this is a moderation command (to bypass NSFW/jailbreak filters for mod reasons) ---
     const earlyWords = lowerQuery.split(/\s+/);
     const modCommandKeywords = [
-      'warn', 'unwarn', 'removewarn', 'deletewarn', 'deletewarning', 'deletewarns', 'delwarn', 'delwarning', 'delwarns',
-      'clearwarn', 'clearwarns', 'resetwarns', 'clearwarnings',
+      'warn', 'unwarn', 'clearwarntemp', 'clearwarnperm',
       'timeout', 'mute', 'untimeout', 'unmute',
       'kick', 'ban', 'unban', 'purge', 'clean'
     ];
-    const isModCommand = (modCommandKeywords.some(kw => earlyWords.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning')) && isModerator(message.member);
+    const isModCommand = modCommandKeywords.some(kw => earlyWords.includes(kw)) && isModerator(message.member);
 
     // --- NSFW Filter (skip for moderators executing mod commands) ---
     const isNsfwAttempt = nsfwKeywords.some(keyword => lowerQuery.includes(keyword));
@@ -2354,20 +3295,15 @@ client.on('messageCreate', async (message) => {
     let isModAction = false;
     let actionKeyword = null;
 
-    if (words.includes('clearwarns') || words.includes('resetwarns') || words.includes('clearwarnings')) {
+    if (words.includes('clearwarntemp') || words.includes('tempclearwarn') || words.includes('clearwarnt')) {
       isModAction = true;
-      actionKeyword = 'clearwarns';
+      actionKeyword = 'clearwarntemp';
+    } else if (words.includes('clearwarnperm') || words.includes('permclearwarn') || words.includes('clearwarnp')) {
+      isModAction = true;
+      actionKeyword = 'clearwarnperm';
     } else if (words.includes('purge') || words.includes('clean')) {
       isModAction = true;
       actionKeyword = 'purge';
-    } else if (
-      words.includes('deletewarn') || words.includes('deletewarning') || words.includes('deletewarns') ||
-      words.includes('delwarn') || words.includes('delwarning') || words.includes('delwarns') ||
-      words.includes('unwarn') || words.includes('removewarn') || words.includes('clearwarn') ||
-      lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn') || lowerQuery.includes('del warning')
-    ) {
-      isModAction = true;
-      actionKeyword = 'deletewarn';
     } else if (words.includes('untimeout') || words.includes('unmute')) {
       isModAction = true;
       actionKeyword = 'untimeout';
@@ -2408,8 +3344,13 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      if ((actionKeyword === 'clearwarns' || actionKeyword === 'deletewarn') && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to delete or clear warnings! ❄️");
+      if (actionKeyword === 'clearwarntemp' && modTier < 2) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to lift warning restrictions! ❄️");
+        return;
+      }
+
+      if (actionKeyword === 'clearwarnperm' && modTier < 3) {
+        await message.reply("Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to permanently reset warnings! ❄️");
         return;
       }
 
@@ -2445,113 +3386,26 @@ client.on('messageCreate', async (message) => {
       const targetUsername = targetMember ? targetMember.user.username : null;
 
       // Executing Actions
-      if (actionKeyword === 'clearwarns') {
-        const reason = getReason(cleanQuery, 'clearwarns', targetMember);
-        let previousWarningsCount = 0;
-        let deletedWarnDocsCount = 0;
-        let logsSnapshot = null;
+      if (actionKeyword === 'clearwarntemp') {
+        const reason = getReason(cleanQuery, 'clearwarntemp', targetMember);
+        await executeClearWarnTemp('prefix', {
+          guild: message.guild,
+          member: message.member,
+          user: message.author,
+          channel: message.channel,
+          replyFn: async (payload) => message.channel.send(payload)
+        }, targetMember, reason);
+        return;
 
-        if (db) {
-          try {
-            logsSnapshot = await db.collection('moderation_logs')
-              .where('targetId', '==', targetMember.id)
-              .get();
-
-            const warnDocs = [];
-            logsSnapshot.forEach(doc => {
-              if (doc.data().action === 'warn') {
-                warnDocs.push(doc);
-              }
-            });
-            deletedWarnDocsCount = warnDocs.length;
-
-            const userRef = db.collection('memories').doc(targetUsername);
-            const userDoc = await userRef.get();
-            if (userDoc.exists) {
-              previousWarningsCount = userDoc.data().warnings || 0;
-            }
-          } catch (err) {
-            console.error("Firestore clearwarns check error:", err);
-          }
-        } else {
-          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-          previousWarningsCount = cachedMem.warnings || 0;
-        }
-
-        const totalWarns = Math.max(previousWarningsCount, deletedWarnDocsCount);
-        const { verify, dot } = await getModEmojis(message.guild);
-
-        if (totalWarns === 0) {
-          const zeroWarnsEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
-            .setDescription(`${dot} <@${targetMember.id}> has **0** active warnings.`)
-            .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() });
-
-          const replyMsg = await message.reply({ embeds: [zeroWarnsEmbed] }).catch(() => {});
-          if (replyMsg && typeof replyMsg.delete === 'function') {
-            setTimeout(() => replyMsg.delete().catch(() => {}), 3000);
-          }
-          return;
-        }
-
-        if (db) {
-          try {
-            const batch = db.batch();
-            if (logsSnapshot) {
-              logsSnapshot.forEach(doc => {
-                if (doc.data().action === 'warn') {
-                  batch.delete(doc.ref);
-                }
-              });
-              if (deletedWarnDocsCount > 0) {
-                await batch.commit();
-              }
-            }
-
-            const userRef = db.collection('memories').doc(targetUsername);
-            await userRef.set({ warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-
-            await db.collection('moderation_logs').add({
-              action: 'clearwarns',
-              targetId: targetMember.id,
-              targetTag: targetMember.user.tag,
-              moderatorId: message.author.id,
-              moderatorTag: message.author.tag,
-              reason: reason,
-              clearedWarnings: previousWarningsCount || deletedWarnDocsCount,
-              timestamp: FieldValue.serverTimestamp()
-            });
-
-            const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-            preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
-          } catch (err) {
-            console.error("Firestore clearwarns error:", err);
-          }
-        } else {
-          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
-        }
-
-        const caseId = generateCaseId();
-        const { url1 } = await getAikoEmojis(message.guild);
-
-        const clearWarnsEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warnings Cleared')}`)
-          .setDescription(
-            `<@${targetMember.id}> — (${targetMember.user.username})\n` +
-            `${toSmallCaps('By')} • <@${message.author.id}>\n` +
-            `Cleared • \`${totalWarns} warning(s) reset\`\n` +
-            `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}`
-          )
-          .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
-          .setTimestamp();
-        if (url1) clearWarnsEmbed.setThumbnail(url1);
-
-        await message.channel.send({ embeds: [clearWarnsEmbed] });
-        logToEmilliaLog(message.guild, 'clearwarns', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: `${dot} Warnings Cleared`, value: `\`${totalWarns} warnings reset to 0\``, inline: true }
-        ]);
+      } else if (actionKeyword === 'clearwarnperm') {
+        const reason = getReason(cleanQuery, 'clearwarnperm', targetMember);
+        await executeClearWarnPerm('prefix', {
+          guild: message.guild,
+          member: message.member,
+          user: message.author,
+          channel: message.channel,
+          replyFn: async (payload) => message.channel.send(payload)
+        }, targetMember, reason);
         return;
 
       } else if (actionKeyword === 'purge') {
@@ -2630,154 +3484,6 @@ client.on('messageCreate', async (message) => {
         }
         return;
 
-      } else if (actionKeyword === 'deletewarn') {
-        const warnNumMatch = cleanQuery.match(/\b([1-9]\d?)\b/);
-        const requestedWarnNum = warnNumMatch ? parseInt(warnNumMatch[1], 10) : null;
-        
-        let warningsCount = 0;
-        const cached = preloadedMemories.get(targetUsername);
-        if (cached) {
-          warningsCount = cached.warnings || 0;
-        }
-
-        let warnDocs = [];
-        if (db) {
-          try {
-            const logsSnapshot = await db.collection('moderation_logs')
-              .where('targetId', '==', targetMember.id)
-              .get();
-
-            logsSnapshot.forEach(doc => {
-              const data = doc.data();
-              if (data.action === 'warn') {
-                warnDocs.push({ id: doc.id, ref: doc.ref, ...data });
-              }
-            });
-
-            // Sort newest first (same order as warns command)
-            warnDocs.sort((a, b) => {
-              const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
-              const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
-              return timeB - timeA;
-            });
-
-            // If there are stale excess warn logs beyond active warningsCount, prune the excess from Firestore
-            if (warningsCount > 0 && warnDocs.length > warningsCount) {
-              const excessDocs = warnDocs.slice(warningsCount);
-              const batch = db.batch();
-              excessDocs.forEach(d => batch.delete(d.ref));
-              await batch.commit().catch(e => console.error("Error pruning excess warn docs:", e));
-              warnDocs = warnDocs.slice(0, warningsCount);
-            }
-          } catch (err) {
-            console.error("Error fetching warnDocs for deletion:", err);
-          }
-        }
-
-        if (warningsCount === 0 && warnDocs.length === 0) {
-          await message.reply(`**${targetMember.user.tag}** has no active warnings to delete! 🌸`);
-          return;
-        }
-
-        const effectiveCount = Math.max(warningsCount, warnDocs.length);
-
-        let deletedWarnDoc = null;
-        let deletedIndexLabel = "";
-
-        if (requestedWarnNum !== null) {
-          const targetIndex = requestedWarnNum - 1;
-          if (targetIndex < 0 || targetIndex >= warnDocs.length) {
-            await message.reply(`Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). Use \`-warns @user\` to see them! ❄️`);
-            return;
-          }
-          deletedWarnDoc = warnDocs[targetIndex];
-          deletedIndexLabel = `#${requestedWarnNum}`;
-        } else {
-          // If no number provided, delete the latest warning (#1)
-          if (warnDocs.length > 0) {
-            deletedWarnDoc = warnDocs[0];
-            deletedIndexLabel = `#1 (Latest)`;
-          }
-        }
-
-        if (db) {
-          try {
-            // Delete the specific warning document from Firestore
-            if (deletedWarnDoc && deletedWarnDoc.ref) {
-              await deletedWarnDoc.ref.delete();
-            }
-
-            // Decrement warnings count in memories
-            const userRef = db.collection('memories').doc(targetUsername);
-            await db.runTransaction(async (t) => {
-              const doc = await t.get(userRef);
-              if (doc.exists) {
-                warningsCount = Math.max(0, (doc.data().warnings || 0) - 1);
-              } else {
-                warningsCount = Math.max(0, effectiveCount - 1);
-              }
-              t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-            });
-
-            // If warningsCount is now 0, clean up any remaining warn docs
-            if (warningsCount === 0) {
-              const remainingLogs = await db.collection('moderation_logs')
-                .where('targetId', '==', targetMember.id)
-                .get();
-              const batch = db.batch();
-              let count = 0;
-              remainingLogs.forEach(doc => {
-                if (doc.data().action === 'warn') {
-                  batch.delete(doc.ref);
-                  count++;
-                }
-              });
-              if (count > 0) await batch.commit().catch(() => {});
-            }
-
-            await db.collection('moderation_logs').add({
-              action: 'deletewarn',
-              targetId: targetMember.id,
-              targetTag: targetMember.user.tag,
-              moderatorId: message.author.id,
-              moderatorTag: message.author.tag,
-              deletedWarningNumber: requestedWarnNum || 1,
-              deletedReason: deletedWarnDoc ? (deletedWarnDoc.reason || 'No reason provided') : 'Unknown',
-              timestamp: FieldValue.serverTimestamp()
-            });
-
-            const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-            preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
-          } catch (err) {
-            console.error("Firestore deletewarn error:", err);
-          }
-        } else {
-          warningsCount = Math.max(0, warningsCount - 1);
-          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
-        }
-
-        const warnReason = deletedWarnDoc?.reason || 'No reason provided';
-        const { verify, dot } = await getModEmojis(message.guild);
-        const caseId = generateCaseId();
-
-        const deleteWarnEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warning Deleted')}`)
-          .setDescription(
-            `<@${targetMember.id}> — Warning **${deletedIndexLabel}**\n` +
-            `${toSmallCaps('By')} • <@${message.author.id}>\n` +
-            `${toSmallCaps('Remaining')} • \`#${warningsCount} warning(s)\`\n` +
-            `${toSmallCaps('Reason')} • ${warnReason}`
-          )
-          .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
-          .setTimestamp();
-
-        await message.channel.send({ embeds: [deleteWarnEmbed] });
-        logToEmilliaLog(message.guild, 'deletewarn', targetMember.user.tag, targetMember.id, message.author.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
-          { name: `${dot} Remaining Warnings`, value: `\`#${warningsCount}\``, inline: true }
-        ]);
-        return;
 
       } else if (actionKeyword === 'untimeout') {
         try {
@@ -2867,119 +3573,13 @@ client.on('messageCreate', async (message) => {
 
       } else if (actionKeyword === 'warn') {
         const reason = getReason(cleanQuery, 'warn', targetMember);
-        
-        let warningsCount = 1;
-        if (db) {
-          try {
-            const userRef = db.collection('memories').doc(targetUsername);
-            await db.runTransaction(async (t) => {
-              const doc = await t.get(userRef);
-              if (doc.exists) {
-                warningsCount = (doc.data().warnings || 0) + 1;
-              }
-              t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-            });
-
-            await db.collection('moderation_logs').add({
-              action: 'warn',
-              targetId: targetMember.id,
-              targetTag: targetMember.user.tag,
-              moderatorId: message.author.id,
-              moderatorTag: message.author.tag,
-              reason: reason,
-              timestamp: FieldValue.serverTimestamp()
-            });
-
-            const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-            preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
-          } catch (err) {
-            console.error("Firestore warn error:", err);
-          }
-        }
-
-        // Auto-moderation check based on warning count
-        let autoTimeoutApplied = false;
-        let autoTimeoutLabel = "";
-        let autoTimeoutMs = 0;
-
-        if (warningsCount === 3) {
-          autoTimeoutMs = 5 * 60 * 1000; // 5 minutes
-          autoTimeoutLabel = "5 minutes (Reached 3 warnings)";
-          autoTimeoutApplied = true;
-        } else if (warningsCount >= 5) {
-          autoTimeoutMs = 60 * 60 * 1000; // 1 hour
-          autoTimeoutLabel = "1 hour (Reached 5+ warnings)";
-          autoTimeoutApplied = true;
-        }
-
-        if (autoTimeoutApplied && targetMember.moderatable) {
-          try {
-            await targetMember.timeout(autoTimeoutMs, `Auto-timeout: Reached ${warningsCount} warnings.`);
-            
-            if (db) {
-              await db.collection('moderation_logs').add({
-                action: 'timeout',
-                duration: autoTimeoutLabel,
-                targetId: targetMember.id,
-                targetTag: targetMember.user.tag,
-                moderatorId: client.user.id,
-                moderatorTag: client.user.tag,
-                reason: `Auto-timeout: Reached ${warningsCount} warnings.`,
-                timestamp: FieldValue.serverTimestamp()
-              });
-            }
-          } catch (timeoutErr) {
-            console.error("Auto-timeout execution error:", timeoutErr);
-            autoTimeoutApplied = false; // reset flag if API call failed
-          }
-        }
-
-        const { verify, dot } = await getModEmojis(message.guild);
-
-        // Try to DM the user
-        let dmSent = true;
-        try {
-          let dmWarnDesc = `<@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-            `${toSmallCaps('By')} • <@${message.author.id}>\n` +
-            `${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
-          if (autoTimeoutApplied) {
-            dmWarnDesc += `\n${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
-          }
-
-          const dmEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
-            .setTitle(`${toSmallCaps('Warning Notice')}`)
-            .setDescription(dmWarnDesc)
-            .setTimestamp()
-            .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-          await targetMember.send({ embeds: [dmEmbed] });
-        } catch (err) {
-          dmSent = false;
-        }
-
-        // Send embed response in channel
-        const caseId = generateCaseId();
-        const { url2 } = await getAikoEmojis(message.guild);
-
-        let warnDesc = `<@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-          `${toSmallCaps('By')} • <@${message.author.id}>\n` +
-          `${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
-        if (autoTimeoutApplied) {
-          warnDesc += `\n${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
-        }
-
-        const warnEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warning has been issued')}`)
-          .setDescription(warnDesc)
-          .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
-          .setTimestamp();
-        if (url2) warnEmbed.setThumbnail(url2);
-
-        await message.channel.send({ embeds: [warnEmbed] });
-        logToEmilliaLog(message.guild, 'warn', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
-          { name: `${dot} ${toSmallCaps('Warning Level')}`, value: `-# \`${warningsCount}\``, inline: true }
-        ]);
+        await executeWarn('prefix', {
+          guild: message.guild,
+          member: message.member,
+          user: message.author,
+          channel: message.channel,
+          replyFn: async (payload) => message.channel.send(payload)
+        }, targetMember, reason);
         return;
 
       } else if (actionKeyword === 'timeout' || actionKeyword === 'mute') {
@@ -3444,10 +4044,10 @@ client.on('messageCreate', async (message) => {
           {
             name: `${toSmallCaps('Disciplinary & Warnings')}`,
             value: [
-              `• \`<warn @user <reason>\` — ${toSmallCaps('Warn User')}`,
-              `• \`<deletewarn @user [number]\` — ${toSmallCaps('Delete Warning')}`,
-              `• \`<clearwarns @user\` — ${toSmallCaps('Clear All Warnings')}`,
-              `• \`<warns @user\` — ${toSmallCaps('View Warning History')}`,
+              `• \`<warn @user [reason]\` — ${toSmallCaps('Issue Warning (Tiered Ladder)')}`,
+              `• \`<clearwarntemp @user [reason]\` — ${toSmallCaps('Lift Restrictions (Keep History)')}`,
+              `• \`<clearwarnperm @user [reason]\` — ${toSmallCaps('Permanently Reset All Warnings')}`,
+              `• \`<warns [@user]\` — ${toSmallCaps('View Warning History & Ladder Level')}`,
               `• \`<leaderboard\` / \`<warns leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
               `• \`<purge <1-100> [@user]\` — ${toSmallCaps('Purge Channel Messages')}`
             ].join('\n'),
@@ -3642,6 +4242,128 @@ client.on('messageCreate', async (message) => {
 
       const iqPayload = await buildIqPayload(targetMember, message.guild);
       await message.channel.send(iqPayload);
+      return;
+    }
+
+    // --- Warn Command (<warn) ---
+    const isPrefixWarn = words[0] === 'warn' || cleanQuery === 'warn' || cleanQuery.startsWith('warn ');
+    if (isPrefixWarn) {
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      let queryArg = cleanQuery.replace(/^warn\s*/i, '').trim();
+
+      if (!targetMember) {
+        const firstArg = queryArg.split(/\s+/)[0];
+        if (firstArg) {
+          targetMember = message.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === firstArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === firstArg.toLowerCase()) ||
+            m.id === firstArg
+          );
+          if (targetMember) {
+            queryArg = queryArg.slice(firstArg.length).trim();
+          }
+        }
+      } else {
+        queryArg = queryArg.replace(new RegExp(`<@!?${targetMember.id}>`, 'g'), '').trim();
+      }
+
+      await executeWarn('prefix', {
+        guild: message.guild,
+        member: message.member,
+        user: message.author,
+        channel: message.channel,
+        replyFn: async (payload) => message.channel.send(payload)
+      }, targetMember, queryArg);
+      return;
+    }
+
+    // --- Warns Command (<warns) ---
+    const isPrefixWarns = words[0] === 'warns' || cleanQuery === 'warns' || cleanQuery.startsWith('warns ');
+    if (isPrefixWarns) {
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^warns\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+      if (!targetMember) targetMember = message.member;
+
+      await executeWarns('prefix', {
+        guild: message.guild,
+        member: message.member,
+        user: message.author,
+        channel: message.channel,
+        replyFn: async (payload) => message.channel.send(payload)
+      }, targetMember);
+      return;
+    }
+
+    // --- ClearWarnTemp Command (<clearwarntemp) ---
+    const isPrefixClearWarnTemp = words[0] === 'clearwarntemp' || cleanQuery === 'clearwarntemp' || cleanQuery.startsWith('clearwarntemp ');
+    if (isPrefixClearWarnTemp) {
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      let queryArg = cleanQuery.replace(/^clearwarntemp\s*/i, '').trim();
+
+      if (!targetMember) {
+        const firstArg = queryArg.split(/\s+/)[0];
+        if (firstArg) {
+          targetMember = message.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === firstArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === firstArg.toLowerCase()) ||
+            m.id === firstArg
+          );
+          if (targetMember) {
+            queryArg = queryArg.slice(firstArg.length).trim();
+          }
+        }
+      } else {
+        queryArg = queryArg.replace(new RegExp(`<@!?${targetMember.id}>`, 'g'), '').trim();
+      }
+
+      await executeClearWarnTemp('prefix', {
+        guild: message.guild,
+        member: message.member,
+        user: message.author,
+        channel: message.channel,
+        replyFn: async (payload) => message.channel.send(payload)
+      }, targetMember, queryArg);
+      return;
+    }
+
+    // --- ClearWarnPerm Command (<clearwarnperm) ---
+    const isPrefixClearWarnPerm = words[0] === 'clearwarnperm' || cleanQuery === 'clearwarnperm' || cleanQuery.startsWith('clearwarnperm ');
+    if (isPrefixClearWarnPerm) {
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      let queryArg = cleanQuery.replace(/^clearwarnperm\s*/i, '').trim();
+
+      if (!targetMember) {
+        const firstArg = queryArg.split(/\s+/)[0];
+        if (firstArg) {
+          targetMember = message.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === firstArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === firstArg.toLowerCase()) ||
+            m.id === firstArg
+          );
+          if (targetMember) {
+            queryArg = queryArg.slice(firstArg.length).trim();
+          }
+        }
+      } else {
+        queryArg = queryArg.replace(new RegExp(`<@!?${targetMember.id}>`, 'g'), '').trim();
+      }
+
+      await executeClearWarnPerm('prefix', {
+        guild: message.guild,
+        member: message.member,
+        user: message.author,
+        channel: message.channel,
+        replyFn: async (payload) => message.channel.send(payload)
+      }, targetMember, queryArg);
       return;
     }
 
@@ -3978,134 +4700,15 @@ client.on('interactionCreate', async (interaction) => {
     // 1. /warn
     // ------------------------------------------
     if (commandName === 'warn') {
-      if (modTier === 0) {
-        await interaction.reply({ content: "Mou! 🌸 Only staff (Shogun, Community Admins, Supervisor, Moderator) can issue warnings! ❄️", ephemeral: true });
-        return;
-      }
       const targetMember = options.getMember('user');
       const reason = options.getString('reason') || 'No reason specified';
-
-      if (!targetMember) {
-        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
-        return;
-      }
-      if (targetMember.id === user.id) {
-        await interaction.reply({ content: "Mou! 🌸 You cannot warn yourself! ❄️", ephemeral: true });
-        return;
-      }
-
-      const targetTier = getMemberTier(targetMember);
-      if (targetTier >= modTier) {
-        const targetRankName = getTierName(targetTier);
-        const modRankName = getTierName(modTier);
-        await interaction.reply({ content: `Mou! 🌸 You cannot warn <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
-        return;
-      }
-
-      const targetUsername = targetMember.user.username;
-      let warningsCount = 1;
-
-      if (db) {
-        try {
-          const userRef = db.collection('memories').doc(targetUsername);
-          await db.runTransaction(async (t) => {
-            const doc = await t.get(userRef);
-            if (doc.exists) {
-              warningsCount = (doc.data().warnings || 0) + 1;
-            }
-            t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-          });
-
-          await db.collection('moderation_logs').add({
-            action: 'warn',
-            targetId: targetMember.id,
-            targetTag: targetMember.user.tag,
-            moderatorId: user.id,
-            moderatorTag: user.tag,
-            reason: reason,
-            timestamp: FieldValue.serverTimestamp()
-          });
-
-          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
-        } catch (err) {
-          console.error("Firestore warn error in slash command:", err);
-        }
-      }
-
-      let autoTimeoutApplied = false;
-      let autoTimeoutLabel = "";
-      let autoTimeoutMs = 0;
-
-      if (warningsCount === 3) {
-        autoTimeoutMs = 5 * 60 * 1000;
-        autoTimeoutLabel = "5 minutes (Reached 3 warnings)";
-        autoTimeoutApplied = true;
-      } else if (warningsCount >= 5) {
-        autoTimeoutMs = 60 * 60 * 1000;
-        autoTimeoutLabel = "1 hour (Reached 5+ warnings)";
-        autoTimeoutApplied = true;
-      }
-
-      if (autoTimeoutApplied && targetMember.moderatable) {
-        try {
-          await targetMember.timeout(autoTimeoutMs, `Auto-timeout: Reached ${warningsCount} warnings.`);
-          if (db) {
-            await db.collection('moderation_logs').add({
-              action: 'timeout',
-              duration: autoTimeoutLabel,
-              targetId: targetMember.id,
-              targetTag: targetMember.user.tag,
-              moderatorId: client.user.id,
-              moderatorTag: client.user.tag,
-              reason: `Auto-timeout: Reached ${warningsCount} warnings.`,
-              timestamp: FieldValue.serverTimestamp()
-            });
-          }
-        } catch (timeoutErr) {
-          console.error("Auto-timeout error in slash command:", timeoutErr);
-          autoTimeoutApplied = false;
-        }
-      }
-
-      // Try DM
-      try {
-        let dmWarnDesc = `<@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-          `${toSmallCaps('By')} • <@${user.id}>\n` +
-          `${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
-        if (autoTimeoutApplied) {
-          dmWarnDesc += `\n${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
-        }
-
-        const dmEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warning Notice')}`)
-          .setDescription(dmWarnDesc)
-          .setTimestamp()
-          .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-        await targetMember.send({ embeds: [dmEmbed] });
-      } catch (err) {}
-
-      const caseId = generateCaseId();
-      let warnDesc = `<@${targetMember.id}> — ${reason || 'No reason provided'}\n` +
-        `${toSmallCaps('By')} • <@${user.id}>\n` +
-        `${toSmallCaps('Warnings')} • \`#${warningsCount}\``;
-      if (autoTimeoutApplied) {
-        warnDesc += `\n${toSmallCaps('Auto-Timeout')} • \`${autoTimeoutLabel}\``;
-      }
-
-      const warnEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
-        .setTitle(`${toSmallCaps('Warning has been issued')}`)
-        .setDescription(warnDesc)
-        .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
-      if (url2) warnEmbed.setThumbnail(url2);
-
-      await interaction.reply({ embeds: [warnEmbed] });
-      logToEmilliaLog(guild, 'warn', targetMember.user.tag, targetMember.id, user.tag, reason, [
-        { name: `${dot} ${toSmallCaps('Warning Level')}`, value: `-# \`${warningsCount}\``, inline: true }
-      ]);
+      await executeWarn('slash', {
+        guild,
+        member,
+        user,
+        channel,
+        replyFn: async (payload) => interaction.reply(payload)
+      }, targetMember, reason);
       return;
     }
 
@@ -4114,84 +4717,13 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'warns') {
       const targetMember = options.getMember('user') || member;
-      const targetUsername = targetMember.user.username;
-
-      let warningsCount = 0;
-      const cached = preloadedMemories.get(targetUsername);
-      if (cached) {
-        warningsCount = cached.warnings || 0;
-      }
-
-      if (warningsCount === 0) {
-        const cleanEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setTitle(`${toSmallCaps('Warning History')}`)
-          .setDescription(
-            `<@${targetMember.id}> (${targetMember.user.username})\n` +
-            `${toSmallCaps('Total Warnings')} • \`0\``
-          )
-          .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
-          .setTimestamp();
-        await interaction.reply({ embeds: [cleanEmbed] });
-        return;
-      }
-
-      const warningsEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
-        .setTitle(`${toSmallCaps('Warning History')}`)
-        .setDescription(
-          `<@${targetMember.id}> (${targetMember.user.username})\n` +
-          `${toSmallCaps('Total Warnings')} • \`#${warningsCount}\``
-        );
-
-      if (db && warningsCount > 0) {
-        try {
-          const logsSnapshot = await db.collection('moderation_logs')
-            .where('targetId', '==', targetMember.id)
-            .get();
-
-          const warnLogs = [];
-          logsSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.action === 'warn') {
-              warnLogs.push({ id: doc.id, ref: doc.ref, ...data });
-            }
-          });
-
-          warnLogs.sort((a, b) => {
-            const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
-            const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
-            return timeB - timeA;
-          });
-
-          const activeWarnLogs = warnLogs.slice(0, warningsCount);
-          if (activeWarnLogs.length > 0) {
-            let historyText = '';
-            for (let i = 0; i < activeWarnLogs.length; i++) {
-              const log = activeWarnLogs[i];
-              const r = log.reason || 'No reason provided';
-              const mod = log.moderatorTag || 'Unknown Moderator';
-              let timeFormatted = 'Unknown date';
-              if (log.timestamp && typeof log.timestamp.toDate === 'function') {
-                const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
-                timeFormatted = `<t:${unixSec}:R>`;
-              }
-              historyText += `-# [#${i + 1}] ${r} • ${dot} \`${mod}\` • ${timeFormatted}\n`;
-            }
-            warningsEmbed.addFields({ 
-              name: `${dot} **Warning Log**`, 
-              value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
-              inline: false 
-            });
-          }
-        } catch (err) {
-          console.error('Error fetching warning history in slash command:', err);
-        }
-      }
-
-      warningsEmbed.setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() });
-      warningsEmbed.setTimestamp();
-      await interaction.reply({ embeds: [warningsEmbed] });
+      await executeWarns('slash', {
+        guild,
+        member,
+        user,
+        channel,
+        replyFn: async (payload) => interaction.reply(payload)
+      }, targetMember);
       return;
     }
 
@@ -4600,247 +5132,34 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 9. /clearwarns
+    // 9. /clearwarntemp
     // ------------------------------------------
-    if (commandName === 'clearwarns') {
-      if (modTier < 2) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' can clear warnings! ❄️", ephemeral: true });
-        return;
-      }
+    if (commandName === 'clearwarntemp') {
       const targetMember = options.getMember('user');
       const reason = options.getString('reason') || 'No reason specified';
-
-      if (!targetMember) {
-        await interaction.reply({ content: "Could not find that member! 🌸", ephemeral: true });
-        return;
-      }
-
-      const targetUsername = targetMember.user.username;
-      let previousWarningsCount = 0;
-      let count = 0;
-      let logsSnapshot = null;
-
-      if (db) {
-        try {
-          logsSnapshot = await db.collection('moderation_logs')
-            .where('targetId', '==', targetMember.id)
-            .get();
-
-          logsSnapshot.forEach(doc => {
-            if (doc.data().action === 'warn') {
-              count++;
-            }
-          });
-
-          const userRef = db.collection('memories').doc(targetUsername);
-          const userDoc = await userRef.get();
-          if (userDoc.exists) {
-            previousWarningsCount = userDoc.data().warnings || 0;
-          }
-        } catch (err) {
-          console.error("Firestore clearwarns slash check error:", err);
-        }
-      } else {
-        const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-        previousWarningsCount = cachedMem.warnings || 0;
-      }
-
-      const totalWarns = Math.max(previousWarningsCount, count);
-
-      if (totalWarns === 0) {
-        const zeroWarnsEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setDescription(`${dot} <@${targetMember.id}> has **0** active warnings.`)
-          .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() });
-
-        await interaction.reply({ embeds: [zeroWarnsEmbed] });
-        setTimeout(() => {
-          interaction.deleteReply().catch(() => {});
-        }, 3000);
-        return;
-      }
-
-      if (db) {
-        try {
-          const batch = db.batch();
-          if (logsSnapshot) {
-            logsSnapshot.forEach(doc => {
-              if (doc.data().action === 'warn') {
-                batch.delete(doc.ref);
-              }
-            });
-            if (count > 0) await batch.commit();
-          }
-
-          const userRef = db.collection('memories').doc(targetUsername);
-          await userRef.set({ warnings: 0, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-
-          await db.collection('moderation_logs').add({
-            action: 'clearwarns',
-            targetId: targetMember.id,
-            targetTag: targetMember.user.tag,
-            moderatorId: user.id,
-            moderatorTag: user.tag,
-            reason: reason,
-            clearedWarnings: previousWarningsCount || count,
-            timestamp: FieldValue.serverTimestamp()
-          });
-
-          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
-        } catch (err) {
-          console.error("Firestore clearwarns slash error:", err);
-        }
-      } else {
-        const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-        preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: 0 });
-      }
-
-      const caseId = generateCaseId();
-      const clearWarnsEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
-        .setTitle(`${toSmallCaps('Warnings Cleared')}`)
-        .setDescription(
-          `<@${targetMember.id}> — (${targetMember.user.username})\n` +
-          `${toSmallCaps('By')} • <@${user.id}>\n` +
-          `Cleared • \`${totalWarns} warning(s) reset\`\n` +
-          `${toSmallCaps('Reason')} • ${reason}`
-        )
-        .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
-      if (url1) clearWarnsEmbed.setThumbnail(url1);
-
-      await interaction.reply({ embeds: [clearWarnsEmbed] });
-      logToEmilliaLog(guild, 'clearwarns', targetMember.user.tag, targetMember.id, user.tag, reason, [
-        { name: `${dot} ${toSmallCaps('Warnings Cleared')}`, value: `-# \`${totalWarns} warnings reset to 0\``, inline: true }
-      ]);
+      await executeClearWarnTemp('slash', {
+        guild,
+        member,
+        user,
+        channel,
+        replyFn: async (payload) => interaction.reply(payload)
+      }, targetMember, reason);
       return;
     }
 
     // ------------------------------------------
-    // 10. /deletewarn
+    // 10. /clearwarnperm
     // ------------------------------------------
-    if (commandName === 'deletewarn') {
-      if (modTier < 2) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' can delete warnings! ❄️", ephemeral: true });
-        return;
-      }
+    if (commandName === 'clearwarnperm') {
       const targetMember = options.getMember('user');
-      const requestedWarnNum = options.getInteger('number');
-
-      if (!targetMember) {
-        await interaction.reply({ content: "Could not find that member! 🌸", ephemeral: true });
-        return;
-      }
-
-      const targetUsername = targetMember.user.username;
-      let warningsCount = 0;
-      const cached = preloadedMemories.get(targetUsername);
-      if (cached) warningsCount = cached.warnings || 0;
-
-      let warnDocs = [];
-      if (db) {
-        try {
-          const logsSnapshot = await db.collection('moderation_logs')
-            .where('targetId', '==', targetMember.id)
-            .get();
-
-          logsSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.action === 'warn') {
-              warnDocs.push({ id: doc.id, ref: doc.ref, ...data });
-            }
-          });
-
-          warnDocs.sort((a, b) => {
-            const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
-            const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
-            return timeB - timeA;
-          });
-        } catch (err) {}
-      }
-
-      if (warningsCount === 0 && warnDocs.length === 0) {
-        await interaction.reply({ content: `**${targetMember.user.tag}** has no active warnings to delete! 🌸`, ephemeral: true });
-        return;
-      }
-
-      let deletedWarnDoc = null;
-      let deletedIndexLabel = "";
-
-      if (requestedWarnNum !== null && requestedWarnNum !== undefined) {
-        const targetIndex = requestedWarnNum - 1;
-        if (targetIndex < 0 || targetIndex >= warnDocs.length) {
-          await interaction.reply({ content: `Mou! 🌸 Warning **#${requestedWarnNum}** was not found for **${targetMember.user.tag}**! They have **${warnDocs.length}** recorded warning(s). ❄️`, ephemeral: true });
-          return;
-        }
-        deletedWarnDoc = warnDocs[targetIndex];
-        deletedIndexLabel = `#${requestedWarnNum}`;
-      } else {
-        if (warnDocs.length > 0) {
-          deletedWarnDoc = warnDocs[0];
-          deletedIndexLabel = `#1 (Latest)`;
-        }
-      }
-
-      if (db) {
-        try {
-          if (deletedWarnDoc && deletedWarnDoc.ref) {
-            await deletedWarnDoc.ref.delete();
-          }
-
-          const userRef = db.collection('memories').doc(targetUsername);
-          await db.runTransaction(async (t) => {
-            const doc = await t.get(userRef);
-            if (doc.exists) {
-              warningsCount = Math.max(0, (doc.data().warnings || 0) - 1);
-            } else {
-              warningsCount = Math.max(0, warningsCount - 1);
-            }
-            t.set(userRef, { warnings: warningsCount, lastUpdated: FieldValue.serverTimestamp() }, { merge: true });
-          });
-
-          await db.collection('moderation_logs').add({
-            action: 'deletewarn',
-            targetId: targetMember.id,
-            targetTag: targetMember.user.tag,
-            moderatorId: user.id,
-            moderatorTag: user.tag,
-            deletedWarningNumber: requestedWarnNum || 1,
-            deletedReason: deletedWarnDoc ? (deletedWarnDoc.reason || 'No reason provided') : 'Unknown',
-            timestamp: FieldValue.serverTimestamp()
-          });
-
-          const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-          preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
-        } catch (err) {
-          console.error("Firestore deletewarn slash error:", err);
-        }
-      } else {
-        warningsCount = Math.max(0, warningsCount - 1);
-        const cachedMem = preloadedMemories.get(targetUsername) || { facts: [], warnings: 0 };
-        preloadedMemories.set(targetUsername, { facts: cachedMem.facts, warnings: warningsCount });
-      }
-
-      const warnReason = deletedWarnDoc?.reason || 'No reason provided';
-      const caseId = generateCaseId();
-
-      const deleteWarnEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
-        .setTitle(`${toSmallCaps('Warning Deleted')}`)
-        .setDescription(
-          `<@${targetMember.id}> — Warning **${deletedIndexLabel}**\n` +
-          `${toSmallCaps('By')} • <@${user.id}>\n` +
-          `${toSmallCaps('Remaining')} • \`#${warningsCount} warning(s)\`\n` +
-          `${toSmallCaps('Reason')} • ${warnReason}`
-        )
-        .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
-
-      await interaction.reply({ embeds: [deleteWarnEmbed] });
-      logToEmilliaLog(guild, 'deletewarn', targetMember.user.tag, targetMember.id, user.tag, `Deleted Warning ${deletedIndexLabel}: "${warnReason}"`, [
-        { name: `${dot} ${toSmallCaps('Remaining Warnings')}`, value: `-# \`#${warningsCount}\``, inline: true }
-      ]);
+      const reason = options.getString('reason') || 'No reason specified';
+      await executeClearWarnPerm('slash', {
+        guild,
+        member,
+        user,
+        channel,
+        replyFn: async (payload) => interaction.reply(payload)
+      }, targetMember, reason);
       return;
     }
 
@@ -4976,10 +5295,10 @@ client.on('interactionCreate', async (interaction) => {
           {
             name: `${toSmallCaps('Disciplinary & Warnings')}`,
             value: [
-              `• \`/warn <user> [reason]\` — ${toSmallCaps('Warn User')}`,
-              `• \`/deletewarn <user> [number]\` — ${toSmallCaps('Delete Warning')}`,
-              `• \`/clearwarns <user> [reason]\` — ${toSmallCaps('Clear All Warnings')}`,
-              `• \`/warns [user]\` — ${toSmallCaps('View Warning History')}`,
+              `• \`/warn <user> [reason]\` — ${toSmallCaps('Issue Warning (Tiered Ladder)')}`,
+              `• \`/clearwarntemp <user> [reason]\` — ${toSmallCaps('Lift Restrictions (Keep History)')}`,
+              `• \`/clearwarnperm <user> [reason]\` — ${toSmallCaps('Permanently Reset All Warnings')}`,
+              `• \`/warns [user]\` — ${toSmallCaps('View Warning History & Ladder Level')}`,
               `• \`/leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
               `• \`/purge <amount> [user]\` — ${toSmallCaps('Purge Channel Messages')}`
             ].join('\n'),
