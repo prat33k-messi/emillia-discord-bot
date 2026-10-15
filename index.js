@@ -2158,7 +2158,9 @@ client.on('messageCreate', async (message) => {
   }
 
   const trimmedContent = message.content.trim();
-  const startsWithPrefix = trimmedContent.startsWith('<');
+  // Ensure it's not a Discord mention (<@...), channel (<#...), role (<@&...), or custom emoji (<a?:...)
+  const isDiscordTag = /^<(?:@[!&]?|#|a?:[a-zA-Z0-9_]+:)\d+>/.test(trimmedContent);
+  const startsWithPrefix = trimmedContent.startsWith('<') && !isDiscordTag;
 
   // Check if message is a reply to the bot
   let isReplyToBot = false;
@@ -2217,20 +2219,7 @@ client.on('messageCreate', async (message) => {
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw)) || lowerQuery.includes('delete warn') || lowerQuery.includes('delete warning') || lowerQuery.includes('del warn');
 
     if (!hasCommandWord) {
-      if (startsWithPrefix) {
-        const { dot } = await getModEmojis(message.guild);
-        const invalidCmdEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
-          .setDescription(`${dot} Invalid command. Use \`<help\` for available commands.`);
-        const replyMsg = await message.reply({ embeds: [invalidCmdEmbed] }).catch(() => {});
-        if (replyMsg) {
-          setTimeout(() => {
-            replyMsg.delete().catch(() => {});
-          }, 2000);
-        }
-        return;
-      }
-      return; // Silently ignore — no typing, no response
+      return; // Silently ignore — no typing, no response, no invalid command notice
     }
 
     // If unauthorized user attempts to use AFK, warn with level embed and auto-delete
