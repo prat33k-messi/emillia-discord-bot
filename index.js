@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, MessageFlags } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
@@ -474,6 +474,28 @@ function formatAfkDuration(ms) {
 // Helper to format text (returns normal clean Discord font)
 function toSmallCaps(str) {
   return str || '';
+}
+
+// Helper to build a clean, borderless container card (like Sybaru, Components V2)
+function createContainerMessage(content) {
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
+  return {
+    components: [container],
+    flags: MessageFlags.IsComponentsV2
+  };
+}
+
+async function replyContainer(messageOrInteraction, content, options = {}) {
+  try {
+    const payload = createContainerMessage(content);
+    if (options.ephemeral) payload.flags = payload.flags | MessageFlags.Ephemeral;
+    return await messageOrInteraction.reply(payload);
+  } catch (err) {
+    console.error("Failed to reply with Container V2, falling back to embed:", err);
+    const fallbackEmbed = new EmbedBuilder().setDescription(content);
+    return await messageOrInteraction.reply({ embeds: [fallbackEmbed], ephemeral: !!options.ephemeral });
+  }
 }
 
 // Helper to get custom animated/static moderation emojis
@@ -2847,10 +2869,7 @@ client.on('messageCreate', async (message) => {
         removeAfkDesc += `\n${toSmallCaps('Mentioned by')} • ${uniqueMentioners.join(', ')}`;
       }
 
-      const removeAfkEmbed = new EmbedBuilder()
-        .setDescription(removeAfkDesc);
-
-      await message.reply({ embeds: [removeAfkEmbed] }).catch(() => {});
+      await replyContainer(message, removeAfkDesc).catch(() => {});
     }
   }
 
@@ -2881,10 +2900,7 @@ client.on('messageCreate', async (message) => {
           afkMentionCooldowns.set(mentionedId, Date.now());
           const afkSinceUnix = Math.floor(afkData.afkSince / 1000);
 
-          const afkMentionEmbed = new EmbedBuilder()
-            .setDescription(`<@${mentionedId}> • ${toSmallCaps('is currently AFK')} — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`);
-
-          await message.reply({ embeds: [afkMentionEmbed] }).catch(() => {});
+          await replyContainer(message, `<@${mentionedId}> • ${toSmallCaps('is currently AFK')} — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`).catch(() => {});
         }
       }
     }
@@ -3803,10 +3819,7 @@ client.on('messageCreate', async (message) => {
         }).catch(err => console.error("Error saving AFK to Firestore:", err));
       }
 
-      const setAfkEmbed = new EmbedBuilder()
-        .setDescription(`<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
-
-      await message.reply({ embeds: [setAfkEmbed] });
+      await replyContainer(message, `<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
       return;
     }
 
@@ -4651,10 +4664,7 @@ client.on('interactionCreate', async (interaction) => {
         }).catch(err => console.error("Error saving AFK in slash to Firestore:", err));
       }
 
-      const setAfkEmbed = new EmbedBuilder()
-        .setDescription(`<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
-
-      await interaction.reply({ embeds: [setAfkEmbed] });
+      await replyContainer(interaction, `<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
       return;
     }
 
