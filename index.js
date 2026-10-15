@@ -1796,7 +1796,6 @@ async function buildIqPayload(targetMember, guild) {
   const attachment = new AttachmentBuilder(buffer, { name: 'iq.png' });
 
   const embed = new EmbedBuilder()
-    .setColor(0x2B2D31)
     .setDescription(formattedQuote)
     .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ${toSmallCaps(tier.rarity)}` })
     .setImage('attachment://iq.png');
@@ -1895,7 +1894,6 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     }));
 
     const logEmbed = new EmbedBuilder()
-      .setColor(0x2B2D31)
       .setTitle(`${titleMap[action] || action}`)
       .addFields(
         { name: `${dot} ${toSmallCaps('Target User')}`, value: `${targetTag} \`(${targetId})\``, inline: false },
@@ -2331,7 +2329,6 @@ async function executeWarn(source, ctx, targetMember, reason) {
     }
 
     const banEmbed = new EmbedBuilder()
-      .setColor(0x2B2D31)
       .setTitle(`${toSmallCaps('Member Banned (Warn Level 6)')}`)
       .setDescription(
         `<@${targetMember.id}> reached **Warn Level 6** and has been permanently banned from the server.\n` +
@@ -2430,7 +2427,6 @@ async function executeWarn(source, ctx, targetMember, reason) {
     }
 
     const dmEmbed = new EmbedBuilder()
-      .setColor(0x2B2D31)
       .setTitle(`${toSmallCaps('Warning Notice')}`)
       .setDescription(dmDesc)
       .setTimestamp()
@@ -2450,7 +2446,6 @@ async function executeWarn(source, ctx, targetMember, reason) {
   }
 
   const warnEmbed = new EmbedBuilder()
-    .setColor(0x2B2D31)
     .setTitle(`${toSmallCaps('Warning has been issued')}`)
     .setDescription(warnDesc)
     .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -2501,7 +2496,6 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
   const currentLevel = state ? (state.currentLevel || 0) : 0;
   if (currentLevel === 0 && (!state || !state.restrictionsActive)) {
     const zeroEmbed = new EmbedBuilder()
-      .setColor(0x2B2D31)
       .setDescription(`<@${targetMember.id}> has **0** active warning restrictions.`)
       .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() });
     await replyFn({ embeds: [zeroEmbed] });
@@ -2562,7 +2556,6 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
   const { dot } = await getModEmojis(guild);
 
   const clearEmbed = new EmbedBuilder()
-    .setColor(0x2B2D31)
     .setTitle(`${toSmallCaps('Warning Restrictions Lifted')}`)
     .setDescription(
       `<@${targetMember.id}> — (${targetMember.user.username})\n` +
@@ -2675,7 +2668,6 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
   const { dot } = await getModEmojis(guild);
 
   const permEmbed = new EmbedBuilder()
-    .setColor(0x2B2D31)
     .setTitle(`${toSmallCaps('All Warnings Permanently Reset')}`)
     .setDescription(
       `<@${targetMember.id}> — (${targetMember.user.username})\n` +
@@ -2748,7 +2740,6 @@ async function executeWarns(source, ctx, targetMember) {
 
   if (warnRecords.length === 0 && currentLevel === 0) {
     const cleanEmbed = new EmbedBuilder()
-      .setColor(0x2B2D31)
       .setTitle(`${toSmallCaps('Warning Record')}`)
       .setDescription(
         `<@${targetMember.id}>\n\n` +
@@ -2779,7 +2770,6 @@ async function executeWarns(source, ctx, targetMember) {
   });
 
   const warnsEmbed = new EmbedBuilder()
-    .setColor(0x2B2D31)
     .setTitle(`${toSmallCaps('Warning Record')}`)
     .setDescription(
       `<@${targetMember.id}>\n` +
@@ -2818,7 +2808,6 @@ client.on('messageCreate', async (message) => {
       await message.delete().catch(() => {});
       const { url1 } = await getAikoEmojis(message.guild);
       const gifWarnEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setDescription(`<@${message.author.id}> • Reach level 5+ to use gif`);
       if (url1) gifWarnEmbed.setThumbnail(url1);
 
@@ -2859,7 +2848,6 @@ client.on('messageCreate', async (message) => {
       }
 
       const removeAfkEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setDescription(removeAfkDesc);
 
       await message.reply({ embeds: [removeAfkEmbed] }).catch(() => {});
@@ -2894,7 +2882,6 @@ client.on('messageCreate', async (message) => {
           const afkSinceUnix = Math.floor(afkData.afkSince / 1000);
 
           const afkMentionEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setDescription(`<@${mentionedId}> • ${toSmallCaps('is currently AFK')} — ${afkData.reason || 'No reason specified'} (<t:${afkSinceUnix}:R>)`);
 
           await message.reply({ embeds: [afkMentionEmbed] }).catch(() => {});
@@ -2928,7 +2915,6 @@ client.on('messageCreate', async (message) => {
 
     if (!isMasterUser) {
       const deniedEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Access Denied')} 🚫`)
         .setDescription(
           `<@${message.author.id}> attempted **unauthorized privileged execution**\n` +
@@ -2979,7 +2965,6 @@ client.on('messageCreate', async (message) => {
       
       if (targetMember.id === MASTER_USER_ID || targetMember.user.username.toLowerCase() === 'el_lapulga' || targetMember.user.username.toLowerCase() === '_c0rle0ne') {
         const immuneEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Security Protocol')} 🛡️`)
           .setDescription(
             `Primary Administrator <@${MASTER_USER_ID}> is **permanently immune** to security restriction directives.\n` +
@@ -2996,7 +2981,6 @@ client.on('messageCreate', async (message) => {
       deniedLevel1Users.add(resolvedName.toLowerCase());
 
       const protoZeroEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Protocol Zero Engaged')}`)
         .setDescription(
           `<@${targetMember.id}> permissions have been **revoked** by <@${message.author.id}>\n` +
@@ -3044,7 +3028,6 @@ client.on('messageCreate', async (message) => {
       deniedLevel1Users.delete(resolvedName.toLowerCase());
 
       const protoOneEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Protocol One Granted')}`)
         .setDescription(
           `<@${targetMember.id}> permissions have been **restored** by <@${message.author.id}>\n` +
@@ -3060,7 +3043,6 @@ client.on('messageCreate', async (message) => {
     if (isCodeBlack) {
       isCodeBlackFrozen = true;
       const codeBlackEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Critical Override: Code Black')} 🔒`)
         .setDescription(
           `System emergency lockdown **engaged** by <@${message.author.id}>\n` +
@@ -3076,7 +3058,6 @@ client.on('messageCreate', async (message) => {
     if (isCodeWhite) {
       isCodeBlackFrozen = false;
       const codeWhiteEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Reboot Sequence: Code White')}`)
         .setDescription(
           `System reboot sequence **initialized** by <@${message.author.id}>\n` +
@@ -3169,7 +3150,6 @@ client.on('messageCreate', async (message) => {
     if (isAfkAttempt && !canUseAfk(message.member)) {
       const { url1 } = await getAikoEmojis(message.guild);
       const afkWarnEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setDescription(`<@${message.author.id}> • Reach level 20+ to use afk`);
       if (url1) afkWarnEmbed.setThumbnail(url1);
 
@@ -3452,7 +3432,6 @@ client.on('messageCreate', async (message) => {
           }
 
           const purgeEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Chat Purged')}`)
             .setDescription(purgeDesc)
             .setTimestamp()
@@ -3505,7 +3484,6 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const untimeoutEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Timeout Lifted')}`)
             .setDescription(
               `<@${targetMember.id}> — (${targetMember.user.username})\n` +
@@ -3553,7 +3531,6 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const unbanEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Ban Revoked')}`)
             .setDescription(
               `<@${targetId}> \`(${targetId})\`\n` +
@@ -3620,7 +3597,6 @@ client.on('messageCreate', async (message) => {
               `${toSmallCaps('Duration')} • \`${durationInfo.label}\``;
 
             const dmEmbed = new EmbedBuilder()
-              .setColor(0x2B2D31)
               .setTitle(`${toSmallCaps('Timeout Notice')}`)
               .setDescription(dmTimeoutDesc)
               .setTimestamp()
@@ -3634,7 +3610,6 @@ client.on('messageCreate', async (message) => {
           const { url3 } = await getAikoEmojis(message.guild);
 
           const timeoutEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Timeout Issued')}`)
             .setDescription(
               `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
@@ -3669,7 +3644,6 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Kicked from Server')}`)
             .setDescription(
               `<@${targetId}>\n` +
@@ -3705,7 +3679,6 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const kickEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Kick Issued')}`)
             .setDescription(
               `<@${targetId}>\n` +
@@ -3740,7 +3713,6 @@ client.on('messageCreate', async (message) => {
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Permanent Exile Notice')}`)
             .setDescription(
               `<@${targetId}>\n` +
@@ -3776,7 +3748,6 @@ client.on('messageCreate', async (message) => {
           const caseId = generateCaseId();
 
           const banEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Ban Issued')}`)
             .setDescription(
               `<@${targetId}>\n` +
@@ -3833,7 +3804,6 @@ client.on('messageCreate', async (message) => {
       }
 
       const setAfkEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setDescription(`<@${message.author.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
 
       await message.reply({ embeds: [setAfkEmbed] });
@@ -3871,7 +3841,6 @@ client.on('messageCreate', async (message) => {
 
         if (top5.length === 0) {
           const emptyLbEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
             .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
@@ -3895,7 +3864,6 @@ client.on('messageCreate', async (message) => {
         }
 
         const lbEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
           .setDescription(lbEntries.join('\n'))
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
@@ -3937,7 +3905,6 @@ client.on('messageCreate', async (message) => {
         }
 
         const cleanEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Warning History')}`)
           .setDescription(
             `<@${targetMember.id}> (${targetMember.user.username})\n` +
@@ -3950,7 +3917,6 @@ client.on('messageCreate', async (message) => {
       }
 
       const warningsEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Warning History')}`)
         .setDescription(
           `<@${targetMember.id}> (${targetMember.user.username})\n` +
@@ -4034,7 +4000,6 @@ client.on('messageCreate', async (message) => {
       const { verify, dot } = await getModEmojis(message.guild);
 
       const helpEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
           `Staff Hierarchy & Permissions\n` +
@@ -4543,7 +4508,6 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
         errorMsg = "Command timed out. Please try again.";
       }
       const errEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setDescription(`${dot} ${errorMsg}`);
       const replyMsg = await message.reply({ embeds: [errEmbed] }).catch(() => {});
       if (replyMsg && typeof replyMsg.delete === 'function') {
@@ -4658,7 +4622,6 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'afk') {
       if (!canUseAfk(member)) {
         const afkWarnEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setDescription(`<@${user.id}> • Reach level 20+ to use afk`);
         if (url1) afkWarnEmbed.setThumbnail(url1);
 
@@ -4689,7 +4652,6 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const setAfkEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setDescription(`<@${user.id}> • ${toSmallCaps('You are now AFK')} — ${reason}`);
 
       await interaction.reply({ embeds: [setAfkEmbed] });
@@ -4745,7 +4707,6 @@ client.on('interactionCreate', async (interaction) => {
 
       if (top5.length === 0) {
         const emptyLbEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
           .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4769,7 +4730,6 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const lbEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
         .setDescription(lbEntries.join('\n'))
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
@@ -4831,7 +4791,6 @@ client.on('interactionCreate', async (interaction) => {
             `${toSmallCaps('Duration')} • \`${durationInfo.label}\``;
 
           const dmEmbed = new EmbedBuilder()
-            .setColor(0x2B2D31)
             .setTitle(`${toSmallCaps('Timeout Notice')}`)
             .setDescription(dmTimeoutDesc)
             .setTimestamp()
@@ -4841,7 +4800,6 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const timeoutEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Timeout Issued')}`)
           .setDescription(
             `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
@@ -4896,7 +4854,6 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const untimeoutEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Timeout Lifted')}`)
           .setDescription(
             `<@${targetMember.id}> — (${targetMember.user.username})\n` +
@@ -4949,7 +4906,6 @@ client.on('interactionCreate', async (interaction) => {
 
       try {
         const dmEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Expulsion Notice')}`)
           .setDescription(
             `<@${targetId}>\n` +
@@ -4980,7 +4936,6 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const kickEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Kick Issued')}`)
           .setDescription(
             `<@${targetId}>\n` +
@@ -5035,7 +4990,6 @@ client.on('interactionCreate', async (interaction) => {
 
       try {
         const dmEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Permanent Exile Notice')}`)
           .setDescription(
             `<@${targetId}>\n` +
@@ -5066,7 +5020,6 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const banEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Ban Issued')}`)
           .setDescription(
             `<@${targetId}>\n` +
@@ -5112,7 +5065,6 @@ client.on('interactionCreate', async (interaction) => {
 
         const caseId = generateCaseId();
         const unbanEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Ban Revoked')}`)
           .setDescription(
             `<@${targetId}> \`(${targetId})\`\n` +
@@ -5205,7 +5157,6 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const purgeEmbed = new EmbedBuilder()
-          .setColor(0x2B2D31)
           .setTitle(`${toSmallCaps('Chat Purged')}`)
           .setDescription(purgeDesc)
           .setTimestamp()
@@ -5285,7 +5236,6 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'help') {
       const helpEmbed = new EmbedBuilder()
-        .setColor(0x2B2D31)
         .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
           `Staff Hierarchy & Permissions\n` +
