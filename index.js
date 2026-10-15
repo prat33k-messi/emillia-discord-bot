@@ -236,17 +236,18 @@ client.once('ready', async () => {
     console.error("Error preloading guild emojis:", err);
   }
 
-  // Register slash commands globally and per guild for instantaneous autocomplete
+  // Register slash commands globally and remove per-guild commands to prevent duplicate entries
   try {
     const commandsJson = slashCommandsData.map(c => c.toJSON());
     if (client.application) {
       await client.application.commands.set(commandsJson);
       console.log("Registered global application slash commands.");
     }
+    // Delete any guild-scoped slash commands so Discord only lists the 1 global command
     for (const guild of client.guilds.cache.values()) {
-      await guild.commands.set(commandsJson).catch(() => {});
+      await guild.commands.set([]).catch(() => {});
     }
-    console.log("Synced slash commands to connected guilds.");
+    console.log("Cleaned guild-scoped slash commands to prevent duplicates.");
   } catch (err) {
     console.error("Error setting up slash commands on ready:", err);
   }
@@ -254,8 +255,8 @@ client.once('ready', async () => {
 
 client.on('guildCreate', async (guild) => {
   try {
-    const commandsJson = slashCommandsData.map(c => c.toJSON());
-    await guild.commands.set(commandsJson).catch(() => {});
+    // Clear guild-scoped commands on join
+    await guild.commands.set([]).catch(() => {});
   } catch (err) {
     console.error("Error syncing commands on guild join:", err);
   }
@@ -267,10 +268,10 @@ client.on('guildCreate', async (guild) => {
 const MASTER_USER_ID = '1013822181379162142'; // Primary Administrator: el_lapulga
 
 const OFFICIAL_STAFF_ROLE_IDS = {
-  SHOGUN: '1517887565431046267',      // Tier 4 (Shogun)
-  ROYAL_HAND: '1517888043573317672',  // Tier 3 (Royal Hand)
-  SUPERVISOR: '1542798540676276224',  // Tier 2 (Supervisor)
-  MODERATOR: '1521217765833179378'    // Tier 1 (Moderator)
+  SHOGUN: '1517887565431046267',          // Tier 4 (Shogun)
+  COMMUNITY_ADMIN: '1517888043573317672', // Tier 3 (Community Admins, previously Royal Hand)
+  SUPERVISOR: '1542798540676276224',      // Tier 2 (Supervisor)
+  MODERATOR: '1521217765833179378'        // Tier 1 (Moderator)
 };
 
 // Global Security Protocol State
@@ -294,7 +295,7 @@ function getMemberTier(member) {
   // STRICT Role ID Verification (Rejects any duplicate/fake named roles)
   if (member.roles && member.roles.cache) {
     if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SHOGUN)) return 4;
-    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.ROYAL_HAND)) return 3;
+    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.COMMUNITY_ADMIN)) return 3;
     if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR)) return 2;
     if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.MODERATOR)) return 1;
   }
@@ -305,19 +306,35 @@ function getMemberTier(member) {
 function getTierName(tier) {
   switch (tier) {
     case 4: return 'Shogun';
-    case 3: return 'Royal Hand';
+    case 3: return 'Community Admins';
     case 2: return 'Supervisor';
     case 1: return 'Moderator';
     default: return 'Member';
   }
 }
 
-// Helper to check if a user is any staff tier (Shogun, Royal Hand, Supervisor, Moderator, Owner, or Admin)
+// Helper to check if a user is any staff tier (Shogun, Community Admins, Supervisor, Moderator, Owner, or Admin)
 function isModerator(member) {
   return getMemberTier(member) >= 1;
 }
 
-// Helper to check if a member has the 'Active' role or above (or is Staff / Owner / Master)
+// Helper to extract the highest level number from member's roles (e.g. Level 5+, Level 10+, Level 20+, ...)
+function getMemberLevel(member) {
+  if (!member || !member.roles || !member.roles.cache) return 0;
+  let maxLevel = 0;
+  for (const role of member.roles.cache.values()) {
+    const match = (role.name || '').match(/level\s*(\d+)/i);
+    if (match) {
+      const lvl = parseInt(match[1], 10);
+      if (!isNaN(lvl) && lvl > maxLevel) {
+        maxLevel = lvl;
+      }
+    }
+  }
+  return maxLevel;
+}
+
+// Helper to check if a member can use AFK (Level 20+ or Staff / Master / Owner)
 function canUseAfk(member) {
   if (!member) return false;
 
@@ -325,31 +342,26 @@ function canUseAfk(member) {
   if (member.id === MASTER_USER_ID) return true;
   if (member.guild && member.guild.ownerId === member.id) return true;
 
-  // Staff (Moderator, Supervisor, Royal Hand, Shogun)
+  // Staff (Moderator, Supervisor, Community Admins, Shogun)
   if (getMemberTier(member) >= 1) return true;
 
-  // Check roles in member
-  if (member.roles && member.roles.cache) {
-    // Check if member explicitly has any role named or containing 'active'
-    const hasActiveRole = member.roles.cache.some(r => {
-      const name = (r.name || '').toLowerCase().trim();
-      return name === 'active' || name.includes('active');
-    });
-    if (hasActiveRole) return true;
+  // Level 20+ requirement
+  return getMemberLevel(member) >= 20;
+}
 
-    // Check if member has a role higher in hierarchy than the Active role
-    if (member.guild && member.guild.roles && member.guild.roles.cache) {
-      const activeRole = member.guild.roles.cache.find(r => {
-        const name = (r.name || '').toLowerCase().trim();
-        return name === 'active' || name.includes('active');
-      });
-      if (activeRole && member.roles.highest && member.roles.highest.position >= activeRole.position) {
-        return true;
-      }
-    }
-  }
+// Helper to check if a member can post GIFs (Level 5+ or Staff / Master / Owner)
+function canUseGif(member) {
+  if (!member) return false;
 
-  return false;
+  // Master User & Server Owner always authorized
+  if (member.id === MASTER_USER_ID) return true;
+  if (member.guild && member.guild.ownerId === member.id) return true;
+
+  // Staff (Moderator, Supervisor, Community Admins, Shogun)
+  if (getMemberTier(member) >= 1) return true;
+
+  // Level 5+ requirement
+  return getMemberLevel(member) >= 5;
 }
 
 // Helper to parse duration for timeouts (e.g. 10m, 2h, 1d)
@@ -1845,14 +1857,49 @@ client.on('messageCreate', async (message) => {
   if (!message.guild) return;
 
   // ==========================================
+  // GIF ENFORCEMENT: Only Level 5+ can use GIFs
+  // ==========================================
+  const hasGifAttachment = message.attachments && message.attachments.some(att => {
+    const ct = (att.contentType || '').toLowerCase();
+    const name = (att.name || '').toLowerCase();
+    return ct.includes('image/gif') || name.endsWith('.gif');
+  });
+
+  const contentLower = (message.content || '').toLowerCase();
+  const hasGifLink = /(https?:\/\/[^\s]+(\.gif|\/gif|[/?&]gif))/i.test(contentLower) ||
+    /tenor\.com\/view\//i.test(contentLower) ||
+    /giphy\.com\/gifs\//i.test(contentLower);
+
+  if (hasGifAttachment || hasGifLink) {
+    if (!canUseGif(message.member)) {
+      await message.delete().catch(() => {});
+      const { url1 } = await getAikoEmojis(message.guild);
+      const gifWarnEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setDescription(`<@${message.author.id}> • Reach level 5+ to use gif`);
+      if (url1) gifWarnEmbed.setThumbnail(url1);
+
+      const warnMsg = await message.channel.send({ embeds: [gifWarnEmbed] }).catch(() => {});
+      if (warnMsg) {
+        setTimeout(() => {
+          warnMsg.delete().catch(() => {});
+        }, 5000);
+      }
+      return;
+    }
+  }
+
+  // ==========================================
   // AFK SYSTEM: Check if user is returning from AFK
   // ==========================================
   if (afkUsers.has(message.author.id)) {
     const afkData = afkUsers.get(message.author.id);
     const timeSinceAfk = Date.now() - (afkData.afkSince || 0);
-    const isSettingAfk = message.content.trim().toLowerCase().startsWith('-afks') || message.content.trim().toLowerCase().startsWith('-afk');
+    const trimmedMsg = message.content.trim().toLowerCase();
+    const isSettingAfk = trimmedMsg.startsWith('<afks') || trimmedMsg.startsWith('<afk') ||
+                         trimmedMsg.startsWith('-afks') || trimmedMsg.startsWith('-afk');
 
-    // Only remove AFK if not currently executing -afks and at least 3 seconds have passed
+    // Only remove AFK if not currently executing afk command and at least 3 seconds have passed
     if (!isSettingAfk && timeSinceAfk > 3000) {
       afkUsers.delete(message.author.id);
       if (db) {
@@ -2111,7 +2158,7 @@ client.on('messageCreate', async (message) => {
   }
 
   const trimmedContent = message.content.trim();
-  const startsWithPrefix = trimmedContent.startsWith('-');
+  const startsWithPrefix = trimmedContent.startsWith('<');
 
   // Check if message is a reply to the bot
   let isReplyToBot = false;
@@ -2174,7 +2221,7 @@ client.on('messageCreate', async (message) => {
         const { dot } = await getModEmojis(message.guild);
         const invalidCmdEmbed = new EmbedBuilder()
           .setColor(0x2B2D31)
-          .setDescription(`${dot} Invalid command. Use \`-help\` for available commands.`);
+          .setDescription(`${dot} Invalid command. Use \`<help\` for available commands.`);
         const replyMsg = await message.reply({ embeds: [invalidCmdEmbed] }).catch(() => {});
         if (replyMsg) {
           setTimeout(() => {
@@ -2186,10 +2233,22 @@ client.on('messageCreate', async (message) => {
       return; // Silently ignore — no typing, no response
     }
 
-    // If unauthorized user attempts to use AFK, silently ignore before sending typing indicator
+    // If unauthorized user attempts to use AFK, warn with level embed and auto-delete
     const isAfkAttempt = preCheckWords[0] === 'afks' || preCheckWords[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk');
     if (isAfkAttempt && !canUseAfk(message.member)) {
-      return; // Silently ignore — no typing indicator, no message, no warning
+      const { url1 } = await getAikoEmojis(message.guild);
+      const afkWarnEmbed = new EmbedBuilder()
+        .setColor(0x2B2D31)
+        .setDescription(`<@${message.author.id}> • Reach level 20+ to use afk`);
+      if (url1) afkWarnEmbed.setThumbnail(url1);
+
+      const warnMsg = await message.reply({ embeds: [afkWarnEmbed] }).catch(() => {});
+      if (warnMsg) {
+        setTimeout(() => {
+          warnMsg.delete().catch(() => {});
+        }, 5000);
+      }
+      return;
     }
 
     // Show typing animation only when Emillia will actually respond
@@ -2345,23 +2404,23 @@ client.on('messageCreate', async (message) => {
 
       // 1. Staff Authorization Check
       if (modTier === 0) {
-        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Royal Hand, Supervisor, Moderator) can use moderation commands! ❄️");
+        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Community Admins, Supervisor, Moderator) can use moderation commands! ❄️");
         return;
       }
 
       // 2. Action-Specific Role Hierarchy & Permission Checks
       if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 3) {
-        await message.reply("Mou! 🌸 Only 'Shogun' and 'Royal Hand' have permission to banish members from Anipedia! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to banish members from Anipedia! ❄️");
         return;
       }
 
       if (actionKeyword === 'kick' && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' have permission to kick members! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members! ❄️");
         return;
       }
 
       if ((actionKeyword === 'clearwarns' || actionKeyword === 'deletewarn') && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' have permission to delete or clear warnings! ❄️");
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to delete or clear warnings! ❄️");
         return;
       }
 
@@ -2370,7 +2429,7 @@ client.on('messageCreate', async (message) => {
       
       // We need a target member for everything except unban and purge
       if (actionKeyword !== 'unban' && actionKeyword !== 'purge' && !targetMember) {
-        await message.reply(`Who should I perform this action on? Please mention the user, like this: \`-${actionKeyword} @user <reason>\`! 🌸`);
+        await message.reply(`Who should I perform this action on? Please mention the user, like this: \`<${actionKeyword} @user <reason>\`! 🌸`);
         return;
       }
 
@@ -2509,7 +2568,7 @@ client.on('messageCreate', async (message) => {
       } else if (actionKeyword === 'purge') {
         const numMatch = cleanQuery.match(/\b([1-9]\d?|100)\b/);
         if (!numMatch) {
-          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `-purge 20` or `-purge @user 15`! 🌸");
+          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `<purge 20` or `<purge @user 15`! 🌸");
           return;
         }
         const purgeAmount = parseInt(numMatch[1], 10);
@@ -3390,43 +3449,43 @@ client.on('messageCreate', async (message) => {
         .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
           `Staff Hierarchy & Permissions\n` +
-          `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
+          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
             name: `${toSmallCaps('Disciplinary & Warnings')}`,
             value: [
-              `• \`-warn @user <reason>\` — ${toSmallCaps('Warn User')}`,
-              `• \`-deletewarn @user [number]\` — ${toSmallCaps('Delete Warning')}`,
-              `• \`-clearwarns @user\` — ${toSmallCaps('Clear All Warnings')}`,
-              `• \`-warns @user\` — ${toSmallCaps('View Warning History')}`,
-              `• \`-leaderboard\` / \`-warns leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
-              `• \`-purge <1-100> [@user]\` — ${toSmallCaps('Purge Channel Messages')}`
+              `• \`<warn @user <reason>\` — ${toSmallCaps('Warn User')}`,
+              `• \`<deletewarn @user [number]\` — ${toSmallCaps('Delete Warning')}`,
+              `• \`<clearwarns @user\` — ${toSmallCaps('Clear All Warnings')}`,
+              `• \`<warns @user\` — ${toSmallCaps('View Warning History')}`,
+              `• \`<leaderboard\` / \`<warns leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
+              `• \`<purge <1-100> [@user]\` — ${toSmallCaps('Purge Channel Messages')}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${toSmallCaps('Punishments & Restrictions')}`,
             value: [
-              `• \`-timeout @user [10m/2h/1d] <reason>\` — ${toSmallCaps('Timeout Member')}`,
-              `• \`-untimeout @user\` — ${toSmallCaps('Remove Timeout')}`,
-              `• \`-kick @user <reason>\` — ${toSmallCaps('Kick Member')}`,
-              `• \`-ban @user <reason>\` — ${toSmallCaps('Ban Member')}`,
-              `• \`-unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
+              `• \`<timeout @user [10m/2h/1d] <reason>\` — ${toSmallCaps('Timeout Member')}`,
+              `• \`<untimeout @user\` — ${toSmallCaps('Remove Timeout')}`,
+              `• \`<kick @user <reason>\` — ${toSmallCaps('Kick Member')}`,
+              `• \`<ban @user <reason>\` — ${toSmallCaps('Ban Member')}`,
+              `• \`<unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
             ].join('\n'),
             inline: false
           },
           {
             name: `${toSmallCaps('General Commands')}`,
             value: [
-              `• \`-afk [reason]\` — ${toSmallCaps('Set AFK Status')}`,
-              `• \`-aura [@user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
-              `• \`-bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
-              `• \`-av [@user]\` — ${toSmallCaps('View User Avatar')}`,
-              `• \`-iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
-              `• \`-profile\` — ${toSmallCaps('View User Profile')}`,
-              `• \`-ping\` — ${toSmallCaps('Check Bot Latency')}`,
-              `• \`-reset\` — ${toSmallCaps('Reset Memory')} *(Aerion-sama)*`
+              `• \`<afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
+              `• \`<aura [@user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
+              `• \`<bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
+              `• \`<av [@user]\` — ${toSmallCaps('View User Avatar')}`,
+              `• \`<iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
+              `• \`<profile\` — ${toSmallCaps('View User Profile')}`,
+              `• \`<ping\` — ${toSmallCaps('Check Bot Latency')}`,
+              `• \`<reset\` — ${toSmallCaps('Reset Memory')} *(Aerion-sama)*`
             ].join('\n'),
             inline: false
           }
@@ -3887,7 +3946,15 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'afk') {
       if (!canUseAfk(member)) {
-        await interaction.reply({ content: "You must have the 'Active' role or above to use AFK.", ephemeral: true }).catch(() => {});
+        const afkWarnEmbed = new EmbedBuilder()
+          .setColor(0x2B2D31)
+          .setDescription(`<@${user.id}> • Reach level 20+ to use afk`);
+        if (url1) afkWarnEmbed.setThumbnail(url1);
+
+        await interaction.reply({ embeds: [afkWarnEmbed] }).catch(() => {});
+        setTimeout(() => {
+          interaction.deleteReply().catch(() => {});
+        }, 5000);
         return;
       }
       const reason = options.getString('reason') || 'No reason specified';
@@ -3923,7 +3990,7 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'warn') {
       if (modTier === 0) {
-        await interaction.reply({ content: "Mou! 🌸 Only staff (Shogun, Royal Hand, Supervisor, Moderator) can issue warnings! ❄️", ephemeral: true });
+        await interaction.reply({ content: "Mou! 🌸 Only staff (Shogun, Community Admins, Supervisor, Moderator) can issue warnings! ❄️", ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
@@ -4333,7 +4400,7 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'kick') {
       if (modTier < 2) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' have permission to kick members! ❄️", ephemeral: true });
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members! ❄️", ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
@@ -4419,7 +4486,7 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'ban') {
       if (modTier < 3) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Royal Hand' have permission to ban members! ❄️", ephemeral: true });
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to ban members! ❄️", ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
@@ -4505,7 +4572,7 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'unban') {
       if (modTier < 3) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Royal Hand' have permission to unban members! ❄️", ephemeral: true });
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to unban members! ❄️", ephemeral: true });
         return;
       }
       const targetId = options.getString('user_id').trim();
@@ -4548,7 +4615,7 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'clearwarns') {
       if (modTier < 2) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' can clear warnings! ❄️", ephemeral: true });
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' can clear warnings! ❄️", ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
@@ -4666,7 +4733,7 @@ client.on('interactionCreate', async (interaction) => {
     // ------------------------------------------
     if (commandName === 'deletewarn') {
       if (modTier < 2) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Royal Hand', and 'Supervisor' can delete warnings! ❄️", ephemeral: true });
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' can delete warnings! ❄️", ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
@@ -4914,7 +4981,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
           `Staff Hierarchy & Permissions\n` +
-          `\`Shogun\` > \`Royal Hand\` > \`Supervisor\` > \`Moderator\``
+          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Moderator\``
         )
         .addFields(
           {
@@ -4943,7 +5010,7 @@ client.on('interactionCreate', async (interaction) => {
           {
             name: `${toSmallCaps('General & Fun Commands')}`,
             value: [
-              `• \`/afk [reason]\` — ${toSmallCaps('Set AFK Status')}`,
+              `• \`/afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
               `• \`/aura [user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
               `• \`/besties <user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
               `• \`/avatar [user]\` — ${toSmallCaps('View User Avatar')}`,
