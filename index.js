@@ -478,6 +478,13 @@ function toSmallCaps(str) {
 
 // Helper to build a clean, borderless container card (Components V2)
 function createContainerMessage(contentOrOptions, legacyOptions = {}) {
+  // If it's ALREADY a components payload with ContainerBuilder, return it as is
+  if (contentOrOptions && typeof contentOrOptions === 'object') {
+    if (contentOrOptions.components && Array.isArray(contentOrOptions.components)) {
+      return contentOrOptions;
+    }
+  }
+
   let opts = {};
   if (contentOrOptions instanceof EmbedBuilder || (contentOrOptions && contentOrOptions.data)) {
     const d = contentOrOptions.data || contentOrOptions;
@@ -505,6 +512,18 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     };
   } else if (typeof contentOrOptions === 'string') {
     opts = { description: contentOrOptions, ...legacyOptions };
+  } else if (contentOrOptions && typeof contentOrOptions === 'object') {
+    opts = {
+      description: contentOrOptions.description || contentOrOptions.content || '',
+      title: contentOrOptions.title,
+      thumbnail: contentOrOptions.thumbnail,
+      fields: contentOrOptions.fields,
+      footer: contentOrOptions.footer,
+      timestamp: contentOrOptions.timestamp,
+      ephemeral: contentOrOptions.ephemeral,
+      files: contentOrOptions.files,
+      ...legacyOptions
+    };
   } else {
     opts = contentOrOptions || {};
   }
@@ -562,12 +581,25 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
 }
 
 async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
+  // If contentOrOptions is ALREADY a valid Discord components payload, send directly without re-wrapping
+  if (contentOrOptions && typeof contentOrOptions === 'object' && contentOrOptions.components && Array.isArray(contentOrOptions.components)) {
+    if (typeof target === 'function') {
+      return await target(contentOrOptions);
+    } else if (target.reply && typeof target.reply === 'function') {
+      if (target.replied || target.deferred) return await target.followUp(contentOrOptions);
+      return await target.reply(contentOrOptions);
+    } else if (target.send && typeof target.send === 'function') {
+      return await target.send(contentOrOptions);
+    }
+  }
+
   let opts = typeof contentOrOptions === 'string' ? { description: contentOrOptions, ...legacyOptions } : (contentOrOptions || {});
   try {
     const payload = createContainerMessage(contentOrOptions, legacyOptions);
     if (typeof target === 'function') {
       return await target(payload);
     } else if (target.reply && typeof target.reply === 'function') {
+      if (target.replied || target.deferred) return await target.followUp(payload);
       return await target.reply(payload);
     } else if (target.send && typeof target.send === 'function') {
       return await target.send(payload);
@@ -587,6 +619,7 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     if (typeof target === 'function') {
       return await target(sendOpts);
     } else if (target.reply && typeof target.reply === 'function') {
+      if (target.replied || target.deferred) return await target.followUp(sendOpts);
       return await target.reply(sendOpts);
     } else if (target.send && typeof target.send === 'function') {
       return await target.send(sendOpts);
@@ -598,6 +631,9 @@ const replyContainer = sendContainer;
 
 function makeReplyFn(target) {
   return async (payload) => {
+    if (typeof target === 'function') {
+      return await target(payload);
+    }
     return await sendContainer(target, payload);
   };
 }
@@ -4354,7 +4390,7 @@ client.on('messageCreate', async (message) => {
         member: message.member,
         user: message.author,
         channel: message.channel,
-        replyFn: async (payload) => message.channel.send(payload)
+        replyFn: makeReplyFn(message.channel)
       }, targetMember, queryArg);
       return;
     }
@@ -4380,7 +4416,7 @@ client.on('messageCreate', async (message) => {
         member: message.member,
         user: message.author,
         channel: message.channel,
-        replyFn: async (payload) => message.channel.send(payload)
+        replyFn: makeReplyFn(message.channel)
       }, targetMember);
       return;
     }
@@ -4412,7 +4448,7 @@ client.on('messageCreate', async (message) => {
         member: message.member,
         user: message.author,
         channel: message.channel,
-        replyFn: async (payload) => message.channel.send(payload)
+        replyFn: makeReplyFn(message.channel)
       }, targetMember, queryArg);
       return;
     }
@@ -4444,7 +4480,7 @@ client.on('messageCreate', async (message) => {
         member: message.member,
         user: message.author,
         channel: message.channel,
-        replyFn: async (payload) => message.channel.send(payload)
+        replyFn: makeReplyFn(message.channel)
       }, targetMember, queryArg);
       return;
     }
