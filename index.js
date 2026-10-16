@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
@@ -476,26 +476,130 @@ function toSmallCaps(str) {
   return str || '';
 }
 
-// Helper to build a clean, borderless container card (like Sybaru, Components V2)
-function createContainerMessage(content) {
-  const container = new ContainerBuilder()
-    .addTextDisplayComponents(new TextDisplayBuilder().setContent(content));
-  return {
+// Helper to build a clean, borderless container card (Components V2)
+function createContainerMessage(contentOrOptions, legacyOptions = {}) {
+  let opts = {};
+  if (contentOrOptions instanceof EmbedBuilder || (contentOrOptions && contentOrOptions.data)) {
+    const d = contentOrOptions.data || contentOrOptions;
+    opts = {
+      title: d.title,
+      description: d.description,
+      thumbnail: d.thumbnail?.url,
+      fields: d.fields,
+      footer: d.footer?.text,
+      timestamp: d.timestamp ? new Date(d.timestamp).getTime() : false,
+      ...legacyOptions
+    };
+  } else if (contentOrOptions && contentOrOptions.embeds && Array.isArray(contentOrOptions.embeds) && contentOrOptions.embeds[0]) {
+    const d = contentOrOptions.embeds[0].data || contentOrOptions.embeds[0];
+    opts = {
+      title: d.title,
+      description: d.description,
+      thumbnail: d.thumbnail?.url,
+      fields: d.fields,
+      footer: d.footer?.text,
+      timestamp: d.timestamp ? new Date(d.timestamp).getTime() : false,
+      ephemeral: contentOrOptions.ephemeral,
+      files: contentOrOptions.files,
+      ...legacyOptions
+    };
+  } else if (typeof contentOrOptions === 'string') {
+    opts = { description: contentOrOptions, ...legacyOptions };
+  } else {
+    opts = contentOrOptions || {};
+  }
+
+  const container = new ContainerBuilder();
+
+  let textContent = '';
+  if (opts.title) {
+    textContent += `**${opts.title}**\n`;
+  }
+  if (opts.description) {
+    textContent += opts.description;
+  }
+
+  if (opts.fields && Array.isArray(opts.fields) && opts.fields.length > 0) {
+    for (const f of opts.fields) {
+      if (f && f.name) {
+        textContent += `\n\n**${f.name}**\n${f.value || ''}`;
+      }
+    }
+  }
+
+  const trimmedText = textContent.trim();
+
+  if (opts.thumbnail) {
+    const section = new SectionBuilder()
+      .addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '))
+      .setThumbnailAccessory(new ThumbnailBuilder().setURL(opts.thumbnail));
+    container.addSectionComponents(section);
+  } else {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
+  }
+
+  if (opts.footer || opts.timestamp) {
+    let footerText = opts.footer || '';
+    if (opts.timestamp) {
+      const timeStr = typeof opts.timestamp === 'number' ? `<t:${Math.floor(opts.timestamp / 1000)}:R>` : `<t:${Math.floor(Date.now() / 1000)}:R>`;
+      footerText = footerText ? `${footerText} • ${timeStr}` : timeStr;
+    }
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(`-# ${footerText}`));
+  }
+
+  let flags = MessageFlags.IsComponentsV2;
+  if (opts.ephemeral) {
+    flags |= MessageFlags.Ephemeral;
+  }
+  const payload = {
     components: [container],
-    flags: MessageFlags.IsComponentsV2
+    flags
   };
+
+  if (opts.ephemeral) payload.ephemeral = true;
+  if (opts.files) payload.files = opts.files;
+  return payload;
 }
 
-async function replyContainer(messageOrInteraction, content, options = {}) {
+async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
+  let opts = typeof contentOrOptions === 'string' ? { description: contentOrOptions, ...legacyOptions } : (contentOrOptions || {});
   try {
-    const payload = createContainerMessage(content);
-    if (options.ephemeral) payload.flags = payload.flags | MessageFlags.Ephemeral;
-    return await messageOrInteraction.reply(payload);
+    const payload = createContainerMessage(contentOrOptions, legacyOptions);
+    if (typeof target === 'function') {
+      return await target(payload);
+    } else if (target.reply && typeof target.reply === 'function') {
+      return await target.reply(payload);
+    } else if (target.send && typeof target.send === 'function') {
+      return await target.send(payload);
+    }
   } catch (err) {
-    console.error("Failed to reply with Container V2, falling back to embed:", err);
-    const fallbackEmbed = new EmbedBuilder().setDescription(content);
-    return await messageOrInteraction.reply({ embeds: [fallbackEmbed], ephemeral: !!options.ephemeral });
+    console.error("Failed to send Container V2, falling back to embed:", err);
+    const fallback = new EmbedBuilder();
+    if (opts.title) fallback.setTitle(opts.title);
+    if (opts.description) fallback.setDescription(opts.description);
+    if (opts.thumbnail) fallback.setThumbnail(opts.thumbnail);
+    if (opts.footer) fallback.setFooter({ text: opts.footer });
+    if (opts.timestamp) fallback.setTimestamp();
+    if (opts.fields && Array.isArray(opts.fields)) fallback.addFields(opts.fields);
+    const sendOpts = { embeds: [fallback] };
+    if (opts.files) sendOpts.files = opts.files;
+    if (opts.ephemeral) sendOpts.ephemeral = true;
+    if (typeof target === 'function') {
+      return await target(sendOpts);
+    } else if (target.reply && typeof target.reply === 'function') {
+      return await target.reply(sendOpts);
+    } else if (target.send && typeof target.send === 'function') {
+      return await target.send(sendOpts);
+    }
   }
+}
+
+const replyContainer = sendContainer;
+
+function makeReplyFn(target) {
+  return async (payload) => {
+    return await sendContainer(target, payload);
+  };
 }
 
 // Helper to get custom animated/static moderation emojis
@@ -2307,7 +2411,7 @@ async function executeWarn(source, ctx, targetMember, reason) {
         )
         .setTimestamp()
         .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-      await targetMember.send({ embeds: [dmEmbed] });
+      await sendContainer(targetMember, dmEmbed);
     } catch (err) {}
 
     try {
@@ -2361,7 +2465,7 @@ async function executeWarn(source, ctx, targetMember, reason) {
       .setTimestamp();
     if (url2) banEmbed.setThumbnail(url2);
 
-    await replyFn({ embeds: [banEmbed] });
+    await sendContainer(replyFn, banEmbed);
     logToEmilliaLog(guild, 'ban', targetMember.user.tag, targetMember.id, user.tag, `Reached Warn Level 6: ${reason || 'No reason specified'}`, [
       { name: `${dot} ${toSmallCaps('Action')}`, value: `-# \`Permanent Ban (Ladder Level 6)\``, inline: true }
     ]);
@@ -2453,7 +2557,7 @@ async function executeWarn(source, ctx, targetMember, reason) {
       .setDescription(dmDesc)
       .setTimestamp()
       .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-    await targetMember.send({ embeds: [dmEmbed] });
+    await sendContainer(targetMember, dmEmbed);
   } catch (dmErr) {}
 
   let warnDesc = `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
@@ -2474,7 +2578,7 @@ async function executeWarn(source, ctx, targetMember, reason) {
     .setTimestamp();
   if (url2) warnEmbed.setThumbnail(url2);
 
-  await replyFn({ embeds: [warnEmbed] });
+  await sendContainer(replyFn, warnEmbed);
 
   logToEmilliaLog(guild, 'warn', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
     { name: `${dot} ${toSmallCaps('Warning Level')}`, value: `-# \`Level ${newLevel}\``, inline: true },
@@ -2520,7 +2624,7 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
     const zeroEmbed = new EmbedBuilder()
       .setDescription(`<@${targetMember.id}> has **0** active warning restrictions.`)
       .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() });
-    await replyFn({ embeds: [zeroEmbed] });
+    await sendContainer(replyFn, zeroEmbed);
     return;
   }
 
@@ -2590,7 +2694,7 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
     .setTimestamp();
   if (url1) clearEmbed.setThumbnail(url1);
 
-  await replyFn({ embeds: [clearEmbed] });
+  await sendContainer(replyFn, clearEmbed);
   logToEmilliaLog(guild, 'clearwarntemp', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
     { name: `${dot} ${toSmallCaps('Action')}`, value: `-# \`Restrictions & Timeout lifted early\``, inline: true },
     { name: `${dot} ${toSmallCaps('History')}`, value: `-# \`Preserved at Level ${currentLevel}\``, inline: true }
@@ -2701,7 +2805,7 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
     .setTimestamp();
   if (url1) permEmbed.setThumbnail(url1);
 
-  await replyFn({ embeds: [permEmbed] });
+  await sendContainer(replyFn, permEmbed);
   logToEmilliaLog(guild, 'clearwarnperm', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
     { name: `${dot} ${toSmallCaps('Action')}`, value: `-# \`All warnings permanently reset to 0\``, inline: true }
   ]);
@@ -2771,7 +2875,7 @@ async function executeWarns(source, ctx, targetMember) {
       .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
       .setTimestamp();
     if (url1) cleanEmbed.setThumbnail(url1);
-    await replyFn({ embeds: [cleanEmbed] });
+    await sendContainer(replyFn, cleanEmbed);
     return;
   }
 
@@ -2803,7 +2907,7 @@ async function executeWarns(source, ctx, targetMember) {
     .setTimestamp();
   if (url2) warnsEmbed.setThumbnail(url2);
 
-  await replyFn({ embeds: [warnsEmbed] });
+  await sendContainer(replyFn, warnsEmbed);
 }
 
 client.on('messageCreate', async (message) => {
@@ -2833,7 +2937,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(`<@${message.author.id}> • Reach level 5+ to use gif`);
       if (url1) gifWarnEmbed.setThumbnail(url1);
 
-      const warnMsg = await message.channel.send({ embeds: [gifWarnEmbed] }).catch(() => {});
+      const warnMsg = await sendContainer(message.channel, gifWarnEmbed).catch(() => {});
       if (warnMsg) {
         setTimeout(() => {
           warnMsg.delete().catch(() => {});
@@ -2939,7 +3043,7 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
-      await message.reply({ embeds: [deniedEmbed] });
+      await sendContainer(message, deniedEmbed);
 
       const alertMsg = `⚠️ **UNAUTHORIZED SECURITY DIRECTIVE ATTEMPT!** ⚠️
 • **User:** <@${message.author.id}> (\`${message.author.tag}\` - ID: \`${message.author.id}\`)
@@ -2988,7 +3092,7 @@ client.on('messageCreate', async (message) => {
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
-        await message.reply({ embeds: [immuneEmbed] });
+        await sendContainer(message, immuneEmbed);
         return;
       }
 
@@ -3005,7 +3109,7 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
-      await message.reply({ embeds: [protoZeroEmbed] });
+      await sendContainer(message, protoZeroEmbed);
       return;
     }
 
@@ -3052,7 +3156,7 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
-      await message.reply({ embeds: [protoOneEmbed] });
+      await sendContainer(message, protoOneEmbed);
       return;
     }
 
@@ -3067,7 +3171,7 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
-      await message.reply({ embeds: [codeBlackEmbed] });
+      await sendContainer(message, codeBlackEmbed);
       return;
     }
 
@@ -3082,7 +3186,7 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
 
-      await message.reply({ embeds: [codeWhiteEmbed] });
+      await sendContainer(message, codeWhiteEmbed);
       return;
     }
   }
@@ -3169,7 +3273,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(`<@${message.author.id}> • Reach level 20+ to use afk`);
       if (url1) afkWarnEmbed.setThumbnail(url1);
 
-      const warnMsg = await message.reply({ embeds: [afkWarnEmbed] }).catch(() => {});
+      const warnMsg = await sendContainer(message, afkWarnEmbed).catch(() => {});
       if (warnMsg) {
         setTimeout(() => {
           warnMsg.delete().catch(() => {});
@@ -3389,7 +3493,7 @@ client.on('messageCreate', async (message) => {
           member: message.member,
           user: message.author,
           channel: message.channel,
-          replyFn: async (payload) => message.channel.send(payload)
+          replyFn: makeReplyFn(message.channel)
         }, targetMember, reason);
         return;
 
@@ -3400,7 +3504,7 @@ client.on('messageCreate', async (message) => {
           member: message.member,
           user: message.author,
           channel: message.channel,
-          replyFn: async (payload) => message.channel.send(payload)
+          replyFn: makeReplyFn(message.channel)
         }, targetMember, reason);
         return;
 
@@ -3453,7 +3557,7 @@ client.on('messageCreate', async (message) => {
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() });
 
-          const confMsg = await message.channel.send({ embeds: [purgeEmbed] });
+          const confMsg = await sendContainer(message.channel, purgeEmbed);
           setTimeout(() => confMsg.delete().catch(() => {}), 5000);
 
           if (db) {
@@ -3510,7 +3614,7 @@ client.on('messageCreate', async (message) => {
             .setTimestamp();
           if (url2) untimeoutEmbed.setThumbnail(url2);
 
-          await message.channel.send({ embeds: [untimeoutEmbed] });
+          await sendContainer(message.channel, untimeoutEmbed);
           logToEmilliaLog(message.guild, 'untimeout', targetMember.user.tag, targetMember.id, message.author.tag, `Untimeout by ${message.author.tag}`);
         } catch (err) {
           console.error("Untimeout execution error:", err);
@@ -3556,7 +3660,7 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
-          await message.channel.send({ embeds: [unbanEmbed] });
+          await sendContainer(message.channel, unbanEmbed);
           logToEmilliaLog(message.guild, 'unban', targetId, targetId, message.author.tag, `Unbanned by ${message.author.tag}`);
         } catch (err) {
           console.error("Unban execution error:", err);
@@ -3571,7 +3675,7 @@ client.on('messageCreate', async (message) => {
           member: message.member,
           user: message.author,
           channel: message.channel,
-          replyFn: async (payload) => message.channel.send(payload)
+          replyFn: makeReplyFn(message.channel)
         }, targetMember, reason);
         return;
 
@@ -3617,7 +3721,7 @@ client.on('messageCreate', async (message) => {
               .setDescription(dmTimeoutDesc)
               .setTimestamp()
               .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-            await targetMember.send({ embeds: [dmEmbed] });
+            await sendContainer(targetMember, dmEmbed);
           } catch (err) {
             dmSent = false;
           }
@@ -3636,7 +3740,7 @@ client.on('messageCreate', async (message) => {
             .setTimestamp();
           if (url3) timeoutEmbed.setThumbnail(url3);
 
-          await message.channel.send({ embeds: [timeoutEmbed] });
+          await sendContainer(message.channel, timeoutEmbed);
           logToEmilliaLog(message.guild, 'timeout', targetMember.user.tag, targetMember.id, message.author.tag, reason, [
             { name: `${dot} ${toSmallCaps('Duration')}`, value: `-# \`${durationInfo.label}\``, inline: true }
           ]);
@@ -3668,7 +3772,7 @@ client.on('messageCreate', async (message) => {
             )
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-          await targetMember.send({ embeds: [dmEmbed] });
+          await sendContainer(targetMember, dmEmbed);
         } catch (err) {
           dmSent = false;
         }
@@ -3705,7 +3809,7 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
-          await message.channel.send({ embeds: [kickEmbed] });
+          await sendContainer(message.channel, kickEmbed);
           logToEmilliaLog(message.guild, 'kick', targetTag, targetId, message.author.tag, reason, [
             { name: `${dot} ${toSmallCaps('Message Cleanup')}`, value: `-# \`${deletedCount} message(s) purged\``, inline: true }
           ]);
@@ -3737,7 +3841,7 @@ client.on('messageCreate', async (message) => {
             )
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-          await targetMember.send({ embeds: [dmEmbed] });
+          await sendContainer(targetMember, dmEmbed);
         } catch (err) {
           dmSent = false;
         }
@@ -3774,7 +3878,7 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
-          await message.channel.send({ embeds: [banEmbed] });
+          await sendContainer(message.channel, banEmbed);
           logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, [
             { name: `${dot} Message Cleanup`, value: `\`${deletedCount} message(s) purged\``, inline: true }
           ]);
@@ -3859,7 +3963,7 @@ client.on('messageCreate', async (message) => {
             .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
           if (url2) emptyLbEmbed.setThumbnail(url2);
-          await message.channel.send({ embeds: [emptyLbEmbed] });
+          await sendContainer(message.channel, emptyLbEmbed);
           return;
         }
 
@@ -3882,7 +3986,7 @@ client.on('messageCreate', async (message) => {
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         if (url2) lbEmbed.setThumbnail(url2);
-        await message.channel.send({ embeds: [lbEmbed] });
+        await sendContainer(message.channel, lbEmbed);
         return;
       }
 
@@ -3925,7 +4029,7 @@ client.on('messageCreate', async (message) => {
           )
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
-        await message.channel.send({ embeds: [cleanEmbed] });
+        await sendContainer(message.channel, cleanEmbed);
         return;
       }
 
@@ -4004,7 +4108,7 @@ client.on('messageCreate', async (message) => {
       }
       warningsEmbed.setTimestamp();
 
-      await message.channel.send({ embeds: [warningsEmbed] });
+      await sendContainer(message.channel, warningsEmbed);
       return;
     }
 
@@ -4059,7 +4163,7 @@ client.on('messageCreate', async (message) => {
         )
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
-      await message.reply({ embeds: [helpEmbed] });
+      await sendContainer(message, helpEmbed);
       return;
     }
 
@@ -4520,9 +4624,7 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
       } else if (error.message?.includes('timeout')) {
         errorMsg = "Command timed out. Please try again.";
       }
-      const errEmbed = new EmbedBuilder()
-        .setDescription(`${dot} ${errorMsg}`);
-      const replyMsg = await message.reply({ embeds: [errEmbed] }).catch(() => {});
+      const replyMsg = await sendContainer(message, `${dot} ${errorMsg}`).catch(() => {});
       if (replyMsg && typeof replyMsg.delete === 'function') {
         setTimeout(() => replyMsg.delete().catch(() => {}), 3000);
       }
@@ -4638,7 +4740,7 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(`<@${user.id}> • Reach level 20+ to use afk`);
         if (url1) afkWarnEmbed.setThumbnail(url1);
 
-        await interaction.reply({ embeds: [afkWarnEmbed] }).catch(() => {});
+        await sendContainer(interaction, afkWarnEmbed).catch(() => {});
         setTimeout(() => {
           interaction.deleteReply().catch(() => {});
         }, 5000);
@@ -4679,7 +4781,7 @@ client.on('interactionCreate', async (interaction) => {
         member,
         user,
         channel,
-        replyFn: async (payload) => interaction.reply(payload)
+        replyFn: makeReplyFn(interaction)
       }, targetMember, reason);
       return;
     }
@@ -4694,7 +4796,7 @@ client.on('interactionCreate', async (interaction) => {
         member,
         user,
         channel,
-        replyFn: async (payload) => interaction.reply(payload)
+        replyFn: makeReplyFn(interaction)
       }, targetMember);
       return;
     }
@@ -4722,7 +4824,7 @@ client.on('interactionCreate', async (interaction) => {
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
         if (url2) emptyLbEmbed.setThumbnail(url2);
-        await interaction.reply({ embeds: [emptyLbEmbed] });
+        await sendContainer(interaction, emptyLbEmbed);
         return;
       }
 
@@ -4745,7 +4847,7 @@ client.on('interactionCreate', async (interaction) => {
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
       if (url2) lbEmbed.setThumbnail(url2);
-      await interaction.reply({ embeds: [lbEmbed] });
+      await sendContainer(interaction, lbEmbed);
       return;
     }
 
@@ -4805,7 +4907,7 @@ client.on('interactionCreate', async (interaction) => {
             .setDescription(dmTimeoutDesc)
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-          await targetMember.send({ embeds: [dmEmbed] });
+          await sendContainer(targetMember, dmEmbed).catch(() => {});
         } catch (err) {}
 
         const caseId = generateCaseId();
@@ -4820,7 +4922,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTimestamp();
         if (url3) timeoutEmbed.setThumbnail(url3);
 
-        await interaction.reply({ embeds: [timeoutEmbed] });
+        await sendContainer(interaction, timeoutEmbed);
         logToEmilliaLog(guild, 'timeout', targetMember.user.tag, targetMember.id, user.tag, reason, [
           { name: `${dot} ${toSmallCaps('Duration')}`, value: `-# \`${durationInfo.label}\``, inline: true }
         ]);
@@ -4874,7 +4976,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTimestamp();
         if (url2) untimeoutEmbed.setThumbnail(url2);
 
-        await interaction.reply({ embeds: [untimeoutEmbed] });
+        await sendContainer(interaction, untimeoutEmbed);
         logToEmilliaLog(guild, 'untimeout', targetMember.user.tag, targetMember.id, user.tag, `Untimeout by ${user.tag}`);
       } catch (err) {
         console.error("Untimeout slash command error:", err);
@@ -4924,7 +5026,7 @@ client.on('interactionCreate', async (interaction) => {
           )
           .setTimestamp()
           .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-        await targetMember.send({ embeds: [dmEmbed] });
+        await sendContainer(targetMember, dmEmbed).catch(() => {});
       } catch (err) {}
 
       try {
@@ -4956,7 +5058,7 @@ client.on('interactionCreate', async (interaction) => {
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
-        await interaction.reply({ embeds: [kickEmbed] });
+        await sendContainer(interaction, kickEmbed);
         logToEmilliaLog(guild, 'kick', targetTag, targetId, user.tag, reason, [
           { name: `${dot} ${toSmallCaps('Message Cleanup')}`, value: `-# \`${deletedCount} message(s) purged\``, inline: true }
         ]);
@@ -5008,7 +5110,7 @@ client.on('interactionCreate', async (interaction) => {
           )
           .setTimestamp()
           .setFooter({ text: toSmallCaps('AniPedia Moderation') });
-        await targetMember.send({ embeds: [dmEmbed] });
+        await sendContainer(targetMember, dmEmbed).catch(() => {});
       } catch (err) {}
 
       try {
@@ -5040,7 +5142,7 @@ client.on('interactionCreate', async (interaction) => {
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
-        await interaction.reply({ embeds: [banEmbed] });
+        await sendContainer(interaction, banEmbed);
         logToEmilliaLog(guild, 'ban', targetTag, targetId, user.tag, reason, [
           { name: `${dot} ${toSmallCaps('Message Cleanup')}`, value: `-# \`${deletedCount} message(s) purged\``, inline: true }
         ]);
@@ -5084,7 +5186,7 @@ client.on('interactionCreate', async (interaction) => {
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
-        await interaction.reply({ embeds: [unbanEmbed] });
+        await sendContainer(interaction, unbanEmbed);
         logToEmilliaLog(guild, 'unban', targetId, targetId, user.tag, `Unbanned by ${user.tag}`);
       } catch (err) {
         console.error("Unban slash command error:", err);
@@ -5104,7 +5206,7 @@ client.on('interactionCreate', async (interaction) => {
         member,
         user,
         channel,
-        replyFn: async (payload) => interaction.reply(payload)
+        replyFn: makeReplyFn(interaction)
       }, targetMember, reason);
       return;
     }
@@ -5120,7 +5222,7 @@ client.on('interactionCreate', async (interaction) => {
         member,
         user,
         channel,
-        replyFn: async (payload) => interaction.reply(payload)
+        replyFn: makeReplyFn(interaction)
       }, targetMember, reason);
       return;
     }
@@ -5171,7 +5273,7 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(purgeDesc)
           .setTimestamp()
           .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() });
-        await interaction.reply({ embeds: [purgeEmbed], ephemeral: true });
+        await sendContainer(interaction, purgeEmbed, { ephemeral: true });
 
         if (db) {
           await db.collection('moderation_logs').add({
@@ -5290,7 +5392,7 @@ client.on('interactionCreate', async (interaction) => {
         )
         .setFooter({ text: toSmallCaps('AniPedia Moderation'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
-      await interaction.reply({ embeds: [helpEmbed] });
+      await sendContainer(interaction, helpEmbed);
       return;
     }
   } catch (err) {
