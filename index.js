@@ -663,12 +663,12 @@ async function getModEmojis(guild) {
   return { verify, dot };
 }
 
-let cachedAikoEmojis = { aiko1: '', aiko2: '', aiko3: '' };
+let cachedAikoEmojis = { aiko1: '', aiko2: '', aiko3: '', url1: '', url2: '', url3: '' };
 
 // Helper to fetch Aiko custom emojis (aiko1, aiko2, aiko3)
 async function getAikoEmojis(guild) {
   if (cachedAikoEmojis.aiko1 && cachedAikoEmojis.aiko2 && cachedAikoEmojis.aiko3) {
-    return cachedAikoEmojis;
+    return { ...cachedAikoEmojis, url1: '', url2: '', url3: '' };
   }
 
   let aiko1 = cachedAikoEmojis.aiko1 || '';
@@ -785,12 +785,16 @@ async function getAikoEmojis(guild) {
     return '';
   }
 
-  const url1 = getEmojiUrl(aiko1);
-  const url2 = getEmojiUrl(aiko2);
-  const url3 = getEmojiUrl(aiko3);
+  // Temporarily disable Aiko image thumbnails across all commands ("we will insert later, so removed from all now")
+  // const url1 = getEmojiUrl(aiko1);
+  // const url2 = getEmojiUrl(aiko2);
+  // const url3 = getEmojiUrl(aiko3);
+  const url1 = '';
+  const url2 = '';
+  const url3 = '';
 
   cachedAikoEmojis = { aiko1, aiko2, aiko3, url1, url2, url3 };
-  console.log("Resolved Aiko emojis:", cachedAikoEmojis);
+  console.log("Resolved Aiko emojis (thumbnails disabled for now):", cachedAikoEmojis);
   if (!aiko1 || !aiko2 || !aiko3) {
     console.log("Available guild emojis:", guild?.emojis?.cache ? Array.from(guild.emojis.cache.values()).map(e => e.name).join(', ') : 'none');
   }
