@@ -3082,11 +3082,7 @@ client.on('messageCreate', async (message) => {
       const { verify } = await getModEmojis(message.guild);
       const durationStr = formatAfkDuration(timeSinceAfk);
 
-      let removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
-      if (afkData.mentions && afkData.mentions.length > 0) {
-        const uniqueMentioners = [...new Set(afkData.mentions.map(m => `<@${m.authorId}>`))];
-        removeAfkDesc += `\n${toSmallCaps('Mentioned by')} • ${uniqueMentioners.join(', ')}`;
-      }
+      const removeAfkDesc = `<@${message.author.id}> • Welcome back, I have removed your **AFK** (\`${durationStr}\`)`;
 
       await replyContainer(message, removeAfkDesc).catch(() => {});
     }
