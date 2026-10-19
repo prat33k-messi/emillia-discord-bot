@@ -95,6 +95,8 @@ const afkMentionCooldowns = new Map();
 
 // Active Warn States tracker: Map userId -> { currentLevel, restrictionsActive, restrictionsExpiry }
 const activeWarnStatesCache = new Map();
+// Active Jailed Users tracker: Map userId -> { userId, userTag, roles: [roleIds], moderatorId, moderatorTag, reason, jailedAt }
+const jailedUsersCache = new Map();
 
 // ==========================================
 // SLASH COMMAND DEFINITIONS (Auto-popup on /)
@@ -131,6 +133,18 @@ const slashCommandsData = [
     .setName('untimeout')
     .setDescription('Remove timeout from a member')
     .addUserOption(opt => opt.setName('user').setDescription('The member to untimeout').setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName('jail')
+    .setDescription('Jail a member, removing their roles and assigning the Jailed role')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to jail').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for jailing').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('unjail')
+    .setDescription('Unjail a member and restore their original roles')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to unjail').setRequired(true))
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for unjailing').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('kick')
@@ -240,6 +254,19 @@ client.once('ready', async () => {
     } catch (err) {
       console.error("Error preloading warn states from Firestore:", err);
     }
+
+    try {
+      const jailedSnapshot = await db.collection('jailed_users').get();
+      jailedSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.status !== 'unjailed') {
+          jailedUsersCache.set(doc.id, data);
+        }
+      });
+      console.log(`Preloaded ${jailedUsersCache.size} jailed users from Firestore.`);
+    } catch (err) {
+      console.error("Error preloading jailed users from Firestore:", err);
+    }
   }
 
   // Preload emojis from all connected guilds
@@ -333,16 +360,44 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
   }
 });
 
+// Enforce Jailed role if a jailed member leaves and rejoins
+client.on('guildMemberAdd', async (member) => {
+  try {
+    if (!member || !member.guild) return;
+    let jailedData = jailedUsersCache.get(member.id);
+    if (!jailedData && db) {
+      const doc = await db.collection('jailed_users').doc(member.id).get();
+      if (doc.exists && doc.data().status === 'active') {
+        jailedData = doc.data();
+        jailedUsersCache.set(member.id, jailedData);
+      }
+    }
+    if (jailedData) {
+      let jailedRole = member.guild.roles.cache.find(r => r.name.toLowerCase() === 'jailed');
+      if (!jailedRole) {
+        const fetched = await member.guild.roles.fetch().catch(() => null);
+        jailedRole = fetched?.find(r => r.name.toLowerCase() === 'jailed');
+      }
+      if (jailedRole) {
+        await member.roles.add(jailedRole, 'Re-applying Jailed role on member rejoin');
+      }
+    }
+  } catch (err) {
+    console.error('Error re-applying Jailed role on guildMemberAdd:', err);
+  }
+});
+
 // ==========================================
 // MASTER CREDENTIALS & SECURITY CONFIGURATION
 // ==========================================
 const MASTER_USER_ID = '1013822181379162142'; // Primary Administrator: el_lapulga
 
 const OFFICIAL_STAFF_ROLE_IDS = {
-  SHOGUN: '1517887565431046267',          // Tier 4 (Shogun)
-  COMMUNITY_ADMIN: '1517888043573317672', // Tier 3 (Community Admins, previously Royal Hand)
-  SUPERVISOR: '1542798540676276224',      // Tier 2 (Supervisor)
-  MODERATOR: '1521217765833179378'        // Tier 1 (Moderator)
+  SHOGUN: '1517887565431046267',          // Tier 5 (Shogun)
+  COMMUNITY_ADMIN: '1517888043573317672', // Tier 4 (Community Admins, previously Royal Hand)
+  SUPERVISOR: '1542798540676276224',      // Tier 3 (Supervisor)
+  SENIOR_MODERATOR: '',                    // Tier 2 (Senior Moderator)
+  MODERATOR: '1521217765833179378'        // Tier 1 (Moderator / Junior Moderator)
 };
 
 // Global Security Protocol State
@@ -350,41 +405,82 @@ let isCodeBlackFrozen = false;
 const protocolZeroBlacklist = new Set();
 const deniedLevel1Users = new Set();
 
-// Staff Role Rankings & Hierarchy strictly bound to official Role IDs
+// Staff Role Rankings & Hierarchy (strictly checks Role IDs and recognized Role Names)
 function getMemberTier(member) {
   if (!member) return 0;
 
   // Master User & Server Owner have permanent supreme clearance (100% Immune)
-  if (member.id === MASTER_USER_ID) return 4;
-  if (member.guild && member.guild.ownerId === member.id) return 4;
+  if (member.id === MASTER_USER_ID) return 5;
+  if (member.guild && member.guild.ownerId === member.id) return 5;
 
   // If user is denied Level 1 clearance via Protocol GrantAccess1
   if (deniedLevel1Users.has(member.id) || (member.user && deniedLevel1Users.has(member.user.username.toLowerCase()))) {
     return 0;
   }
 
-  // STRICT Role ID Verification (Rejects any duplicate/fake named roles)
+  // Check roles by official IDs and case-insensitive names
   if (member.roles && member.roles.cache) {
-    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SHOGUN)) return 4;
-    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.COMMUNITY_ADMIN)) return 3;
-    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR)) return 2;
-    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.MODERATOR)) return 1;
+    // Tier 5: Shogun
+    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SHOGUN) ||
+        member.roles.cache.some(r => r.name.toLowerCase().trim() === 'shogun')) {
+      return 5;
+    }
+
+    // Tier 4: Community Admins
+    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.COMMUNITY_ADMIN) ||
+        member.roles.cache.some(r => {
+          const n = r.name.toLowerCase().trim();
+          return n === 'community admins' || n === 'community admin' || n === 'royal hand';
+        })) {
+      return 4;
+    }
+
+    // Tier 3: Supervisor
+    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR) ||
+        member.roles.cache.some(r => r.name.toLowerCase().trim() === 'supervisor')) {
+      return 3;
+    }
+
+    // Tier 2: Senior Moderator
+    if ((OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR && member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR)) ||
+        member.roles.cache.some(r => {
+          const n = r.name.toLowerCase().trim();
+          return n === 'senior moderator' || n === 'sr moderator' || n === 'sr. moderator' || n === 'senior mod';
+        })) {
+      return 2;
+    }
+
+    // Tier 1: Junior Moderator / Moderator
+    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.MODERATOR) ||
+        member.roles.cache.some(r => {
+          const n = r.name.toLowerCase().trim();
+          return n === 'moderator' || n === 'junior moderator' || n === 'jr moderator' || n === 'jr. moderator' || n === 'junior mod';
+        })) {
+      return 1;
+    }
   }
 
   return 0;
 }
 
-function getTierName(tier) {
+function getTierName(tier, member = null) {
   switch (tier) {
-    case 4: return 'Shogun';
-    case 3: return 'Community Admins';
-    case 2: return 'Supervisor';
-    case 1: return 'Moderator';
+    case 5: return 'Shogun';
+    case 4: return 'Community Admins';
+    case 3: return 'Supervisor';
+    case 2: return 'Senior Moderator';
+    case 1: {
+      if (member && member.roles && member.roles.cache) {
+        const hasJr = member.roles.cache.some(r => r.name.toLowerCase().includes('junior'));
+        if (hasJr) return 'Junior Moderator';
+      }
+      return 'Moderator';
+    }
     default: return 'Member';
   }
 }
 
-// Helper to check if a user is any staff tier (Shogun, Community Admins, Supervisor, Moderator, Owner, or Admin)
+// Helper to check if a user is any staff tier (Shogun, Community Admins, Supervisor, Senior Moderator, Moderator, Owner, or Admin)
 function isModerator(member) {
   return getMemberTier(member) >= 1;
 }
@@ -2053,7 +2149,9 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
       'untimeout': 0x2ECC71, 
       'kick': 0xE67E22, 
       'ban': 0x992D22, 
-      'unban': 0x2ECC71 
+      'unban': 0x2ECC71,
+      'jail': 0xE74C3C,
+      'unjail': 0x2ECC71
     };
     const titleMap = { 
       'warn': 'Moderation Log • User Warned', 
@@ -2068,7 +2166,9 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
       'untimeout': 'Moderation Log • Timeout Removed', 
       'kick': 'Moderation Log • User Kicked', 
       'ban': 'Moderation Log • User Banned', 
-      'unban': 'Moderation Log • User Unbanned' 
+      'unban': 'Moderation Log • User Unbanned',
+      'jail': 'Moderation Log • User Jailed',
+      'unjail': 'Moderation Log • User Unjailed'
     };
 
     const formattedExtra = extraFields.map(f => ({
@@ -2424,7 +2524,7 @@ async function executeWarn(source, ctx, targetMember, reason) {
   const modTier = getMemberTier(member);
 
   if (modTier === 0) {
-    await replyFn({ content: "Mou! 🌸 Only staff (Shogun, Community Admins, Supervisor, Moderator) can issue warnings! ❄️", ephemeral: true });
+    await replyFn({ content: "Mou! 🌸 Only staff (Shogun, Community Admins, Supervisor, Senior Moderator, Moderator) can issue warnings! ❄️", ephemeral: true });
     return;
   }
 
@@ -2439,8 +2539,8 @@ async function executeWarn(source, ctx, targetMember, reason) {
 
   const targetTier = getMemberTier(targetMember);
   if (targetTier >= modTier) {
-    const targetRankName = getTierName(targetTier);
-    const modRankName = getTierName(modTier);
+    const targetRankName = getTierName(targetTier, targetMember);
+    const modRankName = getTierName(modTier, member);
     await replyFn({ content: `Mou! 🌸 You cannot warn <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
     return;
   }
@@ -2682,7 +2782,7 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
   const { guild, member, user, replyFn } = ctx;
   const modTier = getMemberTier(member);
 
-  if (modTier < 2) {
+  if (modTier < 3) {
     await replyFn({ content: "Mou! 🌸 Only Supervisor, Community Admins, and Shogun can lift warning restrictions! ❄️", ephemeral: true });
     return;
   }
@@ -2694,8 +2794,8 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
 
   const targetTier = getMemberTier(targetMember);
   if (targetTier >= modTier) {
-    const targetRankName = getTierName(targetTier);
-    const modRankName = getTierName(modTier);
+    const targetRankName = getTierName(targetTier, targetMember);
+    const modRankName = getTierName(modTier, member);
     await replyFn({ content: `Mou! 🌸 You cannot modify warnings for <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
     return;
   }
@@ -2797,7 +2897,7 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
   const { guild, member, user, replyFn } = ctx;
   const modTier = getMemberTier(member);
 
-  if (modTier < 3) {
+  if (modTier < 4) {
     await replyFn({ content: "Mou! 🌸 Only Community Admins and Shogun can permanently reset warnings! ❄️", ephemeral: true });
     return;
   }
@@ -2809,8 +2909,8 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
 
   const targetTier = getMemberTier(targetMember);
   if (targetTier >= modTier) {
-    const targetRankName = getTierName(targetTier);
-    const modRankName = getTierName(modTier);
+    const targetRankName = getTierName(targetTier, targetMember);
+    const modRankName = getTierName(modTier, member);
     await replyFn({ content: `Mou! 🌸 You cannot modify warnings for <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
     return;
   }
@@ -3001,6 +3101,253 @@ async function executeWarns(source, ctx, targetMember) {
   if (url2) warnsEmbed.setThumbnail(url2);
 
   await sendContainer(replyFn, warnsEmbed);
+}
+
+// ==========================================
+// JAIL & UNJAIL SYSTEM
+// ==========================================
+
+async function executeJail(source, ctx, targetMember, reason) {
+  const { guild, member, user, replyFn } = ctx;
+  const modTier = getMemberTier(member);
+
+  // Only Senior Moderator (Tier 2), Supervisor (Tier 3), Community Admins (Tier 4), and Shogun (Tier 5)
+  if (modTier < 2) {
+    await replyFn({ content: "Mou! 🌸 Only 'Senior Moderator', 'Supervisor', 'Community Admins', and 'Shogun' have permission to jail members! ❄️", ephemeral: true });
+    return;
+  }
+
+  if (!targetMember) {
+    await replyFn({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+    return;
+  }
+  if (targetMember.id === user.id) {
+    await replyFn({ content: "Mou! 🌸 You cannot jail yourself! ❄️", ephemeral: true });
+    return;
+  }
+  if (targetMember.id === client.user.id) {
+    await replyFn({ content: "Mou! 🌸 You cannot jail me! ❄️", ephemeral: true });
+    return;
+  }
+
+  const targetTier = getMemberTier(targetMember);
+  if (targetTier >= modTier) {
+    const targetRankName = getTierName(targetTier, targetMember);
+    const modRankName = getTierName(modTier, member);
+    await replyFn({ content: `Mou! 🌸 You cannot jail <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    return;
+  }
+
+  // Find Jailed role (by name or cache)
+  let jailedRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'jailed');
+  if (!jailedRole) {
+    const fetched = await guild.roles.fetch().catch(() => null);
+    jailedRole = fetched?.find(r => r.name.toLowerCase() === 'jailed');
+  }
+
+  if (!jailedRole) {
+    await replyFn({ content: "Mou! 🌸 Could not find the **Jailed** role in this server! Please create it or check role permissions! ❄️", ephemeral: true });
+    return;
+  }
+
+  // Check if target is already jailed
+  if (targetMember.roles.cache.has(jailedRole.id) || jailedUsersCache.has(targetMember.id)) {
+    await replyFn({ content: `<@${targetMember.id}> is already jailed! 🌸`, ephemeral: true });
+    return;
+  }
+
+  // Collect roles to strip (exclude @everyone, managed integration roles, and Jailed role)
+  const rolesToStrip = targetMember.roles.cache.filter(role =>
+    role.id !== guild.id &&
+    !role.managed &&
+    role.id !== jailedRole.id
+  );
+  const strippedRoleIds = Array.from(rolesToStrip.keys());
+
+  // Managed roles must remain in target roles array to avoid Discord API 400 error
+  const managedRoleIds = targetMember.roles.cache.filter(r => r.managed).map(r => r.id);
+  const newRoleIds = Array.from(new Set([jailedRole.id, ...managedRoleIds]));
+
+  try {
+    // Send DM notice first before role stripping
+    try {
+      const dmEmbed = new EmbedBuilder()
+        .setTitle(`${toSmallCaps('Jail Notice')}`)
+        .setDescription(
+          `You have been jailed in **${guild.name}**.\n` +
+          `${toSmallCaps('By')} • <@${user.id}>\n` +
+          `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}`
+        )
+        .setFooter({ text: toSmallCaps('AniPedia') })
+        .setTimestamp();
+      await sendContainer(targetMember, dmEmbed).catch(() => {});
+    } catch (e) {}
+
+    await targetMember.roles.set(newRoleIds, `Jailed by ${user.tag}: ${reason || 'No reason specified'}`);
+
+    const jailData = {
+      userId: targetMember.id,
+      userTag: targetMember.user.tag,
+      roles: strippedRoleIds,
+      moderatorId: user.id,
+      moderatorTag: user.tag,
+      reason: reason || 'No reason specified',
+      jailedAt: Date.now(),
+      status: 'active'
+    };
+    jailedUsersCache.set(targetMember.id, jailData);
+
+    if (db) {
+      try {
+        await db.collection('jailed_users').doc(targetMember.id).set({
+          ...jailData,
+          timestamp: FieldValue.serverTimestamp()
+        });
+
+        await db.collection('moderation_logs').add({
+          action: 'jail',
+          targetId: targetMember.id,
+          targetTag: targetMember.user.tag,
+          moderatorId: user.id,
+          moderatorTag: user.tag,
+          reason: reason || 'No reason specified',
+          strippedRolesCount: strippedRoleIds.length,
+          timestamp: FieldValue.serverTimestamp()
+        });
+      } catch (err) {
+        console.error("Firestore jail record error:", err);
+      }
+    }
+
+    const { dot } = await getModEmojis(guild);
+    const jailEmbed = new EmbedBuilder()
+      .setTitle(`${toSmallCaps('Member Jailed')}`)
+      .setDescription(
+        `<@${targetMember.id}> — (${targetMember.user.username})\n` +
+        `${toSmallCaps('By')} • <@${user.id}>\n` +
+        `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
+        `${toSmallCaps('Roles Stripped')} • \`${strippedRoleIds.length} role(s)\``
+      )
+      .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+      .setTimestamp();
+
+    await sendContainer(replyFn, jailEmbed);
+    logToEmilliaLog(guild, 'jail', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
+      { name: `${dot} ${toSmallCaps('Roles Stripped')}`, value: `-# \`${strippedRoleIds.length} role(s)\``, inline: true }
+    ]);
+  } catch (err) {
+    console.error("Jail execution error:", err);
+    if (err.code === 50013) {
+      await replyFn({ content: "Mou! 🌸 I cannot jail this member because their highest role is higher than or equal to my role ('Emillia') in Server Settings -> Roles! ❄️", ephemeral: true });
+    } else {
+      await replyFn({ content: "Mou! 🌸 Failed to jail this member: " + err.message, ephemeral: true });
+    }
+  }
+}
+
+async function executeUnjail(source, ctx, targetMember, reason) {
+  const { guild, member, user, replyFn } = ctx;
+  const modTier = getMemberTier(member);
+
+  // Only Senior Moderator (Tier 2), Supervisor (Tier 3), Community Admins (Tier 4), and Shogun (Tier 5)
+  if (modTier < 2) {
+    await replyFn({ content: "Mou! 🌸 Only 'Senior Moderator', 'Supervisor', 'Community Admins', and 'Shogun' have permission to unjail members! ❄️", ephemeral: true });
+    return;
+  }
+
+  if (!targetMember) {
+    await replyFn({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+    return;
+  }
+
+  let jailedRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'jailed');
+  if (!jailedRole) {
+    const fetched = await guild.roles.fetch().catch(() => null);
+    jailedRole = fetched?.find(r => r.name.toLowerCase() === 'jailed');
+  }
+
+  const hasJailedRole = jailedRole && targetMember.roles.cache.has(jailedRole.id);
+  let savedRecord = jailedUsersCache.get(targetMember.id);
+
+  if (!savedRecord && db) {
+    try {
+      const doc = await db.collection('jailed_users').doc(targetMember.id).get();
+      if (doc.exists) {
+        savedRecord = doc.data();
+      }
+    } catch (err) {
+      console.error("Error fetching jailed user record from DB:", err);
+    }
+  }
+
+  if (!hasJailedRole && !savedRecord) {
+    await replyFn({ content: `<@${targetMember.id}> is not currently jailed! 🌸`, ephemeral: true });
+    return;
+  }
+
+  try {
+    const currentRoles = targetMember.roles.cache.filter(r => (!jailedRole || r.id !== jailedRole.id) && r.id !== guild.id).map(r => r.id);
+    const savedRoleIds = savedRecord?.roles || [];
+    const rolesToRestore = Array.from(new Set([...currentRoles, ...savedRoleIds]));
+    const validRoles = rolesToRestore.filter(rid => guild.roles.cache.has(rid));
+
+    await targetMember.roles.set(validRoles, `Unjailed by ${user.tag}: ${reason || 'No reason specified'}`);
+
+    jailedUsersCache.delete(targetMember.id);
+    if (db) {
+      try {
+        await db.collection('jailed_users').doc(targetMember.id).delete();
+        await db.collection('moderation_logs').add({
+          action: 'unjail',
+          targetId: targetMember.id,
+          targetTag: targetMember.user.tag,
+          moderatorId: user.id,
+          moderatorTag: user.tag,
+          reason: reason || 'No reason specified',
+          rolesRestoredCount: savedRoleIds.length,
+          timestamp: FieldValue.serverTimestamp()
+        });
+      } catch (err) {
+        console.error("Firestore unjail record error:", err);
+      }
+    }
+
+    try {
+      const dmEmbed = new EmbedBuilder()
+        .setTitle(`${toSmallCaps('Unjail Notice')}`)
+        .setDescription(
+          `You have been released from jail in **${guild.name}** and your roles have been restored.\n` +
+          `${toSmallCaps('By')} • <@${user.id}>`
+        )
+        .setFooter({ text: toSmallCaps('AniPedia') })
+        .setTimestamp();
+      await sendContainer(targetMember, dmEmbed).catch(() => {});
+    } catch (e) {}
+
+    const { dot } = await getModEmojis(guild);
+    const unjailEmbed = new EmbedBuilder()
+      .setTitle(`${toSmallCaps('Member Unjailed')}`)
+      .setDescription(
+        `<@${targetMember.id}> — (${targetMember.user.username})\n` +
+        `${toSmallCaps('By')} • <@${user.id}>\n` +
+        `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
+        `${toSmallCaps('Roles Restored')} • \`${savedRoleIds.length} role(s)\``
+      )
+      .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+      .setTimestamp();
+
+    await sendContainer(replyFn, unjailEmbed);
+    logToEmilliaLog(guild, 'unjail', targetMember.user.tag, targetMember.id, user.tag, reason || 'No reason specified', [
+      { name: `${dot} ${toSmallCaps('Roles Restored')}`, value: `-# \`${savedRoleIds.length} role(s)\``, inline: true }
+    ]);
+  } catch (err) {
+    console.error("Unjail execution error:", err);
+    if (err.code === 50013) {
+      await replyFn({ content: "Mou! 🌸 I cannot unjail this member because some of their roles are higher than my role ('Emillia') in Server Settings -> Roles! ❄️", ephemeral: true });
+    } else {
+      await replyFn({ content: "Mou! 🌸 Failed to unjail this member: " + err.message, ephemeral: true });
+    }
+  }
 }
 
 client.on('messageCreate', async (message) => {
@@ -3371,6 +3718,7 @@ client.on('messageCreate', async (message) => {
       'warn', 'unwarn', 'clearwarntemp', 'clearwarnperm',
       'warnings', 'warns', 'leaderboard', 'top', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
       'timeout', 'mute', 'untimeout', 'unmute',
+      'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
       'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
@@ -3416,6 +3764,7 @@ client.on('messageCreate', async (message) => {
     const modCommandKeywords = [
       'warn', 'unwarn', 'clearwarntemp', 'clearwarnperm',
       'timeout', 'mute', 'untimeout', 'unmute',
+      'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean'
     ];
     const isModCommand = modCommandKeywords.some(kw => earlyWords.includes(kw)) && isModerator(message.member);
@@ -3525,6 +3874,12 @@ client.on('messageCreate', async (message) => {
     } else if (words.includes('unban')) {
       isModAction = true;
       actionKeyword = 'unban';
+    } else if (words.includes('unjail')) {
+      isModAction = true;
+      actionKeyword = 'unjail';
+    } else if (words.includes('jail')) {
+      isModAction = true;
+      actionKeyword = 'jail';
     } else if (words.includes('warn')) {
       isModAction = true;
       actionKeyword = 'warn';
@@ -3544,33 +3899,44 @@ client.on('messageCreate', async (message) => {
 
       // 1. Staff Authorization Check
       if (modTier === 0) {
-        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Community Admins, Supervisor, Moderator) can use moderation commands! ❄️");
+        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Community Admins, Supervisor, Senior Moderator, Moderator) can use moderation commands! ❄️");
         return;
       }
 
       // 2. Action-Specific Role Hierarchy & Permission Checks
-      if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 3) {
+      if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 4) {
         await message.reply("Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to banish members from Anipedia! ❄️");
         return;
       }
 
-      if (actionKeyword === 'kick' && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members! ❄️");
-        return;
-      }
-
-      if (actionKeyword === 'clearwarntemp' && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to lift warning restrictions! ❄️");
-        return;
-      }
-
-      if (actionKeyword === 'clearwarnperm' && modTier < 3) {
+      if (actionKeyword === 'clearwarnperm' && modTier < 4) {
         await message.reply("Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to permanently reset warnings! ❄️");
         return;
       }
 
+      if (actionKeyword === 'kick' && modTier < 3) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members! ❄️");
+        return;
+      }
+
+      if (actionKeyword === 'clearwarntemp' && modTier < 3) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to lift warning restrictions! ❄️");
+        return;
+      }
+
+      if ((actionKeyword === 'jail' || actionKeyword === 'unjail') && modTier < 2) {
+        await message.reply("Mou! 🌸 Only 'Senior Moderator', 'Supervisor', 'Community Admins', and 'Shogun' have permission to use the jail feature! ❄️");
+        return;
+      }
+
       // Identify Target Member (excluding the bot itself)
-      const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      if (!targetMember && (actionKeyword === 'jail' || actionKeyword === 'unjail' || actionKeyword === 'kick' || actionKeyword === 'ban' || actionKeyword === 'warn' || actionKeyword === 'timeout' || actionKeyword === 'mute')) {
+        const idMatch = cleanQuery.match(/\b\d{17,19}\b/);
+        if (idMatch) {
+          targetMember = message.guild.members.cache.get(idMatch[0]) || await message.guild.members.fetch(idMatch[0]).catch(() => null);
+        }
+      }
       
       // We need a target member for everything except unban and purge
       if (actionKeyword !== 'unban' && actionKeyword !== 'purge' && !targetMember) {
@@ -3587,8 +3953,8 @@ client.on('messageCreate', async (message) => {
 
         const targetTier = getMemberTier(targetMember);
         if (targetTier >= modTier) {
-          const targetRankName = getTierName(targetTier);
-          const modRankName = getTierName(modTier);
+          const targetRankName = getTierName(targetTier, targetMember);
+          const modRankName = getTierName(modTier, message.member);
           if (targetTier === modTier) {
             await message.reply(`Mou! 🌸 You cannot moderate <@${targetMember.id}> because they hold an equal rank (**${targetRankName}**) to you! ❄️`);
           } else {
@@ -3780,6 +4146,28 @@ client.on('messageCreate', async (message) => {
           console.error("Unban execution error:", err);
           await message.reply("I couldn't unban this user! Make sure the ID is correct and they are actually banned! 😰");
         }
+        return;
+
+      } else if (actionKeyword === 'jail') {
+        const reason = getReason(cleanQuery, 'jail', targetMember);
+        await executeJail('prefix', {
+          guild: message.guild,
+          member: message.member,
+          user: message.author,
+          channel: message.channel,
+          replyFn: makeReplyFn(message.channel)
+        }, targetMember, reason);
+        return;
+
+      } else if (actionKeyword === 'unjail') {
+        const reason = getReason(cleanQuery, 'unjail', targetMember);
+        await executeUnjail('prefix', {
+          guild: message.guild,
+          member: message.member,
+          user: message.author,
+          channel: message.channel,
+          replyFn: makeReplyFn(message.channel)
+        }, targetMember, reason);
         return;
 
       } else if (actionKeyword === 'warn') {
@@ -4234,7 +4622,7 @@ client.on('messageCreate', async (message) => {
         .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
           `Staff Hierarchy & Permissions\n` +
-          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Moderator\``
+          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\``
         )
         .addFields(
           {
@@ -4254,6 +4642,8 @@ client.on('messageCreate', async (message) => {
             value: [
               `• \`<timeout @user [10m/2h/1d] <reason>\` — ${toSmallCaps('Timeout Member')}`,
               `• \`<untimeout @user\` — ${toSmallCaps('Remove Timeout')}`,
+              `• \`<jail @user [reason]\` — ${toSmallCaps('Jail Member (Strip Roles)')}`,
+              `• \`<unjail @user [reason]\` — ${toSmallCaps('Release Member & Restore Roles')}`,
               `• \`<kick @user <reason>\` — ${toSmallCaps('Kick Member')}`,
               `• \`<ban @user <reason>\` — ${toSmallCaps('Ban Member')}`,
               `• \`<unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
@@ -5099,10 +5489,42 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
+    // /jail
+    // ------------------------------------------
+    if (commandName === 'jail') {
+      const targetMember = options.getMember('user');
+      const reason = options.getString('reason') || 'No reason specified';
+      await executeJail('slash', {
+        guild,
+        member,
+        user,
+        channel,
+        replyFn: makeReplyFn(interaction)
+      }, targetMember, reason);
+      return;
+    }
+
+    // ------------------------------------------
+    // /unjail
+    // ------------------------------------------
+    if (commandName === 'unjail') {
+      const targetMember = options.getMember('user');
+      const reason = options.getString('reason') || 'No reason specified';
+      await executeUnjail('slash', {
+        guild,
+        member,
+        user,
+        channel,
+        replyFn: makeReplyFn(interaction)
+      }, targetMember, reason);
+      return;
+    }
+
+    // ------------------------------------------
     // 6. /kick
     // ------------------------------------------
     if (commandName === 'kick') {
-      if (modTier < 2) {
+      if (modTier < 3) {
         await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members! ❄️", ephemeral: true });
         return;
       }
@@ -5120,8 +5542,8 @@ client.on('interactionCreate', async (interaction) => {
 
       const targetTier = getMemberTier(targetMember);
       if (targetTier >= modTier) {
-        const targetRankName = getTierName(targetTier);
-        const modRankName = getTierName(modTier);
+        const targetRankName = getTierName(targetTier, targetMember);
+        const modRankName = getTierName(modTier, member);
         await interaction.reply({ content: `Mou! 🌸 You cannot kick <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
         return;
       }
@@ -5186,7 +5608,7 @@ client.on('interactionCreate', async (interaction) => {
     // 7. /ban
     // ------------------------------------------
     if (commandName === 'ban') {
-      if (modTier < 3) {
+      if (modTier < 4) {
         await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to ban members! ❄️", ephemeral: true });
         return;
       }
@@ -5204,8 +5626,8 @@ client.on('interactionCreate', async (interaction) => {
 
       const targetTier = getMemberTier(targetMember);
       if (targetTier >= modTier) {
-        const targetRankName = getTierName(targetTier);
-        const modRankName = getTierName(modTier);
+        const targetRankName = getTierName(targetTier, targetMember);
+        const modRankName = getTierName(modTier, member);
         await interaction.reply({ content: `Mou! 🌸 You cannot ban <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
         return;
       }
@@ -5270,7 +5692,7 @@ client.on('interactionCreate', async (interaction) => {
     // 8. /unban
     // ------------------------------------------
     if (commandName === 'unban') {
-      if (modTier < 3) {
+      if (modTier < 4) {
         await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to unban members! ❄️", ephemeral: true });
         return;
       }
@@ -5464,7 +5886,7 @@ client.on('interactionCreate', async (interaction) => {
         .setTitle(`${toSmallCaps('Command Guide')}`)
         .setDescription(
           `Staff Hierarchy & Permissions\n` +
-          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Moderator\``
+          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\``
         )
         .addFields(
           {
@@ -5484,6 +5906,8 @@ client.on('interactionCreate', async (interaction) => {
             value: [
               `• \`/timeout <user> [duration] [reason]\` — ${toSmallCaps('Timeout Member')}`,
               `• \`/untimeout <user>\` — ${toSmallCaps('Remove Timeout')}`,
+              `• \`/jail <user> [reason]\` — ${toSmallCaps('Jail Member (Strip Roles)')}`,
+              `• \`/unjail <user> [reason]\` — ${toSmallCaps('Release Member & Restore Roles')}`,
               `• \`/kick <user> [reason]\` — ${toSmallCaps('Kick Member')}`,
               `• \`/ban <user> [reason]\` — ${toSmallCaps('Ban Member')}`,
               `• \`/unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
