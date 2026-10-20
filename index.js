@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags, StringSelectMenuBuilder, ComponentType } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
@@ -97,6 +97,12 @@ const afkMentionCooldowns = new Map();
 const activeWarnStatesCache = new Map();
 // Active Jailed Users tracker: Map userId -> { userId, userTag, roles: [roleIds], moderatorId, moderatorTag, reason, jailedAt }
 const jailedUsersCache = new Map();
+
+// In-memory warning records cache: Map userId -> array of warn record objects
+const inMemoryWarnRecords = new Map();
+
+// Feature cooldowns tracker: Map `${userId}_${featureName}` -> timestampMs (10s per feature)
+const featureCooldowns = new Map();
 
 // ==========================================
 // SLASH COMMAND DEFINITIONS (Auto-popup on /)
@@ -266,6 +272,21 @@ client.once('ready', async () => {
       console.log(`Preloaded ${jailedUsersCache.size} jailed users from Firestore.`);
     } catch (err) {
       console.error("Error preloading jailed users from Firestore:", err);
+    }
+
+    try {
+      const warnRecSnapshot = await db.collection('warn_records').get();
+      warnRecSnapshot.forEach(doc => {
+        const data = doc.data();
+        if (data.userId) {
+          const arr = inMemoryWarnRecords.get(data.userId) || [];
+          arr.push({ id: doc.id, ...data });
+          inMemoryWarnRecords.set(data.userId, arr);
+        }
+      });
+      console.log(`Preloaded warn records for ${inMemoryWarnRecords.size} users from Firestore.`);
+    } catch (err) {
+      console.error("Error preloading warn records from Firestore:", err);
     }
   }
 
@@ -896,6 +917,267 @@ async function getAikoEmojis(guild) {
   }
 
   return { aiko1, aiko2, aiko3, url1, url2, url3 };
+}
+
+// Helper for per-feature cooldowns (10s duration) with 2-second auto-deleting container popup
+async function handleFeatureCooldown(target, userId, featureName) {
+  const now = Date.now();
+  const cooldownKey = `${userId}_${featureName}`;
+  const lastUsed = featureCooldowns.get(cooldownKey) || 0;
+  const cooldownMs = 10000; // 10 seconds
+
+  if (now - lastUsed < cooldownMs) {
+    const cdText = `<@${userId}> • You have a 10s cooldown on this feature!`;
+    try {
+      if (target.reply && target.channel) {
+        // MessageCreate (prefix command)
+        const sentMsg = await replyContainer(target, cdText);
+        if (sentMsg && typeof sentMsg.delete === 'function') {
+          setTimeout(() => {
+            sentMsg.delete().catch(() => {});
+          }, 2000);
+        }
+      } else if (target.isRepliable && target.isRepliable()) {
+        // Interaction (slash command)
+        if (!target.replied && !target.deferred) {
+          await sendContainer(target, cdText, { ephemeral: true });
+          setTimeout(() => {
+            target.deleteReply().catch(() => {});
+          }, 2000);
+        }
+      }
+    } catch (err) {
+      console.error("Error sending cooldown container alert:", err);
+    }
+    return false;
+  }
+
+  featureCooldowns.set(cooldownKey, now);
+  return true;
+}
+
+// Helper to send Interactive Help Menu with Dropdown Select
+async function sendInteractiveHelpMenu(source, ctx) {
+  const { guild, user, channel, interaction } = ctx;
+
+  const overviewEmbed = new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setTitle(`${toSmallCaps('Command Guide')}`)
+    .setDescription(
+      `Staff Hierarchy & Permissions\n` +
+      `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\`\n\n` +
+      `Select a category from the dropdown menu below to view available commands.`
+    )
+    .addFields(
+      {
+        name: `${toSmallCaps('Categories')}`,
+        value: [
+          `• **🛡️ Staff Hierarchy & Permissions**`,
+          `• **⚠️ Disciplinary & Warnings**`,
+          `• **🔨 Punishments & Restrictions**`,
+          `• **📜 General Commands**`
+        ].join('\n'),
+        inline: false
+      }
+    )
+    .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+    .setTimestamp();
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`help_category_${Date.now()}_${user.id}`)
+    .setPlaceholder('Select a category...')
+    .addOptions([
+      {
+        label: 'Home / Overview',
+        description: 'Overview and guide navigation',
+        value: 'home',
+        emoji: '🏠'
+      },
+      {
+        label: 'Staff Hierarchy & Permissions',
+        description: 'Staff ranks and permission guidelines',
+        value: 'staff',
+        emoji: '🛡️'
+      },
+      {
+        label: 'Disciplinary & Warnings',
+        description: 'Warns, warning ladder, and logs',
+        value: 'warnings',
+        emoji: '⚠️'
+      },
+      {
+        label: 'Punishments & Restrictions',
+        description: 'Timeout, jail, kick, and ban commands',
+        value: 'punishments',
+        emoji: '🔨'
+      },
+      {
+        label: 'General Commands',
+        description: 'AFK, aura, bestie, avatar, iq, profile, ping',
+        value: 'general',
+        emoji: '📜'
+      }
+    ]);
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+
+  let responseMsg;
+  if (source === 'slash') {
+    responseMsg = await interaction.reply({ embeds: [overviewEmbed], components: [row], fetchReply: true });
+  } else {
+    responseMsg = await channel.send({ embeds: [overviewEmbed], components: [row] });
+  }
+
+  const collector = responseMsg.createMessageComponentCollector({
+    componentType: ComponentType.StringSelect,
+    time: 120000
+  });
+
+  collector.on('collect', async (i) => {
+    try {
+      if (i.user.id !== user.id) {
+        await i.reply({
+          content: "Mou! 🌸 This menu isn't for you! Please run `<help` to open your own menu! ❄️",
+          ephemeral: true
+        });
+        return;
+      }
+
+      const selected = i.values[0];
+      let catEmbed;
+
+      if (selected === 'home') {
+        catEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setTitle(`${toSmallCaps('Command Guide — Overview')}`)
+          .setDescription(
+            `Staff Hierarchy & Permissions\n` +
+            `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\`\n\n` +
+            `Select any category below to view detailed command syntax and descriptions.`
+          )
+          .addFields({
+            name: `${toSmallCaps('Categories')}`,
+            value: [
+              `• **🛡️ Staff Hierarchy & Permissions**`,
+              `• **⚠️ Disciplinary & Warnings**`,
+              `• **🔨 Punishments & Restrictions**`,
+              `• **📜 General Commands**`
+            ].join('\n'),
+            inline: false
+          })
+          .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+      } else if (selected === 'staff') {
+        catEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setTitle(`${toSmallCaps('Staff Hierarchy & Permissions')}`)
+          .setDescription(
+            `Staff Hierarchy & Permissions\n` +
+            `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\`\n\n` +
+            `**Staff Role Permissions:**\n` +
+            `• **Shogun**: Full administrative and server authority.\n` +
+            `• **Community Admins**: Full moderation access, jail/unjail, permanent warn resets.\n` +
+            `• **Supervisor**: Intermediate staff management, moderation, jail/unjail.\n` +
+            `• **Senior Moderator**: Mute, warn, jail/unjail access.\n` +
+            `• **Junior Moderator**: Mute and warn permissions.`
+          )
+          .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+      } else if (selected === 'warnings') {
+        const warnLines = source === 'slash' ? [
+          `• \`/warn <user> [reason]\` — ${toSmallCaps('Issue Warning (Tiered Ladder)')}`,
+          `• \`/clearwarntemp <user> [reason]\` — ${toSmallCaps('Lift Restrictions (Keep History)')}`,
+          `• \`/clearwarnperm <user> [reason]\` — ${toSmallCaps('Permanently Reset All Warnings')}`,
+          `• \`/warns [user]\` — ${toSmallCaps('View Warning History & Ladder Level')}`,
+          `• \`/leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
+          `• \`/purge <amount> [user]\` — ${toSmallCaps('Purge Channel Messages')}`
+        ] : [
+          `• \`<warn @user [reason]\` — ${toSmallCaps('Issue Warning (Tiered Ladder)')}`,
+          `• \`<clearwarntemp @user [reason]\` — ${toSmallCaps('Lift Restrictions (Keep History)')}`,
+          `• \`<clearwarnperm @user [reason]\` — ${toSmallCaps('Permanently Reset All Warnings')}`,
+          `• \`<warns [@user]\` — ${toSmallCaps('View Warning History & Ladder Level')}`,
+          `• \`<leaderboard\` / \`<warns leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
+          `• \`<purge <1-100> [@user]\` — ${toSmallCaps('Purge Channel Messages')}`
+        ];
+
+        catEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setTitle(`${toSmallCaps('Disciplinary & Warnings')}`)
+          .setDescription(warnLines.join('\n'))
+          .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+      } else if (selected === 'punishments') {
+        const punishLines = source === 'slash' ? [
+          `• \`/timeout <user> [duration] [reason]\` — ${toSmallCaps('Timeout Member')}`,
+          `• \`/untimeout <user>\` — ${toSmallCaps('Remove Timeout')}`,
+          `• \`/jail <user> [reason]\` — ${toSmallCaps('Jail Member (Strip Roles)')}`,
+          `• \`/unjail <user> [reason]\` — ${toSmallCaps('Release Member & Restore Roles')}`,
+          `• \`/kick <user> [reason]\` — ${toSmallCaps('Kick Member')}`,
+          `• \`/ban <user> [reason]\` — ${toSmallCaps('Ban Member')}`,
+          `• \`/unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
+        ] : [
+          `• \`<timeout @user [10m/2h/1d] <reason>\` — ${toSmallCaps('Timeout Member')}`,
+          `• \`<untimeout @user\` — ${toSmallCaps('Remove Timeout')}`,
+          `• \`<jail @user [reason]\` — ${toSmallCaps('Jail Member (Strip Roles)')}`,
+          `• \`<unjail @user [reason]\` — ${toSmallCaps('Release Member & Restore Roles')}`,
+          `• \`<kick @user <reason>\` — ${toSmallCaps('Kick Member')}`,
+          `• \`<ban @user <reason>\` — ${toSmallCaps('Ban Member')}`,
+          `• \`<unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
+        ];
+
+        catEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setTitle(`${toSmallCaps('Punishments & Restrictions')}`)
+          .setDescription(punishLines.join('\n'))
+          .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+      } else if (selected === 'general') {
+        const generalLines = source === 'slash' ? [
+          `• \`/afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
+          `• \`/aura [user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
+          `• \`/besties <user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
+          `• \`/avatar [user]\` — ${toSmallCaps('View User Avatar')}`,
+          `• \`/iq [user]\` — ${toSmallCaps('Test User IQ Score')}`,
+          `• \`/help\` — ${toSmallCaps('Show Command Guide')}`
+        ] : [
+          `• \`<afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
+          `• \`<aura [@user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
+          `• \`<bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
+          `• \`<av [@user]\` — ${toSmallCaps('View User Avatar')}`,
+          `• \`<iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
+          `• \`<profile\` — ${toSmallCaps('View User Profile')}`,
+          `• \`<ping\` — ${toSmallCaps('Check Bot Latency')}`,
+          `• \`<reset\` — ${toSmallCaps('Reset Memory')} *(Aerion-sama)*`
+        ];
+
+        catEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setTitle(`${toSmallCaps('General Commands')}`)
+          .setDescription(generalLines.join('\n'))
+          .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+          .setTimestamp();
+      }
+
+      await i.reply({ embeds: [catEmbed], ephemeral: true });
+    } catch (err) {
+      console.error("Error handling help dropdown selection:", err);
+      if (!i.replied && !i.deferred) {
+        await i.reply({ content: "Something went wrong while opening the help category! 😰", ephemeral: true }).catch(() => {});
+      }
+    }
+  });
+
+  collector.on('end', async () => {
+    try {
+      selectMenu.setDisabled(true).setPlaceholder('Help menu expired (Run <help again)');
+      const disabledRow = new ActionRowBuilder().addComponents(selectMenu);
+      if (source === 'slash') {
+        await interaction.editReply({ components: [disabledRow] }).catch(() => {});
+      } else {
+        await responseMsg.edit({ components: [disabledRow] }).catch(() => {});
+      }
+    } catch (err) {}
+  });
 }
 
 // Helper to generate unique Case ID for moderation embeds
@@ -2617,6 +2899,31 @@ async function executeWarn(source, ctx, targetMember, reason) {
           status: 'active'
         });
 
+        await db.collection('moderation_logs').add({
+          action: 'warn',
+          targetId: targetMember.id,
+          targetTag: targetMember.user.tag,
+          moderatorId: user.id,
+          moderatorTag: user.tag,
+          reason: reason || 'Reached Warn Level 6',
+          level: 6,
+          timestamp: FieldValue.serverTimestamp()
+        });
+
+        const userRecs = inMemoryWarnRecords.get(targetMember.id) || [];
+        userRecs.push({
+          id: `warn_lvl6_${Date.now()}`,
+          userId: targetMember.id,
+          targetTag: targetMember.user.tag,
+          level: 6,
+          reason: reason || 'Reached Warn Level 6',
+          moderatorId: user.id,
+          moderatorTag: user.tag,
+          timestamp: new Date(),
+          status: 'active'
+        });
+        inMemoryWarnRecords.set(targetMember.id, userRecs);
+
         await db.collection('user_warn_states').doc(targetMember.id).set({
           userId: targetMember.id,
           username: targetMember.user.username,
@@ -2681,13 +2988,14 @@ async function executeWarn(source, ctx, targetMember, reason) {
 
   // Database update
   let warnDocId = null;
+  const warnReason = reason && reason.trim() ? reason.trim() : 'No reason provided';
   if (db) {
     try {
       const warnDocRef = await db.collection('warn_records').add({
         userId: targetMember.id,
         targetTag: targetMember.user.tag,
         level: newLevel,
-        reason: reason || 'No reason specified',
+        reason: warnReason,
         moderatorId: user.id,
         moderatorTag: user.tag,
         timestamp: FieldValue.serverTimestamp(),
@@ -2696,6 +3004,31 @@ async function executeWarn(source, ctx, targetMember, reason) {
         status: 'active'
       });
       warnDocId = warnDocRef.id;
+
+      await db.collection('moderation_logs').add({
+        action: 'warn',
+        targetId: targetMember.id,
+        targetTag: targetMember.user.tag,
+        moderatorId: user.id,
+        moderatorTag: user.tag,
+        reason: warnReason,
+        level: newLevel,
+        timestamp: FieldValue.serverTimestamp()
+      });
+
+      const userRecs = inMemoryWarnRecords.get(targetMember.id) || [];
+      userRecs.push({
+        id: warnDocId,
+        userId: targetMember.id,
+        targetTag: targetMember.user.tag,
+        level: newLevel,
+        reason: warnReason,
+        moderatorId: user.id,
+        moderatorTag: user.tag,
+        timestamp: new Date(),
+        status: 'active'
+      });
+      inMemoryWarnRecords.set(targetMember.id, userRecs);
 
       await db.collection('user_warn_states').doc(targetMember.id).set({
         userId: targetMember.id,
@@ -2728,6 +3061,26 @@ async function executeWarn(source, ctx, targetMember, reason) {
     } catch (dbErr) {
       console.error("Firestore warn write error:", dbErr);
     }
+  } else {
+    // If Firestore offline, save in memory cache
+    const userRecs = inMemoryWarnRecords.get(targetMember.id) || [];
+    userRecs.push({
+      id: `local_${Date.now()}`,
+      userId: targetMember.id,
+      targetTag: targetMember.user.tag,
+      level: newLevel,
+      reason: warnReason,
+      moderatorId: user.id,
+      moderatorTag: user.tag,
+      timestamp: new Date(),
+      status: 'active'
+    });
+    inMemoryWarnRecords.set(targetMember.id, userRecs);
+
+    preloadedMemories.set(targetMember.user.username, {
+      ...(preloadedMemories.get(targetMember.user.username) || { facts: [] }),
+      warnings: newLevel
+    });
   }
 
   // DM Member
@@ -2856,6 +3209,13 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
 
       activeWarnStatesCache.delete(targetMember.id);
 
+      const memRecs = inMemoryWarnRecords.get(targetMember.id);
+      if (memRecs) {
+        memRecs.forEach(r => {
+          if (r.status === 'active') r.status = 'expired';
+        });
+      }
+
       await db.collection('moderation_logs').add({
         action: 'clearwarntemp',
         targetId: targetMember.id,
@@ -2960,6 +3320,13 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
 
       activeWarnStatesCache.delete(targetMember.id);
 
+      const memRecs = inMemoryWarnRecords.get(targetMember.id);
+      if (memRecs) {
+        memRecs.forEach(r => {
+          r.status = 'cleared';
+        });
+      }
+
       await db.collection('memories').doc(targetMember.user.username).set({
         warnings: 0,
         lastUpdated: FieldValue.serverTimestamp()
@@ -3033,72 +3400,115 @@ async function executeWarns(source, ctx, targetMember) {
           if (d.action === 'warn') {
             warnRecords.push({
               id: doc.id,
-              level: 1,
-              reason: d.reason || 'Legacy warning',
-              moderatorId: d.moderatorId || client.user.id,
+              level: d.level || 1,
+              reason: d.reason || 'No reason provided',
+              moderatorId: d.moderatorId || null,
+              moderatorTag: d.moderatorTag || null,
               timestamp: d.timestamp,
               status: 'expired'
             });
           }
         });
       }
-
-      warnRecords.sort((a, b) => {
-        const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
-        const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
-        return timeB - timeA;
-      });
     } catch (err) {
       console.error("Error fetching warns records:", err);
     }
   }
 
-  const { url1, url2 } = await getAikoEmojis(guild);
-  const { dot } = await getModEmojis(guild);
-  const currentLevel = userState ? (userState.currentLevel || 0) : 0;
+  // Merge in-memory records
+  const memList = inMemoryWarnRecords.get(targetMember.id) || [];
+  for (const mRec of memList) {
+    if (!warnRecords.some(r => r.id === mRec.id)) {
+      warnRecords.push(mRec);
+    }
+  }
 
-  if (warnRecords.length === 0 && currentLevel === 0) {
+  const cached = preloadedMemories.get(targetMember.user?.username);
+  const currentLevel = userState ? (userState.currentLevel || 0) : (cached?.warnings || 0);
+
+  // If there are warnings recorded in memory/state but 0 detailed records found, create fallback entries so nothing crashes
+  if (warnRecords.length === 0 && currentLevel > 0) {
+    for (let i = 0; i < currentLevel; i++) {
+      warnRecords.push({
+        id: `legacy_${i + 1}`,
+        level: i + 1,
+        reason: 'No reason provided',
+        moderatorId: null,
+        moderatorTag: null,
+        timestamp: null,
+        status: userState?.restrictionsActive ? 'active' : 'expired'
+      });
+    }
+  }
+
+  // Sort descending by timestamp (newest first)
+  warnRecords.sort((a, b) => {
+    const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp instanceof Date ? a.timestamp.getTime() : (typeof a.timestamp === 'number' ? a.timestamp : 0));
+    const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp instanceof Date ? b.timestamp.getTime() : (typeof b.timestamp === 'number' ? b.timestamp : 0));
+    return timeB - timeA;
+  });
+
+  const totalWarnings = warnRecords.length;
+
+  if (totalWarnings === 0 && currentLevel === 0) {
     const cleanEmbed = new EmbedBuilder()
-      .setTitle(`${toSmallCaps('Warning Record')}`)
+      .setTitle(`${toSmallCaps('Warning History')}`)
       .setDescription(
-        `<@${targetMember.id}>\n\n` +
+        `<@${targetMember.id}> (${targetMember.user.username})\n` +
+        `${toSmallCaps('Total Warnings')} • \`0\`\n` +
+        `${toSmallCaps('Current Ladder Level')} • \`Level 0\`\n` +
+        `${toSmallCaps('Active Restrictions')} • \`No\`\n\n` +
         `**${toSmallCaps('Status')}:** \`100% Clean Record\`\n` +
         `This member has no recorded warnings in AniPedia!`
       )
-      .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+      .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
       .setTimestamp();
-    if (url1) cleanEmbed.setThumbnail(url1);
     await sendContainer(replyFn, cleanEmbed);
     return;
   }
 
-  const warnLines = warnRecords.slice(0, 10).map((w, idx) => {
+  const displayedRecords = warnRecords.slice(0, 10);
+  const warnLines = displayedRecords.map((w, idx) => {
     let dateStr = 'Recently';
-    if (w.timestamp && typeof w.timestamp.toDate === 'function') {
-      const unixSec = Math.floor(w.timestamp.toDate().getTime() / 1000);
-      dateStr = `<t:${unixSec}:R>`;
+    if (w.timestamp) {
+      let ms = 0;
+      if (typeof w.timestamp.toDate === 'function') ms = w.timestamp.toDate().getTime();
+      else if (w.timestamp instanceof Date) ms = w.timestamp.getTime();
+      else if (typeof w.timestamp === 'number') ms = w.timestamp;
+      else if (typeof w.timestamp === 'string') ms = new Date(w.timestamp).getTime();
+      if (ms > 0 && !isNaN(ms)) {
+        dateStr = `<t:${Math.floor(ms / 1000)}:R>`;
+      }
     }
 
-    let statusBadge = '`Active`';
-    if (w.status === 'expired') statusBadge = '`Expired`';
-    else if (w.status === 'cleared') statusBadge = '`Cleared`';
+    let statusBadge = 'Active';
+    if (w.status === 'cleared') statusBadge = 'Cleared';
+    else if (w.status === 'expired') statusBadge = 'Expired';
+    else statusBadge = 'Active';
 
-    return `**${toSmallCaps(`Warn ${w.level || idx + 1}`)}** • ${statusBadge}\n` +
-      `- ${toSmallCaps('Reason')}: ${w.reason || 'No reason specified'}\n` +
-      `- ${toSmallCaps('Moderator')}: <@${w.moderatorId}> • ${dateStr}`;
+    const reason = w.reason || 'No reason provided';
+    const modStr = w.moderatorId ? `<@${w.moderatorId}>` : (w.moderatorTag ? `@${w.moderatorTag}` : 'Staff');
+
+    return `#${idx + 1} • ${reason} • issued by ${modStr} • ${dateStr} • \`${statusBadge}\``;
   });
 
+  let warningLogContent = warnLines.join('\n');
+  if (totalWarnings > 10) {
+    warningLogContent += `\n\n*Showing latest 10 of ${totalWarnings} warnings*`;
+  }
+
   const warnsEmbed = new EmbedBuilder()
-    .setTitle(`${toSmallCaps('Warning Record')}`)
+    .setTitle(`${toSmallCaps('Warning History')}`)
     .setDescription(
-      `<@${targetMember.id}>\n` +
+      `<@${targetMember.id}> (${targetMember.user.username})\n` +
+      `${toSmallCaps('Total Warnings')} • \`#${totalWarnings}\`\n` +
       `${toSmallCaps('Current Ladder Level')} • \`Level ${currentLevel}\`\n` +
       `${toSmallCaps('Active Restrictions')} • \`${userState?.restrictionsActive ? 'Yes' : 'No'}\`\n\n` +
-      warnLines.join('\n\n')
+      `${toSmallCaps('Warning Log')}\n` +
+      warningLogContent
     )
-    .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
+    .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
     .setTimestamp();
-  if (url2) warnsEmbed.setThumbnail(url2);
 
   await sendContainer(replyFn, warnsEmbed);
 }
@@ -4494,180 +4904,25 @@ client.on('messageCreate', async (message) => {
 
       // Specific user warning query
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
-      const targetUsername = targetMember.user.username;
-      const { verify, dot } = await getModEmojis(message.guild);
-
-      let warningsCount = 0;
-      const cached = preloadedMemories.get(targetUsername);
-      if (cached) {
-        warningsCount = cached.warnings || 0;
-      }
-
-      if (warningsCount === 0) {
-        // As a precaution, purge any orphaned/stale warn docs in Firestore
-        if (db) {
-          db.collection('moderation_logs')
-            .where('targetId', '==', targetMember.id)
-            .get()
-            .then(snapshot => {
-              const batch = db.batch();
-              let count = 0;
-              snapshot.forEach(doc => {
-                if (doc.data().action === 'warn') {
-                  batch.delete(doc.ref);
-                  count++;
-                }
-              });
-              if (count > 0) batch.commit().catch(() => {});
-            })
-            .catch(() => {});
-        }
-
-        const cleanEmbed = new EmbedBuilder()
-          .setTitle(`${toSmallCaps('Warning History')}`)
-          .setDescription(
-            `<@${targetMember.id}> (${targetMember.user.username})\n` +
-            `${toSmallCaps('Total Warnings')} • \`0\``
-          )
-          .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
-          .setTimestamp();
-        await sendContainer(message.channel, cleanEmbed);
-        return;
-      }
-
-      const warningsEmbed = new EmbedBuilder()
-        .setTitle(`${toSmallCaps('Warning History')}`)
-        .setDescription(
-          `<@${targetMember.id}> (${targetMember.user.username})\n` +
-          `${toSmallCaps('Total Warnings')} • \`#${warningsCount}\``
-        );
-
-      // Fetch warning history with reasons and moderators from Firestore (in-memory sort avoids composite index errors)
-      if (db && warningsCount > 0) {
-        try {
-          const logsSnapshot = await db.collection('moderation_logs')
-            .where('targetId', '==', targetMember.id)
-            .get();
-
-          const warnLogs = [];
-          logsSnapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.action === 'warn') {
-              warnLogs.push({ id: doc.id, ref: doc.ref, ...data });
-            }
-          });
-
-          // Sort descending by timestamp (newest first)
-          warnLogs.sort((a, b) => {
-            const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : 0;
-            const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : 0;
-            return timeB - timeA;
-          });
-
-          // Only keep active warnings up to warningsCount and prune any historical excess from Firestore
-          let activeWarnLogs = warnLogs;
-          if (warnLogs.length > warningsCount) {
-            activeWarnLogs = warnLogs.slice(0, warningsCount);
-            const excessDocs = warnLogs.slice(warningsCount);
-            const batch = db.batch();
-            excessDocs.forEach(d => batch.delete(d.ref));
-            batch.commit().catch(e => console.error("Error pruning excess warn docs in warns view:", e));
-          }
-
-          if (activeWarnLogs.length > 0) {
-            let historyText = '';
-            for (let i = 0; i < activeWarnLogs.length; i++) {
-              const log = activeWarnLogs[i];
-              const reason = log.reason || 'No reason provided';
-              const moderator = log.moderatorTag || 'Unknown Moderator';
-              let timeFormatted = 'Unknown date';
-              if (log.timestamp && typeof log.timestamp.toDate === 'function') {
-                const unixSec = Math.floor(log.timestamp.toDate().getTime() / 1000);
-                timeFormatted = `<t:${unixSec}:R>`;
-              }
-              historyText += `-# [#${i + 1}] ${reason} • ${dot} \`${moderator}\` • ${timeFormatted}\n`;
-            }
-            warningsEmbed.addFields({ 
-              name: `${toSmallCaps('Warning Log')}`, 
-              value: historyText.length > 1024 ? historyText.substring(0, 1020) + '...' : historyText, 
-              inline: false 
-            });
-            warningsEmbed.setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
-          } else {
-            warningsEmbed.addFields({ 
-              name: `${toSmallCaps('Warning Log')}`, 
-              value: `*This user has ${warningsCount} active warning(s) recorded in memory.*`, 
-              inline: false 
-            });
-            warningsEmbed.setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
-          }
-        } catch (err) {
-          console.error('Error fetching warning history:', err);
-          warningsEmbed.setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
-        }
-      } else {
-        warningsEmbed.setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() });
-      }
-      warningsEmbed.setTimestamp();
-
-      await sendContainer(message.channel, warningsEmbed);
+      await executeWarns('prefix', {
+        guild: message.guild,
+        member: message.member,
+        user: message.author,
+        channel: message.channel,
+        replyFn: makeReplyFn(message.channel)
+      }, targetMember);
       return;
     }
 
-    // --- Help Command (rich embed) ---
-    if (lowerQuery === 'help' || lowerQuery.includes('what can you do') || lowerQuery.includes('commands')) {
-      const { verify, dot } = await getModEmojis(message.guild);
-
-      const helpEmbed = new EmbedBuilder()
-        .setTitle(`${toSmallCaps('Command Guide')}`)
-        .setDescription(
-          `Staff Hierarchy & Permissions\n` +
-          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\``
-        )
-        .addFields(
-          {
-            name: `${toSmallCaps('Disciplinary & Warnings')}`,
-            value: [
-              `• \`<warn @user [reason]\` — ${toSmallCaps('Issue Warning (Tiered Ladder)')}`,
-              `• \`<clearwarntemp @user [reason]\` — ${toSmallCaps('Lift Restrictions (Keep History)')}`,
-              `• \`<clearwarnperm @user [reason]\` — ${toSmallCaps('Permanently Reset All Warnings')}`,
-              `• \`<warns [@user]\` — ${toSmallCaps('View Warning History & Ladder Level')}`,
-              `• \`<leaderboard\` / \`<warns leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
-              `• \`<purge <1-100> [@user]\` — ${toSmallCaps('Purge Channel Messages')}`
-            ].join('\n'),
-            inline: false
-          },
-          {
-            name: `${toSmallCaps('Punishments & Restrictions')}`,
-            value: [
-              `• \`<timeout @user [10m/2h/1d] <reason>\` — ${toSmallCaps('Timeout Member')}`,
-              `• \`<untimeout @user\` — ${toSmallCaps('Remove Timeout')}`,
-              `• \`<jail @user [reason]\` — ${toSmallCaps('Jail Member (Strip Roles)')}`,
-              `• \`<unjail @user [reason]\` — ${toSmallCaps('Release Member & Restore Roles')}`,
-              `• \`<kick @user <reason>\` — ${toSmallCaps('Kick Member')}`,
-              `• \`<ban @user <reason>\` — ${toSmallCaps('Ban Member')}`,
-              `• \`<unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
-            ].join('\n'),
-            inline: false
-          },
-          {
-            name: `${toSmallCaps('General Commands')}`,
-            value: [
-              `• \`<afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
-              `• \`<aura [@user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
-              `• \`<bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
-              `• \`<av [@user]\` — ${toSmallCaps('View User Avatar')}`,
-              `• \`<iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
-              `• \`<profile\` — ${toSmallCaps('View User Profile')}`,
-              `• \`<ping\` — ${toSmallCaps('Check Bot Latency')}`,
-              `• \`<reset\` — ${toSmallCaps('Reset Memory')} *(Aerion-sama)*`
-            ].join('\n'),
-            inline: false
-          }
-        )
-        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
-      await sendContainer(message, helpEmbed);
+    // --- Help Command (Interactive Menu) ---
+    if (lowerQuery === 'help' || lowerQuery.includes('what can you do') || lowerQuery.includes('commands') || cleanQuery === 'help' || words[0] === 'help') {
+      await sendInteractiveHelpMenu('prefix', {
+        guild: message.guild,
+        member: message.member,
+        user: message.author,
+        channel: message.channel,
+        replyFn: makeReplyFn(message.channel)
+      });
       return;
     }
 
@@ -4718,6 +4973,9 @@ client.on('messageCreate', async (message) => {
                     lowerQuery.startsWith('av ') || lowerQuery.startsWith('avatar ');
 
     if (isAvCmd) {
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'av');
+      if (!allowed) return;
+
       let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
 
       if (!targetMember) {
@@ -4749,6 +5007,9 @@ client.on('messageCreate', async (message) => {
                       lowerQuery.startsWith('aura ') || lowerQuery.startsWith('auras ');
 
     if (isAuraCmd) {
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'aura');
+      if (!allowed) return;
+
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       if (!targetMember) {
         const queryArg = cleanQuery.replace(/^(auras?)\s*/i, '').trim();
@@ -4776,6 +5037,9 @@ client.on('messageCreate', async (message) => {
                         lowerQuery.startsWith('bestie ') || lowerQuery.startsWith('besties ');
 
     if (isBestieCmd) {
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'bestie');
+      if (!allowed) return;
+
       let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
 
       // If no direct mention, look up by username, nickname or ID in the arguments
@@ -4808,6 +5072,9 @@ client.on('messageCreate', async (message) => {
                     lowerQuery.startsWith('iq ');
 
     if (isIqCmd) {
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
+      if (!allowed) return;
+
       let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
 
       if (!targetMember) {
@@ -5834,6 +6101,8 @@ client.on('interactionCreate', async (interaction) => {
     // 12. /auras & /aura
     // ------------------------------------------
     if (commandName === 'auras' || commandName === 'aura') {
+      const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'aura');
+      if (!allowed) return;
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const auraPayload = await buildAuraPayload(targetMember, guild);
@@ -5845,6 +6114,8 @@ client.on('interactionCreate', async (interaction) => {
     // 13. /besties & /bestie
     // ------------------------------------------
     if (commandName === 'besties' || commandName === 'bestie') {
+      const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'bestie');
+      if (!allowed) return;
       const targetMember = options.getMember('user');
       if (!targetMember) {
         await interaction.reply({ content: "Please specify a user to check besties compatibility with! 🌸", ephemeral: true });
@@ -5860,6 +6131,8 @@ client.on('interactionCreate', async (interaction) => {
     // 14. /avatar & /av
     // ------------------------------------------
     if (commandName === 'avatar' || commandName === 'av') {
+      const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'av');
+      if (!allowed) return;
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const avPayload = await buildAvatarPayload(targetMember);
@@ -5871,6 +6144,8 @@ client.on('interactionCreate', async (interaction) => {
     // 15. /iq
     // ------------------------------------------
     if (commandName === 'iq') {
+      const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'iq');
+      if (!allowed) return;
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const iqPayload = await buildIqPayload(targetMember, guild);
@@ -5882,54 +6157,14 @@ client.on('interactionCreate', async (interaction) => {
     // 16. /help
     // ------------------------------------------
     if (commandName === 'help') {
-      const helpEmbed = new EmbedBuilder()
-        .setTitle(`${toSmallCaps('Command Guide')}`)
-        .setDescription(
-          `Staff Hierarchy & Permissions\n` +
-          `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\``
-        )
-        .addFields(
-          {
-            name: `${toSmallCaps('Disciplinary & Warnings')}`,
-            value: [
-              `• \`/warn <user> [reason]\` — ${toSmallCaps('Issue Warning (Tiered Ladder)')}`,
-              `• \`/clearwarntemp <user> [reason]\` — ${toSmallCaps('Lift Restrictions (Keep History)')}`,
-              `• \`/clearwarnperm <user> [reason]\` — ${toSmallCaps('Permanently Reset All Warnings')}`,
-              `• \`/warns [user]\` — ${toSmallCaps('View Warning History & Ladder Level')}`,
-              `• \`/leaderboard\` — ${toSmallCaps('Top 5 Most Warned')}`,
-              `• \`/purge <amount> [user]\` — ${toSmallCaps('Purge Channel Messages')}`
-            ].join('\n'),
-            inline: false
-          },
-          {
-            name: `${toSmallCaps('Punishments & Restrictions')}`,
-            value: [
-              `• \`/timeout <user> [duration] [reason]\` — ${toSmallCaps('Timeout Member')}`,
-              `• \`/untimeout <user>\` — ${toSmallCaps('Remove Timeout')}`,
-              `• \`/jail <user> [reason]\` — ${toSmallCaps('Jail Member (Strip Roles)')}`,
-              `• \`/unjail <user> [reason]\` — ${toSmallCaps('Release Member & Restore Roles')}`,
-              `• \`/kick <user> [reason]\` — ${toSmallCaps('Kick Member')}`,
-              `• \`/ban <user> [reason]\` — ${toSmallCaps('Ban Member')}`,
-              `• \`/unban <user_id>\` — ${toSmallCaps('Unban by ID')}`
-            ].join('\n'),
-            inline: false
-          },
-          {
-            name: `${toSmallCaps('General & Fun Commands')}`,
-            value: [
-              `• \`/afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
-              `• \`/aura [user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
-              `• \`/besties <user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
-              `• \`/avatar [user]\` — ${toSmallCaps('View User Avatar')}`,
-              `• \`/iq [user]\` — ${toSmallCaps('Test User IQ Score')}`,
-              `• \`/help\` — ${toSmallCaps('Show Command Guide')}`
-            ].join('\n'),
-            inline: false
-          }
-        )
-        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
-        .setTimestamp();
-      await sendContainer(interaction, helpEmbed);
+      await sendInteractiveHelpMenu('slash', {
+        guild: guild,
+        member: member,
+        user: user,
+        channel: channel,
+        interaction: interaction,
+        replyFn: makeReplyFn(interaction)
+      });
       return;
     }
   } catch (err) {
