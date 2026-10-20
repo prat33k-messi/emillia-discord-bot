@@ -1007,12 +1007,6 @@ async function sendInteractiveHelpMenu(source, ctx) {
     .setPlaceholder('Select a category...')
     .addOptions([
       {
-        label: 'Home / Overview',
-        description: 'Overview and guide navigation',
-        value: 'home',
-        emoji: '🏠'
-      },
-      {
         label: 'Staff Hierarchy & Permissions',
         description: 'Staff ranks and permission guidelines',
         value: 'staff',
@@ -1065,28 +1059,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
       const selected = i.values[0];
       let catEmbed;
 
-      if (selected === 'home') {
-        catEmbed = new EmbedBuilder()
-          .setColor(0x2b2d31)
-          .setTitle(`${toSmallCaps('Command Guide — Overview')}`)
-          .setDescription(
-            `Staff Hierarchy & Permissions\n` +
-            `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Moderator\`\n\n` +
-            `Select any category below to view detailed command syntax and descriptions.`
-          )
-          .addFields({
-            name: `${toSmallCaps('Categories')}`,
-            value: [
-              `• **🛡️ Staff Hierarchy & Permissions**`,
-              `• **⚠️ Disciplinary & Warnings**`,
-              `• **🔨 Punishments & Restrictions**`,
-              `• **📜 General Commands**`
-            ].join('\n\n'),
-            inline: false
-          })
-          .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
-          .setTimestamp();
-      } else if (selected === 'staff') {
+      if (selected === 'staff') {
         catEmbed = new EmbedBuilder()
           .setColor(0x2b2d31)
           .setTitle(`${toSmallCaps('Staff Hierarchy & Permissions')}`)
