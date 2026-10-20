@@ -979,7 +979,7 @@ const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356
 
 // Helper to format the AniPedia Welcome Message
 function formatWelcomeMessage(guild) {
-  let text = 
+  let headerText = 
 `# :ani_gate:**WELCOME TO ANIPEDIA**:ani_gate:
 :ani_sword: **A New World. A New Journey. A New Family**
 
@@ -990,9 +990,10 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 │ ୨୧・Introduce yourself in <#genral-chat>
 │ ୨୧・Meet fellow anime fans and make friends
 
-:ani_adv:  **Your adventure begins here.**
+:ani_adv:  **Your adventure begins here.**`;
 
-> :ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
+  let quoteText = 
+`:ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
 
 **Be polite and enjoy your stay, Nakama!** :ani_flower:
 
@@ -1005,23 +1006,24 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
       const found = guild.emojis?.cache?.find(e => e.name && e.name.toLowerCase() === name.toLowerCase()) ||
                     client.emojis?.cache?.find(e => e.name && e.name.toLowerCase() === name.toLowerCase());
       if (found) {
-        text = text.split(`:${name}:`).join(found.toString());
+        headerText = headerText.split(`:${name}:`).join(found.toString());
+        quoteText = quoteText.split(`:${name}:`).join(found.toString());
       }
     }
 
     // Resolve channel mentions if channels with matching names exist in guild
     const rulesChannel = guild.channels?.cache?.find(c => c.name && (c.name.toLowerCase() === 'rules' || c.name.toLowerCase().includes('rule')));
     if (rulesChannel) {
-      text = text.replace('<#rules>', `<#${rulesChannel.id}>`);
+      headerText = headerText.replace('<#rules>', `<#${rulesChannel.id}>`);
     }
 
     const generalChannel = guild.channels?.cache?.find(c => c.name && (c.name.toLowerCase() === 'genral-chat' || c.name.toLowerCase() === 'general-chat' || c.name.toLowerCase() === 'general'));
     if (generalChannel) {
-      text = text.replace('<#genral-chat>', `<#${generalChannel.id}>`);
+      headerText = headerText.replace('<#genral-chat>', `<#${generalChannel.id}>`);
     }
   }
 
-  return text;
+  return { headerText, quoteText };
 }
 
 // Helper to send Interactive Help Menu with Dropdown Select
@@ -5012,10 +5014,15 @@ client.on('messageCreate', async (message) => {
                          lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ');
 
     if (isWelcomeCmd) {
-      const welcomeText = formatWelcomeMessage(message.guild);
+      const { headerText, quoteText } = formatWelcomeMessage(message.guild);
+      const quoteEmbed = new EmbedBuilder()
+        .setColor(0xED4245) // Discord Red
+        .setDescription(quoteText);
+
       try {
         await message.channel.send({
-          content: welcomeText,
+          content: headerText,
+          embeds: [quoteEmbed],
           files: [{
             attachment: WELCOME_GIF_URL,
             name: 'welcome.gif'
@@ -5023,12 +5030,10 @@ client.on('messageCreate', async (message) => {
         });
       } catch (err) {
         console.error("Error sending welcome message with attachment:", err);
-        const gifEmbed = new EmbedBuilder()
-          .setColor(0x2b2d31)
-          .setImage(WELCOME_GIF_URL);
+        quoteEmbed.setImage(WELCOME_GIF_URL);
         await message.channel.send({
-          content: welcomeText,
-          embeds: [gifEmbed]
+          content: headerText,
+          embeds: [quoteEmbed]
         });
       }
       return;
