@@ -990,7 +990,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
     .addFields(
       {
         name: `${toSmallCaps('Categories')}`,
-        value: [
+        value: `\u200B\n` + [
           `• **🛡️ Staff Hierarchy & Permissions**`,
           `• **⚠️ Disciplinary & Warnings**`,
           `• **🔨 Punishments & Restrictions**`,
