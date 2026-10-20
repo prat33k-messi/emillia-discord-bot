@@ -980,23 +980,23 @@ const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356
 // Helper to format the AniPedia Welcome Message
 function formatWelcomeMessage(guild) {
   let text = 
-`:ani_gate:WELCOME TO ANIPEDIA:ani_gate:
-:ani_sword: A New World. A New Journey. A New Family
+`:ani_gate:**WELCOME TO ANIPEDIA**:ani_gate:
+:ani_sword: **A New World. A New Journey. A New Family**
 
-Welcome to AniPedia — where anime fans unite, legends are born, and every story brings us together. :ani_star:
+Welcome to **AniPedia** — where anime fans unite, legends are born, and every story brings us together. :ani_star:
 
-:ani_saku: START YOUR JOURNEY
+:ani_saku: **START YOUR JOURNEY**
 │ ୨୧・Read the rules in <#rules>
 │ ୨୧・Introduce yourself in <#genral-chat>
 │ ୨୧・Meet fellow anime fans and make friends
 
-:ani_adv:  Your adventure begins here.
+:ani_adv:  **Your adventure begins here.**
 
-:ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
+│ :ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
 
-Be polite and enjoy your stay, Nakama! :ani_flower:
+**Be polite and enjoy your stay, Nakama!** :ani_flower:
 
-— The AniPedia Family`;
+— *The AniPedia Family*`;
 
   if (guild) {
     // If custom emojis with these names exist, resolve to <:name:id> so Discord renders them
