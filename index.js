@@ -982,11 +982,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
   const overviewEmbed = new EmbedBuilder()
     .setColor(0x2b2d31)
     .setTitle(`${toSmallCaps('Command Guide')}`)
-    .setDescription(
-      `Staff Hierarchy & Permissions\n` +
-      `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Moderator\`\n\n` +
-      `Select a category from the dropdown menu below to view available commands.`
-    )
+    .setDescription(`Select a category from the dropdown menu below to view available commands.`)
     .addFields(
       {
         name: `${toSmallCaps('Categories')}`,
