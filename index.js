@@ -980,7 +980,7 @@ const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356
 // Helper to format the AniPedia Welcome Message
 function formatWelcomeMessage(guild) {
   let text = 
-`:ani_gate:**WELCOME TO ANIPEDIA**:ani_gate:
+`# :ani_gate:**WELCOME TO ANIPEDIA**:ani_gate:
 :ani_sword: **A New World. A New Journey. A New Family**
 
 Welcome to **AniPedia** — where anime fans unite, legends are born, and every story brings us together. :ani_star:
@@ -992,7 +992,7 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 
 :ani_adv:  **Your adventure begins here.**
 
-│ :ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
+> :ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
 
 **Be polite and enjoy your stay, Nakama!** :ani_flower:
 
