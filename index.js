@@ -975,6 +975,8 @@ async function handleFeatureCooldown(target, userId, featureName) {
   return true;
 }
 
+const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562132739241541843/download_1.gif?ex=6ad8e0fc&is=6ad78f7c&hm=b592d0a87d565073fdbcbc6aa59d32df0bf32f2f8dac9fdf6d274fec10f470d9&';
+
 // Helper to format the AniPedia Welcome Message
 function formatWelcomeMessage(guild) {
   let text = 
@@ -994,8 +996,7 @@ Welcome to AniPedia — where anime fans unite, legends are born, and every stor
 
 Be polite and enjoy your stay, Nakama! :ani_flower:
 
-— The AniPedia Family
-https://cdn.discordapp.com/attachments/1558786839744356544/1562132739241541843/download_1.gif?ex=6ad8e0fc&is=6ad78f7c&hm=b592d0a87d565073fdbcbc6aa59d32df0bf32f2f8dac9fdf6d274fec10f470d9&`;
+— The AniPedia Family`;
 
   if (guild) {
     // If custom emojis with these names exist, resolve to <:name:id> so Discord renders them
@@ -5012,7 +5013,24 @@ client.on('messageCreate', async (message) => {
 
     if (isWelcomeCmd) {
       const welcomeText = formatWelcomeMessage(message.guild);
-      await message.channel.send(welcomeText);
+      try {
+        await message.channel.send({
+          content: welcomeText,
+          files: [{
+            attachment: WELCOME_GIF_URL,
+            name: 'welcome.gif'
+          }]
+        });
+      } catch (err) {
+        console.error("Error sending welcome message with attachment:", err);
+        const gifEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setImage(WELCOME_GIF_URL);
+        await message.channel.send({
+          content: welcomeText,
+          embeds: [gifEmbed]
+        });
+      }
       return;
     }
 
