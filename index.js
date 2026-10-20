@@ -975,6 +975,54 @@ async function handleFeatureCooldown(target, userId, featureName) {
   return true;
 }
 
+// Helper to format the AniPedia Welcome Message
+function formatWelcomeMessage(guild) {
+  let text = 
+`:ani_gate:WELCOME TO ANIPEDIA:ani_gate:
+:ani_sword: A New World. A New Journey. A New Family
+
+Welcome to AniPedia — where anime fans unite, legends are born, and every story brings us together. :ani_star:
+
+:ani_saku: START YOUR JOURNEY
+│ ୨୧・Read the rules in <#rules>
+│ ୨୧・Introduce yourself in <#genral-chat>
+│ ୨୧・Meet fellow anime fans and make friends
+
+:ani_adv:  Your adventure begins here.
+
+:ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
+
+Be polite and enjoy your stay, Nakama! :ani_flower:
+
+— The AniPedia Family
+https://cdn.discordapp.com/attachments/1558786839744356544/1562132739241541843/download_1.gif?ex=6ad8e0fc&is=6ad78f7c&hm=b592d0a87d565073fdbcbc6aa59d32df0bf32f2f8dac9fdf6d274fec10f470d9&`;
+
+  if (guild) {
+    // If custom emojis with these names exist, resolve to <:name:id> so Discord renders them
+    const emojiNames = ['ani_gate', 'ani_sword', 'ani_star', 'ani_saku', 'ani_adv', 'ani_light', 'ani_flower'];
+    for (const name of emojiNames) {
+      const found = guild.emojis?.cache?.find(e => e.name && e.name.toLowerCase() === name.toLowerCase()) ||
+                    client.emojis?.cache?.find(e => e.name && e.name.toLowerCase() === name.toLowerCase());
+      if (found) {
+        text = text.split(`:${name}:`).join(found.toString());
+      }
+    }
+
+    // Resolve channel mentions if channels with matching names exist in guild
+    const rulesChannel = guild.channels?.cache?.find(c => c.name && (c.name.toLowerCase() === 'rules' || c.name.toLowerCase().includes('rule')));
+    if (rulesChannel) {
+      text = text.replace('<#rules>', `<#${rulesChannel.id}>`);
+    }
+
+    const generalChannel = guild.channels?.cache?.find(c => c.name && (c.name.toLowerCase() === 'genral-chat' || c.name.toLowerCase() === 'general-chat' || c.name.toLowerCase() === 'general'));
+    if (generalChannel) {
+      text = text.replace('<#genral-chat>', `<#${generalChannel.id}>`);
+    }
+  }
+
+  return text;
+}
+
 // Helper to send Interactive Help Menu with Dropdown Select
 async function sendInteractiveHelpMenu(source, ctx) {
   const { guild, user, channel, interaction } = ctx;
@@ -4119,7 +4167,7 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -4955,6 +5003,16 @@ client.on('messageCreate', async (message) => {
         .setTimestamp();
 
       await sendContainer(message, aikoProfileEmbed);
+      return;
+    }
+
+    // --- Welcome Test Command (<welcome) ---
+    const isWelcomeCmd = words[0] === 'welcome' || cleanQuery === 'welcome' || cleanQuery.startsWith('welcome ') ||
+                         lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ');
+
+    if (isWelcomeCmd) {
+      const welcomeText = formatWelcomeMessage(message.guild);
+      await message.channel.send(welcomeText);
       return;
     }
 
