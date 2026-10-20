@@ -208,6 +208,10 @@ const slashCommandsData = [
     .addUserOption(opt => opt.setName('user').setDescription('The member to test IQ for (leave empty for yourself)').setRequired(false)),
 
   new SlashCommandBuilder()
+    .setName('profile')
+    .setDescription('View Aiko profile and system background'),
+
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help and available commands')
 ];
@@ -506,13 +510,7 @@ function getTierName(tier, member = null) {
     case 4: return 'Community Admins';
     case 3: return 'Supervisor';
     case 2: return 'Senior Moderator';
-    case 1: {
-      if (member && member.roles && member.roles.cache) {
-        const hasJr = member.roles.cache.some(r => r.name.toLowerCase().includes('junior'));
-        if (hasJr) return 'Junior Moderator';
-      }
-      return 'Moderator';
-    }
+    case 1: return 'Moderator';
     default: return 'Member';
   }
 }
@@ -986,7 +984,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
     .setTitle(`${toSmallCaps('Command Guide')}`)
     .setDescription(
       `Staff Hierarchy & Permissions\n` +
-      `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\`\n\n` +
+      `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Moderator\`\n\n` +
       `Select a category from the dropdown menu below to view available commands.`
     )
     .addFields(
@@ -997,7 +995,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           `• **⚠️ Disciplinary & Warnings**`,
           `• **🔨 Punishments & Restrictions**`,
           `• **📜 General Commands**`
-        ].join('\n'),
+        ].join('\n\n'),
         inline: false
       }
     )
@@ -1073,7 +1071,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           .setTitle(`${toSmallCaps('Command Guide — Overview')}`)
           .setDescription(
             `Staff Hierarchy & Permissions\n` +
-            `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\`\n\n` +
+            `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Moderator\`\n\n` +
             `Select any category below to view detailed command syntax and descriptions.`
           )
           .addFields({
@@ -1083,7 +1081,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
               `• **⚠️ Disciplinary & Warnings**`,
               `• **🔨 Punishments & Restrictions**`,
               `• **📜 General Commands**`
-            ].join('\n'),
+            ].join('\n\n'),
             inline: false
           })
           .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
@@ -1094,13 +1092,13 @@ async function sendInteractiveHelpMenu(source, ctx) {
           .setTitle(`${toSmallCaps('Staff Hierarchy & Permissions')}`)
           .setDescription(
             `Staff Hierarchy & Permissions\n` +
-            `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Junior Moderator\`\n\n` +
+            `\`Shogun\` > \`Community Admins\` > \`Supervisor\` > \`Senior Moderator\` > \`Moderator\`\n\n` +
             `**Staff Role Permissions:**\n` +
             `• **Shogun**: Full administrative and server authority.\n` +
             `• **Community Admins**: Full moderation access, jail/unjail, permanent warn resets.\n` +
             `• **Supervisor**: Intermediate staff management, moderation, jail/unjail.\n` +
             `• **Senior Moderator**: Mute, warn, jail/unjail access.\n` +
-            `• **Junior Moderator**: Mute and warn permissions.`
+            `• **Moderator**: Mute and warn permissions.`
           )
           .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
@@ -1159,6 +1157,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           `• \`/besties <user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
           `• \`/avatar [user]\` — ${toSmallCaps('View User Avatar')}`,
           `• \`/iq [user]\` — ${toSmallCaps('Test User IQ Score')}`,
+          `• \`/profile\` — ${toSmallCaps('View Aiko Profile')}`,
           `• \`/help\` — ${toSmallCaps('Show Command Guide')}`
         ] : [
           `• \`<afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
@@ -1166,7 +1165,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           `• \`<bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
           `• \`<av [@user]\` — ${toSmallCaps('View User Avatar')}`,
           `• \`<iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
-          `• \`<profile\` — ${toSmallCaps('View User Profile')}`,
+          `• \`<profile\` — ${toSmallCaps('View Aiko Profile')}`,
           `• \`<ping\` — ${toSmallCaps('Check Bot Latency')}`,
           `• \`<reset\` — ${toSmallCaps('Reset Memory')} *(Aerion-sama)*`
         ];
@@ -4972,17 +4971,21 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    if (lowerQuery === 'profile' || lowerQuery === 'about me') {
-      if (userMemories.length === 0) {
-        const notFoundText = isWhitelistedUser(message.author)
-          ? "I don't have any details stored about you yet! If we talk more, I will start remembering! 🌸"
-          : `I don't have any facts stored about you yet! Chat with me normally and I will start remembering things about you! 🌸`;
-        await message.reply(notFoundText);
-      } else {
-        const memoryList = userMemories.map(f => `• ${f}`).join('\n');
-        const header = isWhitelistedUser(message.author) ? "✨ **Administrator Profile** ✨" : `📝 **User Profile: ${nickname}**`;
-        await message.reply(`${header}\nHere is what I remember about you:\n${memoryList}\n\n*Type '@Emillia reset' if you want me to clear this.*`);
-      }
+    const isProfileCmd = words[0] === 'profile' || cleanQuery === 'profile' || cleanQuery.startsWith('profile ') ||
+                         lowerQuery === 'profile' || lowerQuery === 'about me' || lowerQuery === 'aiko' || lowerQuery === 'about aiko';
+
+    if (isProfileCmd) {
+      const aikoProfileEmbed = new EmbedBuilder()
+        .setTitle(`${toSmallCaps('Aiko Profile')}`)
+        .setDescription(
+          `Aiko is the core moderation intelligence and guardian system engineered for AniPedia.\n\n` +
+          `Built with advanced moderation protocols, real-time behavioral filtering, and security enforcement directives, she is designed to protect the server, uphold community guidelines, and maintain a safe, welcoming, and peaceful sanctuary for all members.\n\n` +
+          `Creation: Aerion`
+        )
+        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await sendContainer(message, aikoProfileEmbed);
       return;
     }
 
@@ -6176,7 +6179,25 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     // ------------------------------------------
-    // 16. /help
+    // 16. /profile
+    // ------------------------------------------
+    if (commandName === 'profile') {
+      const aikoProfileEmbed = new EmbedBuilder()
+        .setTitle(`${toSmallCaps('Aiko Profile')}`)
+        .setDescription(
+          `Aiko is the core moderation intelligence and guardian system engineered for AniPedia.\n\n` +
+          `Built with advanced moderation protocols, real-time behavioral filtering, and security enforcement directives, she is designed to protect the server, uphold community guidelines, and maintain a safe, welcoming, and peaceful sanctuary for all members.\n\n` +
+          `Creation: Aerion`
+        )
+        .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+        .setTimestamp();
+
+      await sendContainer(interaction, aikoProfileEmbed);
+      return;
+    }
+
+    // ------------------------------------------
+    // 17. /help
     // ------------------------------------------
     if (commandName === 'help') {
       await sendInteractiveHelpMenu('slash', {
