@@ -733,6 +733,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     flags
   };
 
+  if (opts.content) payload.content = opts.content;
   if (opts.ephemeral) payload.ephemeral = true;
   if (opts.files) payload.files = opts.files;
   return payload;
@@ -1052,7 +1053,7 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 
 const welcomeClickCooldowns = new Map();
 
-// Send full welcome card into #summon-circle
+// Send full welcome card into #summon-circle / #public-discussion
 async function sendSummonCircleWelcome(channel, member) {
   if (!channel || !member) return;
   const welcomeText = await formatWelcomeMessage(member.guild, member);
@@ -1063,6 +1064,7 @@ async function sendSummonCircleWelcome(channel, member) {
 
   try {
     await channel.send({
+      content: `<@${member.id}>`,
       embeds: [welcomeEmbed],
       files: [{
         attachment: WELCOME_GIF_URL,
@@ -1073,18 +1075,18 @@ async function sendSummonCircleWelcome(channel, member) {
     console.error("Error sending summon circle welcome with attachment:", err);
     welcomeEmbed.setImage(WELCOME_GIF_URL);
     await channel.send({
+      content: `<@${member.id}>`,
       embeds: [welcomeEmbed]
     });
   }
 }
 
-// Send small container style welcome card into #general-chat / #public-discussion
+// Send small container style welcome card into #general-chat / #bot-commands
 async function sendGeneralWelcome(channel, member) {
   if (!channel || !member) return;
   const { url2 } = await getAikoEmojis(member.guild);
 
   const welcomeEmbed = new EmbedBuilder()
-    .setColor(0x2b2d31)
     .setTitle(`${toSmallCaps('Welcome to AniPedia')}`)
     .setDescription(
       `Welcome, <@${member.id}>, to the AniPedia!\n` +
@@ -1099,9 +1101,7 @@ async function sendGeneralWelcome(channel, member) {
     welcomeEmbed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
   }
 
-  await channel.send({
-    embeds: [welcomeEmbed]
-  });
+  await sendContainer(channel, welcomeEmbed, { content: `<@${member.id}>` });
 }
 
 // Unified Welcome Handler for new joins and <welcome command
@@ -1115,33 +1115,24 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 
   const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
 
-  // 1. Prioritize #public-discussion (Channel ID: 1558786839744356544 or by name)
-  const publicDiscussionChannel = 
-    guild.channels.cache.get('1558786839744356544') ||
-    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('public-discussion') || c.name.toLowerCase().includes('publicdiscussion'))) ||
-    guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('public-discussion') || c.name.toLowerCase().includes('publicdiscussion')));
-
-  if (publicDiscussionChannel) {
-    // Send both features to #public-discussion
-    await sendSummonCircleWelcome(publicDiscussionChannel, member);
-    await sendGeneralWelcome(publicDiscussionChannel, member);
-    return;
-  }
-
-  // 2. Otherwise check for #summon-circle and #general-chat
+  // 1. Channel for Summon Circle message:
+  // First look for #summon-circle, otherwise #public-discussion (ID: 1558786839744356544 or by name)
   const summonChannel = 
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon-circle')) ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon')) ||
+    guild.channels.cache.get('1558786839744356544') ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('public-discussion') || c.name.toLowerCase().includes('publicdiscussion'))) ||
     guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('summon-circle')) ||
-    guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('summon'));
+    guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('public-discussion') || c.name.toLowerCase().includes('publicdiscussion')));
 
+  // 2. Channel for General Welcome message:
+  // First look for #general-chat, otherwise #bot-commands
   const generalChannel = 
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general-chat')) ||
-    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general') && c.name.toLowerCase().includes('chat')) ||
-    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('genral-chat') || c.name.toLowerCase().includes('genralchat'))) ||
-    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general')) ||
-    guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('general-chat')) ||
-    guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('general') || c.name.toLowerCase().includes('genral')));
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('bot-commands') || c.name.toLowerCase().includes('bot-command') || c.name.toLowerCase().includes('botcommands'))) ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('general') || c.name.toLowerCase().includes('chat'))) ||
+    guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('bot-commands') || c.name.toLowerCase().includes('bot-command'))) ||
+    guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('general-chat'));
 
   const targetSummon = summonChannel || fallbackChannel;
   if (targetSummon) {
@@ -1150,6 +1141,8 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 
   const targetGeneral = generalChannel || (targetSummon ? null : fallbackChannel);
   if (targetGeneral && targetGeneral.id !== targetSummon?.id) {
+    await sendGeneralWelcome(targetGeneral, member);
+  } else if (!targetSummon && targetGeneral) {
     await sendGeneralWelcome(targetGeneral, member);
   }
 }
