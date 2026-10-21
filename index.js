@@ -1121,7 +1121,7 @@ async function sendGeneralWelcome(channel, member) {
   });
 }
 
-// Unified Welcome Handler for new joins and <welcome command
+// Unified Welcome Handler for new joins and <welcome command (Summon Circle only)
 async function handleMemberWelcome(member, fallbackChannel = null) {
   if (!member || !member.guild) return;
   const guild = member.guild;
@@ -1138,26 +1138,10 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
     guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('summon-circle')) ||
     guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('summon'));
 
-  const generalChannel = 
-    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general-chat')) ||
-    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general') && c.name.toLowerCase().includes('chat')) ||
-    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('genral-chat') || c.name.toLowerCase().includes('genralchat'))) ||
-    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general')) ||
-    guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('general-chat')) ||
-    guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('general') || c.name.toLowerCase().includes('genral')));
-
-  // 1. Send to #summon-circle
+  // Send only to #summon-circle (or fallback channel if summon-circle is not found)
   const targetSummon = summonChannel || fallbackChannel;
   if (targetSummon) {
     await sendSummonCircleWelcome(targetSummon, member);
-  }
-
-  // 2. Send to #general-chat
-  const targetGeneral = generalChannel || fallbackChannel;
-  if (targetGeneral && targetGeneral.id !== targetSummon?.id) {
-    await sendGeneralWelcome(targetGeneral, member);
-  } else if (!targetSummon && targetGeneral) {
-    await sendGeneralWelcome(targetGeneral, member);
   }
 }
 
