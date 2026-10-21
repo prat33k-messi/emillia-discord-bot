@@ -978,7 +978,7 @@ async function handleFeatureCooldown(target, userId, featureName) {
 const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562132739241541843/download_1.gif?ex=6ad8e0fc&is=6ad78f7c&hm=b592d0a87d565073fdbcbc6aa59d32df0bf32f2f8dac9fdf6d274fec10f470d9&';
 
 // Helper to format the AniPedia Welcome Message
-function formatWelcomeMessage(guild) {
+async function formatWelcomeMessage(guild) {
   let text = 
 `# :ani_gate:**WELCOME TO ANIPEDIA**:ani_gate:
 :ani_sword: **A New World. A New Journey. A New Family**
@@ -999,6 +999,10 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 — *The AniPedia Family*`;
 
   if (guild) {
+    if (guild.channels?.fetch) {
+      await guild.channels.fetch().catch(() => {});
+    }
+
     // If custom emojis with these names exist, resolve to <:name:id> so Discord renders them
     const emojiNames = ['ani_gate', 'ani_sword', 'ani_star', 'ani_saku', 'ani_adv', 'ani_light', 'ani_flower'];
     for (const name of emojiNames) {
@@ -1009,15 +1013,27 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
       }
     }
 
-    // Resolve channel mentions if channels with matching names exist in guild
-    const rulesChannel = guild.channels?.cache?.find(c => c.name && (c.name.toLowerCase() === 'rules' || c.name.toLowerCase().includes('rule')));
+    const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
+
+    // Resolve rules channel mention
+    const rulesChannel = 
+      guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('rule')) ||
+      guild.channels?.cache?.find(c => c.name && c.name.toLowerCase().includes('rule'));
     if (rulesChannel) {
       text = text.replace('<#rules>', `<#${rulesChannel.id}>`);
     }
 
-    const generalChannel = guild.channels?.cache?.find(c => c.name && (c.name.toLowerCase() === 'genral-chat' || c.name.toLowerCase() === 'general-chat' || c.name.toLowerCase() === 'general'));
+    // Resolve general chat channel mention (e.g. #・general-chat)
+    const generalChannel = 
+      guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('general-chat')) ||
+      guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('general') && c.name.toLowerCase().includes('chat')) ||
+      guild.channels?.cache?.find(c => isTextChannel(c) && c.name && (c.name.toLowerCase().includes('genral-chat') || c.name.toLowerCase().includes('genralchat'))) ||
+      guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('general')) ||
+      guild.channels?.cache?.find(c => c.name && c.name.toLowerCase().includes('general-chat')) ||
+      guild.channels?.cache?.find(c => c.name && (c.name.toLowerCase().includes('general') || c.name.toLowerCase().includes('genral')));
+
     if (generalChannel) {
-      text = text.replace('<#genral-chat>', `<#${generalChannel.id}>`);
+      text = text.replace(/<#(?:genral|general)-chat>/g, `<#${generalChannel.id}>`);
     }
   }
 
@@ -5012,7 +5028,7 @@ client.on('messageCreate', async (message) => {
                          lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ');
 
     if (isWelcomeCmd) {
-      const welcomeText = formatWelcomeMessage(message.guild);
+      const welcomeText = await formatWelcomeMessage(message.guild);
       const welcomeEmbed = new EmbedBuilder()
         .setColor(0xED4245) // Discord Red
         .setDescription(welcomeText)
