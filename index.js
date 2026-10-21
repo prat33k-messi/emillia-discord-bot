@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags, StringSelectMenuBuilder, ComponentType } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags, StringSelectMenuBuilder, ComponentType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
@@ -409,6 +409,15 @@ client.on('guildMemberAdd', async (member) => {
     }
   } catch (err) {
     console.error('Error re-applying Jailed role on guildMemberAdd:', err);
+  }
+
+  // Trigger welcome flow in summon-circle and general-chat
+  try {
+    if (member && member.guild) {
+      await handleMemberWelcome(member);
+    }
+  } catch (welcomeErr) {
+    console.error('Error triggering member welcome flow on join:', welcomeErr);
   }
 });
 
@@ -1038,6 +1047,118 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
   }
 
   return text;
+}
+
+const welcomeClickCooldowns = new Map();
+
+// Send full welcome card into #summon-circle
+async function sendSummonCircleWelcome(channel, member) {
+  if (!channel || !member) return;
+  const welcomeText = await formatWelcomeMessage(member.guild);
+  const welcomeEmbed = new EmbedBuilder()
+    .setColor(0xED4245) // Discord Red
+    .setDescription(welcomeText)
+    .setImage('attachment://welcome.gif');
+
+  try {
+    await channel.send({
+      content: `<@${member.id}>`,
+      embeds: [welcomeEmbed],
+      files: [{
+        attachment: WELCOME_GIF_URL,
+        name: 'welcome.gif'
+      }]
+    });
+  } catch (err) {
+    console.error("Error sending summon circle welcome with attachment:", err);
+    welcomeEmbed.setImage(WELCOME_GIF_URL);
+    await channel.send({
+      content: `<@${member.id}>`,
+      embeds: [welcomeEmbed]
+    });
+  }
+}
+
+// Send small container style welcome card into #general-chat with ping button
+async function sendGeneralWelcome(channel, member) {
+  if (!channel || !member) return;
+  const { url2 } = await getAikoEmojis(member.guild);
+
+  const welcomeEmbed = new EmbedBuilder()
+    .setColor(0x2b2d31)
+    .setTitle(`${toSmallCaps('Welcome to AniPedia')}`)
+    .setDescription(
+      `Welcome, <@${member.id}>, to the AniPedia!\n` +
+      `Have fun and interact with other people.`
+    )
+    .setFooter({ text: toSmallCaps('AniPedia'), iconURL: member.guild.iconURL() || client.user.displayAvatarURL() })
+    .setTimestamp();
+
+  if (url2) {
+    welcomeEmbed.setThumbnail(url2);
+  } else if (member.user?.displayAvatarURL) {
+    welcomeEmbed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
+  }
+
+  const quickButton = new ButtonBuilder()
+    .setCustomId(`welcome_quick_${member.id}`)
+    .setLabel('Say Welcome')
+    .setStyle(ButtonStyle.Primary)
+    .setEmoji('👋');
+
+  const customButton = new ButtonBuilder()
+    .setCustomId(`welcome_custom_${member.id}`)
+    .setLabel('Custom Message')
+    .setStyle(ButtonStyle.Secondary)
+    .setEmoji('💬');
+
+  const row = new ActionRowBuilder().addComponents(quickButton, customButton);
+
+  await channel.send({
+    content: `<@${member.id}>`,
+    embeds: [welcomeEmbed],
+    components: [row]
+  });
+}
+
+// Unified Welcome Handler for new joins and <welcome command
+async function handleMemberWelcome(member, fallbackChannel = null) {
+  if (!member || !member.guild) return;
+  const guild = member.guild;
+
+  if (guild.channels?.fetch) {
+    await guild.channels.fetch().catch(() => {});
+  }
+
+  const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
+
+  const summonChannel = 
+    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon-circle')) ||
+    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon')) ||
+    guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('summon-circle')) ||
+    guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('summon'));
+
+  const generalChannel = 
+    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general-chat')) ||
+    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general') && c.name.toLowerCase().includes('chat')) ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('genral-chat') || c.name.toLowerCase().includes('genralchat'))) ||
+    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general')) ||
+    guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('general-chat')) ||
+    guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('general') || c.name.toLowerCase().includes('genral')));
+
+  // 1. Send to #summon-circle
+  const targetSummon = summonChannel || fallbackChannel;
+  if (targetSummon) {
+    await sendSummonCircleWelcome(targetSummon, member);
+  }
+
+  // 2. Send to #general-chat
+  const targetGeneral = generalChannel || fallbackChannel;
+  if (targetGeneral && targetGeneral.id !== targetSummon?.id) {
+    await sendGeneralWelcome(targetGeneral, member);
+  } else if (!targetSummon && targetGeneral) {
+    await sendGeneralWelcome(targetGeneral, member);
+  }
 }
 
 // Helper to send Interactive Help Menu with Dropdown Select
@@ -5028,27 +5149,8 @@ client.on('messageCreate', async (message) => {
                          lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ');
 
     if (isWelcomeCmd) {
-      const welcomeText = await formatWelcomeMessage(message.guild);
-      const welcomeEmbed = new EmbedBuilder()
-        .setColor(0xED4245) // Discord Red
-        .setDescription(welcomeText)
-        .setImage('attachment://welcome.gif');
-
-      try {
-        await message.channel.send({
-          embeds: [welcomeEmbed],
-          files: [{
-            attachment: WELCOME_GIF_URL,
-            name: 'welcome.gif'
-          }]
-        });
-      } catch (err) {
-        console.error("Error sending welcome embed with attachment:", err);
-        welcomeEmbed.setImage(WELCOME_GIF_URL);
-        await message.channel.send({
-          embeds: [welcomeEmbed]
-        });
-      }
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
+      await handleMemberWelcome(targetMember, message.channel);
       return;
     }
 
@@ -5558,9 +5660,61 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
 }
 
 // ==========================================
-// SLASH INTERACTION HANDLER
+// INTERACTION HANDLER (Buttons, Modals, Slash)
 // ==========================================
 client.on('interactionCreate', async (interaction) => {
+  // Handle Welcome Button & Modal Interactions
+  if (interaction.isButton()) {
+    if (interaction.customId.startsWith('welcome_quick_')) {
+      const targetUserId = interaction.customId.replace('welcome_quick_', '');
+      const cdKey = `${interaction.user.id}_${targetUserId}`;
+      const lastClick = welcomeClickCooldowns.get(cdKey) || 0;
+      if (Date.now() - lastClick < 10000) {
+        await interaction.reply({
+          content: "You already welcomed this member recently! 🌸",
+          ephemeral: true
+        });
+        return;
+      }
+      welcomeClickCooldowns.set(cdKey, Date.now());
+
+      await interaction.reply({
+        content: `👋 <@${interaction.user.id}>: Welcome to AniPedia, <@${targetUserId}>! *Have fun and interact with other people!* 🌸`
+      });
+      return;
+    }
+
+    if (interaction.customId.startsWith('welcome_custom_')) {
+      const targetUserId = interaction.customId.replace('welcome_custom_', '');
+      const modal = new ModalBuilder()
+        .setCustomId(`welcome_modal_${targetUserId}`)
+        .setTitle('Welcome to AniPedia');
+
+      const messageInput = new TextInputBuilder()
+        .setCustomId('welcome_text')
+        .setLabel('Your welcome message:')
+        .setStyle(TextInputStyle.Paragraph)
+        .setValue(`Welcome <@${targetUserId}> to the AniPedia! Have fun and interact with other people! 🎉`)
+        .setMaxLength(500)
+        .setRequired(true);
+
+      const actionRow = new ActionRowBuilder().addComponents(messageInput);
+      modal.addComponents(actionRow);
+
+      await interaction.showModal(modal);
+      return;
+    }
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId.startsWith('welcome_modal_')) {
+    const targetUserId = interaction.customId.replace('welcome_modal_', '');
+    const userMessage = interaction.fields.getTextInputValue('welcome_text');
+    await interaction.reply({
+      content: `👋 <@${interaction.user.id}>: ${userMessage}`
+    });
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
 
   // If System is Frozen under Code Black, block all slash commands (except whitelisted admins)
