@@ -987,7 +987,8 @@ async function handleFeatureCooldown(target, userId, featureName) {
 const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562132739241541843/download_1.gif?ex=6ad8e0fc&is=6ad78f7c&hm=b592d0a87d565073fdbcbc6aa59d32df0bf32f2f8dac9fdf6d274fec10f470d9&';
 
 // Helper to format the AniPedia Welcome Message
-async function formatWelcomeMessage(guild) {
+async function formatWelcomeMessage(guild, member = null) {
+  const userMention = member ? `<@${member.id}>` : 'Nakama';
   let text = 
 `# :ani_gate:**WELCOME TO ANIPEDIA**:ani_gate:
 :ani_sword: **A New World. A New Journey. A New Family**
@@ -1003,7 +1004,7 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 
 > :ani_light: From legendary battles to unforgettable stories, there's a place for every anime fan here.
 
-**Be polite and enjoy your stay, Nakama!** :ani_flower:
+**Be polite and enjoy your stay, ${userMention}!** :ani_flower:
 
 — *The AniPedia Family*`;
 
@@ -1054,7 +1055,7 @@ const welcomeClickCooldowns = new Map();
 // Send full welcome card into #summon-circle
 async function sendSummonCircleWelcome(channel, member) {
   if (!channel || !member) return;
-  const welcomeText = await formatWelcomeMessage(member.guild);
+  const welcomeText = await formatWelcomeMessage(member.guild, member);
   const welcomeEmbed = new EmbedBuilder()
     .setColor(0xED4245) // Discord Red
     .setDescription(welcomeText)
@@ -1062,7 +1063,6 @@ async function sendSummonCircleWelcome(channel, member) {
 
   try {
     await channel.send({
-      content: `<@${member.id}>`,
       embeds: [welcomeEmbed],
       files: [{
         attachment: WELCOME_GIF_URL,
@@ -1073,7 +1073,6 @@ async function sendSummonCircleWelcome(channel, member) {
     console.error("Error sending summon circle welcome with attachment:", err);
     welcomeEmbed.setImage(WELCOME_GIF_URL);
     await channel.send({
-      content: `<@${member.id}>`,
       embeds: [welcomeEmbed]
     });
   }
@@ -1115,7 +1114,6 @@ async function sendGeneralWelcome(channel, member) {
   const row = new ActionRowBuilder().addComponents(quickButton, customButton);
 
   await channel.send({
-    content: `<@${member.id}>`,
     embeds: [welcomeEmbed],
     components: [row]
   });
@@ -5688,9 +5686,40 @@ client.on('interactionCreate', async (interaction) => {
       }
       welcomeClickCooldowns.set(cdKey, Date.now());
 
-      await interaction.reply({
-        content: `👋 <@${interaction.user.id}>: Welcome to AniPedia, <@${targetUserId}>! *Have fun and interact with other people!* 🌸`
-      });
+      const welcomeMsgContent = `Welcome to AniPedia, <@${targetUserId}>! Have fun and interact with other people! 🎉🌸`;
+      let sentViaWebhook = false;
+
+      try {
+        if (interaction.channel && interaction.channel.fetchWebhooks) {
+          const webhooks = await interaction.channel.fetchWebhooks().catch(() => null);
+          let webhook = webhooks?.find(wh => wh.owner?.id === client.user.id && wh.token) ||
+                        webhooks?.first();
+          if (!webhook && interaction.guild?.members?.me?.permissionsIn(interaction.channel)?.has(PermissionFlagsBits.ManageWebhooks)) {
+            webhook = await interaction.channel.createWebhook({
+              name: 'AniPedia Welcomer',
+              avatar: client.user.displayAvatarURL()
+            }).catch(() => null);
+          }
+
+          if (webhook) {
+            await webhook.send({
+              content: welcomeMsgContent,
+              username: interaction.member?.displayName || interaction.user.displayName || interaction.user.username,
+              avatarURL: interaction.user.displayAvatarURL({ dynamic: true })
+            });
+            await interaction.deferUpdate().catch(() => {});
+            sentViaWebhook = true;
+          }
+        }
+      } catch (whErr) {
+        console.error("Webhook welcome sending failed:", whErr);
+      }
+
+      if (!sentViaWebhook) {
+        await interaction.reply({
+          content: `👋 <@${interaction.user.id}>: ${welcomeMsgContent}`
+        });
+      }
       return;
     }
 
@@ -5704,7 +5733,7 @@ client.on('interactionCreate', async (interaction) => {
         .setCustomId('welcome_text')
         .setLabel('Your welcome message:')
         .setStyle(TextInputStyle.Paragraph)
-        .setValue(`Welcome <@${targetUserId}> to the AniPedia! Have fun and interact with other people! 🎉`)
+        .setValue(`Welcome to AniPedia, <@${targetUserId}>! Have fun and interact with other people! 🎉`)
         .setMaxLength(500)
         .setRequired(true);
 
@@ -5719,9 +5748,39 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isModalSubmit() && interaction.customId.startsWith('welcome_modal_')) {
     const targetUserId = interaction.customId.replace('welcome_modal_', '');
     const userMessage = interaction.fields.getTextInputValue('welcome_text');
-    await interaction.reply({
-      content: `👋 <@${interaction.user.id}>: ${userMessage}`
-    });
+
+    let sentViaWebhook = false;
+    try {
+      if (interaction.channel && interaction.channel.fetchWebhooks) {
+        const webhooks = await interaction.channel.fetchWebhooks().catch(() => null);
+        let webhook = webhooks?.find(wh => wh.owner?.id === client.user.id && wh.token) ||
+                      webhooks?.first();
+        if (!webhook && interaction.guild?.members?.me?.permissionsIn(interaction.channel)?.has(PermissionFlagsBits.ManageWebhooks)) {
+          webhook = await interaction.channel.createWebhook({
+            name: 'AniPedia Welcomer',
+            avatar: client.user.displayAvatarURL()
+          }).catch(() => null);
+        }
+
+        if (webhook) {
+          await webhook.send({
+            content: userMessage,
+            username: interaction.member?.displayName || interaction.user.displayName || interaction.user.username,
+            avatarURL: interaction.user.displayAvatarURL({ dynamic: true })
+          });
+          await interaction.deferUpdate().catch(() => {});
+          sentViaWebhook = true;
+        }
+      }
+    } catch (whErr) {
+      console.error("Webhook modal welcome sending failed:", whErr);
+    }
+
+    if (!sentViaWebhook) {
+      await interaction.reply({
+        content: `👋 <@${interaction.user.id}>: ${userMessage}`
+      });
+    }
     return;
   }
 
