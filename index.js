@@ -1078,7 +1078,7 @@ async function sendSummonCircleWelcome(channel, member) {
   }
 }
 
-// Send small container style welcome card into #general-chat with ping button
+// Send small container style welcome card into #general-chat / #public-discussion
 async function sendGeneralWelcome(channel, member) {
   if (!channel || !member) return;
   const { url2 } = await getAikoEmojis(member.guild);
@@ -1099,23 +1099,8 @@ async function sendGeneralWelcome(channel, member) {
     welcomeEmbed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
   }
 
-  const quickButton = new ButtonBuilder()
-    .setCustomId(`welcome_quick_${member.id}`)
-    .setLabel('Say Welcome')
-    .setStyle(ButtonStyle.Primary)
-    .setEmoji('👋');
-
-  const customButton = new ButtonBuilder()
-    .setCustomId(`welcome_custom_${member.id}`)
-    .setLabel('Custom Message')
-    .setStyle(ButtonStyle.Secondary)
-    .setEmoji('💬');
-
-  const row = new ActionRowBuilder().addComponents(quickButton, customButton);
-
   await channel.send({
-    embeds: [welcomeEmbed],
-    components: [row]
+    embeds: [welcomeEmbed]
   });
 }
 
