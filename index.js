@@ -1037,6 +1037,7 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 
     // Resolve general chat channel mention (e.g. #・general-chat)
     const generalChannel = 
+      guild.channels?.cache?.get('1517882822126338050') ||
       guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('general-chat')) ||
       guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('general') && c.name.toLowerCase().includes('chat')) ||
       guild.channels?.cache?.find(c => isTextChannel(c) && c.name && (c.name.toLowerCase().includes('genral-chat') || c.name.toLowerCase().includes('genralchat'))) ||
@@ -1125,8 +1126,9 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
   const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
 
   // 1. Channel for Summon Circle message:
-  // First look for #summon-circle, otherwise #public-discussion (ID: 1558786839744356544 or by name)
+  // Primary Summon Circle Channel ID: 1518191913705013278
   const summonChannel = 
+    guild.channels.cache.get('1518191913705013278') ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon-circle')) ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon')) ||
     guild.channels.cache.get('1558786839744356544') ||
@@ -1135,8 +1137,9 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
     guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('public-discussion') || c.name.toLowerCase().includes('publicdiscussion')));
 
   // 2. Channel for General Welcome message:
-  // Prioritize #general-chat, then #bot-commands / #botcommands / #bot-command / #botcmd
+  // Primary General Chat Channel ID: 1517882822126338050
   const generalChannel = 
+    guild.channels.cache.get('1517882822126338050') ||
     guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('general-chat') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('generalchat'))) ||
     guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('bot-commands') || c.name.toLowerCase().includes('bot-command') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('botcommand') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('botcmd'))) ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general') && !c.name.toLowerCase().includes('voice') && !c.name.toLowerCase().includes('staff') && !c.name.toLowerCase().includes('mod')) ||
