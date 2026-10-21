@@ -773,6 +773,7 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     if (opts.timestamp) fallback.setTimestamp();
     if (opts.fields && Array.isArray(opts.fields)) fallback.addFields(opts.fields);
     const sendOpts = { embeds: [fallback] };
+    if (opts.content || legacyOptions.content) sendOpts.content = opts.content || legacyOptions.content;
     if (opts.files) sendOpts.files = opts.files;
     if (opts.ephemeral) sendOpts.ephemeral = true;
     if (typeof target === 'function') {
@@ -1064,7 +1065,7 @@ async function sendSummonCircleWelcome(channel, member) {
 
   try {
     await channel.send({
-      content: `<@${member.id}>`,
+      content: `Welcome <@${member.id}>`,
       embeds: [welcomeEmbed],
       files: [{
         attachment: WELCOME_GIF_URL,
@@ -1075,7 +1076,7 @@ async function sendSummonCircleWelcome(channel, member) {
     console.error("Error sending summon circle welcome with attachment:", err);
     welcomeEmbed.setImage(WELCOME_GIF_URL);
     await channel.send({
-      content: `<@${member.id}>`,
+      content: `Welcome <@${member.id}>`,
       embeds: [welcomeEmbed]
     });
   }
@@ -1101,7 +1102,15 @@ async function sendGeneralWelcome(channel, member) {
     welcomeEmbed.setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
   }
 
-  await sendContainer(channel, welcomeEmbed, { content: `<@${member.id}>` });
+  try {
+    await sendContainer(channel, welcomeEmbed, { content: `Welcome <@${member.id}>` });
+  } catch (err) {
+    console.error("Error sending general welcome container:", err);
+    await channel.send({
+      content: `Welcome <@${member.id}>`,
+      embeds: [welcomeEmbed]
+    }).catch(e => console.error("Error sending fallback general welcome:", e));
+  }
 }
 
 // Unified Welcome Handler for new joins and <welcome command
@@ -1126,24 +1135,36 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
     guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('public-discussion') || c.name.toLowerCase().includes('publicdiscussion')));
 
   // 2. Channel for General Welcome message:
-  // First look for #general-chat, otherwise #bot-commands
+  // Prioritize #general-chat, then #bot-commands / #botcommands / #bot-command / #botcmd
   const generalChannel = 
-    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general-chat')) ||
-    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('bot-commands') || c.name.toLowerCase().includes('bot-command') || c.name.toLowerCase().includes('botcommands'))) ||
-    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('general') || c.name.toLowerCase().includes('chat'))) ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('general-chat') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('generalchat'))) ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('bot-commands') || c.name.toLowerCase().includes('bot-command') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('botcommand') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('botcmd'))) ||
+    guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('general') && !c.name.toLowerCase().includes('voice') && !c.name.toLowerCase().includes('staff') && !c.name.toLowerCase().includes('mod')) ||
     guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('bot-commands') || c.name.toLowerCase().includes('bot-command'))) ||
     guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('general-chat'));
 
   const targetSummon = summonChannel || fallbackChannel;
   if (targetSummon) {
-    await sendSummonCircleWelcome(targetSummon, member);
+    try {
+      await sendSummonCircleWelcome(targetSummon, member);
+    } catch (err) {
+      console.error("Error sending summon circle welcome:", err);
+    }
   }
 
-  const targetGeneral = generalChannel || (targetSummon ? null : fallbackChannel);
+  const targetGeneral = generalChannel || (fallbackChannel && fallbackChannel.id !== targetSummon?.id ? fallbackChannel : null);
   if (targetGeneral && targetGeneral.id !== targetSummon?.id) {
-    await sendGeneralWelcome(targetGeneral, member);
+    try {
+      await sendGeneralWelcome(targetGeneral, member);
+    } catch (err) {
+      console.error("Error sending general welcome:", err);
+    }
   } else if (!targetSummon && targetGeneral) {
-    await sendGeneralWelcome(targetGeneral, member);
+    try {
+      await sendGeneralWelcome(targetGeneral, member);
+    } catch (err) {
+      console.error("Error sending general welcome:", err);
+    }
   }
 }
 
