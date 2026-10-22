@@ -1267,13 +1267,18 @@ function createRulesPanelPayload() {
 
   const row = new ActionRowBuilder().addComponents(selectMenu);
 
+  const bannerEmbed = new EmbedBuilder()
+    .setColor(0x8B0000)
+    .setImage('attachment://rules_banner.png');
+
+  const hasBanner = fs.existsSync(RULES_BANNER_PATH);
+
   const payload = {
-    embeds: [rulesEmbed],
+    embeds: hasBanner ? [bannerEmbed, rulesEmbed] : [rulesEmbed],
     components: [row]
   };
 
-  if (fs.existsSync(RULES_BANNER_PATH)) {
-    rulesEmbed.setImage('attachment://rules_banner.png');
+  if (hasBanner) {
     payload.files = [{ attachment: RULES_BANNER_PATH, name: 'rules_banner.png' }];
   }
 
