@@ -1212,9 +1212,8 @@ const userLastRulesInteraction = new Map();
 function createRulesPanelPayload() {
   const rulesEmbed = new EmbedBuilder()
     .setColor(0x8B0000)
-    .setTitle('━━━━━━ ✦ ANIPEDIA RULES ✦ ━━━━━━')
     .setDescription(
-      `━━━━━━ ✦ WELCOME TO ANIPEDIA ✦ ━━━━━━\n\n` +
+      `# ANIPEDIA RULES\n\n` +
       `To keep AniPedia safe, respectful and enjoyable for everyone, all members are expected to follow the rules below.\n\n` +
       `▸ Ignorance of the rules is not an excuse.\n\n` +
       `▸ Staff decisions are final.\n\n` +
@@ -1292,8 +1291,8 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_warn_system':
       return new EmbedBuilder()
         .setColor(0xED4245)
-        .setTitle('━━━━━━ ✦ WARN SYSTEM ✦ ━━━━━━')
         .setDescription(
+          `## WARN SYSTEM\n\n` +
           `**AniPedia Tiered Warning Ladder**\n\n` +
           `• **Level 1** — Nickname tag \`[on warn 1]\`\n` +
           `  Duration: **24 hours** (No channel restrictions)\n\n` +
@@ -1315,14 +1314,14 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_chat_disruption':
       return new EmbedBuilder()
         .setColor(0xE67E22)
-        .setTitle('━━━━━━ ✦ CHAT DISRUPTION ✦ ━━━━━━')
         .setDescription(
-          `• Spamming or flooding messages\n` +
-          `• Ignoring reasonable instructions from staff\n` +
-          `• Using channels for purposes they were not intended for\n` +
+          `## CHAT DISRUPTION\n\n` +
+          `• Spamming or flooding messages\n\n` +
+          `• Ignoring reasonable instructions from staff\n\n` +
+          `• Using channels for purposes they were not intended for\n\n` +
           `• Unnecessary or repeated pings to members or staff\n\n` +
-          `➜ **Punishment**: Warn System\n` +
-          `  Verbal warning for the first offense. Repeating it may result in a formal warning and mute.`
+          `**➜ Punishment:** Warn System\n` +
+          `Verbal warning for the first offense. Repeating it may result in a formal warning and mute.`
         )
         .setFooter(footerObj)
         .setTimestamp();
@@ -1330,16 +1329,16 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_minor_offenses':
       return new EmbedBuilder()
         .setColor(0xF1C40F)
-        .setTitle('━━━━━━ ✦ MINOR OFFENSES ✦ ━━━━━━')
         .setDescription(
-          `• Encouraging others to break server rules\n` +
-          `• Excessive swearing or inappropriate language\n` +
-          `• Mentioning NSFW, gore or disturbing content unnecessarily\n` +
-          `• Attempting to bypass, manipulate or exploit server rules\n` +
-          `• Posting excessively loud or ear-piercing audio\n` +
+          `## MINOR OFFENSES\n\n` +
+          `• Encouraging others to break server rules\n\n` +
+          `• Excessive swearing or inappropriate language\n\n` +
+          `• Mentioning NSFW, gore or disturbing content unnecessarily\n\n` +
+          `• Attempting to bypass, manipulate or exploit server rules\n\n` +
+          `• Posting excessively loud or ear-piercing audio\n\n` +
           `• Flooding chat (6+ lines in a single message)\n\n` +
-          `➜ **Punishment**: Warn System\n` +
-          `  A warning and mute. Mute duration increases with repeated offenses.`
+          `**➜ Punishment:** Warn System\n` +
+          `A warning and mute. Mute duration increases with repeated offenses.`
         )
         .setFooter(footerObj)
         .setTimestamp();
@@ -1347,15 +1346,15 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_serious_offenses':
       return new EmbedBuilder()
         .setColor(0xED4245)
-        .setTitle('━━━━━━ ✦ SERIOUS OFFENSES ✦ ━━━━━━')
         .setDescription(
-          `• Using racial, homophobic or other hate-based slurs\n` +
-          `• Repeatedly breaking rules within a short period\n` +
-          `• Evading or ignoring staff warnings and punishments\n` +
-          `• Displaying extreme or targeted toxic behavior\n` +
+          `## SERIOUS OFFENSES\n\n` +
+          `• Using racial, homophobic or other hate-based slurs\n\n` +
+          `• Repeatedly breaking rules within a short period\n\n` +
+          `• Evading or ignoring staff warnings and punishments\n\n` +
+          `• Displaying extreme or targeted toxic behavior\n\n` +
           `• Bypassing moderation filters or disguising prohibited terms\n\n` +
-          `➜ **Punishment**: Appealable Ban\n` +
-          `  Severity and duration depend on the offense.`
+          `**➜ Punishment:** Appealable Ban\n` +
+          `Severity and duration depend on the offense.`
         )
         .setFooter(footerObj)
         .setTimestamp();
@@ -1363,15 +1362,15 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_zero_tolerance':
       return new EmbedBuilder()
         .setColor(0x992D22)
-        .setTitle('━━━━━━ ✦ ZERO-TOLERANCE OFFENSES ✦ ━━━━━━')
         .setDescription(
-          `• Racist, homophobic, sexist or other discriminatory behavior\n` +
-          `• Organizing, joining or encouraging raids against communities\n` +
-          `• Sharing someone's private or identifying information without consent\n` +
-          `• Real-money or cross-platform trading\n` +
-          `• Promoting scams, NSFW material or malicious links\n` +
+          `## ZERO-TOLERANCE OFFENSES\n\n` +
+          `• Racist, homophobic, sexist or other discriminatory behavior\n\n` +
+          `• Organizing, joining or encouraging raids against communities\n\n` +
+          `• Sharing someone's private or identifying information without consent\n\n` +
+          `• Real-money or cross-platform trading\n\n` +
+          `• Promoting scams, NSFW material or malicious links\n\n` +
           `• Posting pornographic content, graphic violence or self-harm content\n\n` +
-          `➜ **Punishment**: Permanent, Non-Appealable Ban`
+          `**➜ Punishment:** Permanent, Non-Appealable Ban`
         )
         .setFooter(footerObj)
         .setTimestamp();
@@ -1379,12 +1378,12 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_mod_policy':
       return new EmbedBuilder()
         .setColor(0xFEE75C)
-        .setTitle('━━━━━━ ✦ MODERATION POLICY ✦ ━━━━━━')
         .setDescription(
-          `• Staff may adjust punishments based on severity, frequency and context of an offense\n` +
-          `• Repeated violations may result in stricter penalties\n` +
-          `• Evading a punishment may lead to further action\n` +
-          `• Appeals for eligible punishments must go through the official appeal form\n` +
+          `## MODERATION POLICY\n\n` +
+          `• Staff may adjust punishments based on severity, frequency and context of an offense\n\n` +
+          `• Repeated violations may result in stricter penalties\n\n` +
+          `• Evading a punishment may lead to further action\n\n` +
+          `• Appeals for eligible punishments must go through the official appeal form\n\n` +
           `• Respect staff decisions and use the proper channels to raise concerns\n\n` +
           `✦ By remaining in AniPedia, you agree to follow these rules.`
         )
