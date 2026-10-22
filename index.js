@@ -4540,7 +4540,7 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands', 'rules', 'rule'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -5336,8 +5336,8 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Persistent Rules Panel Command (<rules) ---
-    const isRulesCmd = words[0] === 'rules' || cleanQuery === 'rules' || lowerQuery === 'rules';
+    // --- Persistent Rules Panel Command (<rules / <rule) ---
+    const isRulesCmd = words[0] === 'rules' || words[0] === 'rule' || cleanQuery === 'rules' || cleanQuery === 'rule' || lowerQuery === 'rules' || lowerQuery === 'rule' || lowerQuery.startsWith('rules') || lowerQuery.startsWith('rule');
     if (isRulesCmd) {
       const modTier = getMemberTier(message.member);
       if (modTier === 0) {
