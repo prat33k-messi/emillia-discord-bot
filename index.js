@@ -1207,24 +1207,19 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 // PERSISTENT RULES PANEL
 // ==========================================
 const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
+const userLastRulesInteraction = new Map();
 
 function createRulesPanelPayload() {
   const rulesEmbed = new EmbedBuilder()
     .setColor(0x8B0000)
     .setTitle('✦ ━━━━━━ 𝐀𝐧𝐢𝐏𝐞𝐝𝐢𝐚 𝐑𝐮𝐥𝐞𝐬 ━━━━━━ ✦')
     .setDescription(
-      `        ⋆｡°✩ 𝓦𝓮𝓵𝓬𝓸𝓶𝓮 𝓽𝓸 𝓐𝓷𝓲𝓟𝓮𝓭𝓲𝓪 ✩°｡⋆\n\n` +
-      `   To keep AniPedia safe, respectful and enjoyable\n` +
-      `   for everyone, all members are expected to follow\n` +
-      `   the rules below.\n\n` +
-      `   ▸ Ignorance of the rules is not an excuse.\n` +
-      `   ▸ Staff decisions are final.\n` +
-      `   ▸ Even if a rule isn't listed, you may still be\n` +
-      `     warned for inappropriate behavior in chats or\n` +
-      `     voice calls. Use common sense and respect the\n` +
-      `     community guidelines.\n\n` +
-      `   ✦ Select a category below to view the offenses\n` +
-      `     and their punishments.`
+      `⋆｡°✩ **Welcome to AniPedia** ✩°｡⋆\n\n` +
+      `To keep AniPedia safe, respectful and enjoyable for everyone, all members are expected to follow the rules below.\n\n` +
+      `▸ Ignorance of the rules is not an excuse.\n\n` +
+      `▸ Staff decisions are final.\n\n` +
+      `▸ Even if a rule isn't listed, you may still be warned for inappropriate behavior in chats or voice calls. Use common sense and respect the community guidelines.\n\n` +
+      `✦ Select a category below to view the offenses and their punishments.`
     )
     .setFooter({ text: 'Stay respectful. Keep the peace. Enjoy the community.' });
 
@@ -6028,10 +6023,18 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isStringSelectMenu() && interaction.customId === 'anipedia_rules_select') {
     const selected = interaction.values[0];
     const embed = getRulesOptionEmbed(selected, interaction.guild);
+    const prev = userLastRulesInteraction.get(interaction.user.id);
+
     if (embed) {
       await interaction.reply({ embeds: [embed], ephemeral: true });
+      userLastRulesInteraction.set(interaction.user.id, interaction);
     } else {
       await interaction.reply({ content: "Unknown category selected.", ephemeral: true });
+      userLastRulesInteraction.set(interaction.user.id, interaction);
+    }
+
+    if (prev) {
+      prev.deleteReply().catch(() => {});
     }
     return;
   }
