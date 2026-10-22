@@ -1207,7 +1207,7 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 // PERSISTENT RULES PANEL
 // ==========================================
 const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
-const APPEAL_CHANNEL_ID = null; // Set to channel ID string (e.g. '123456789012345678') to enable clickable channel mention
+const APPEAL_CHANNEL_ID = '1560574164144754710';
 const userLastRulesInteraction = new Map();
 
 function createRulesPanelPayload() {
