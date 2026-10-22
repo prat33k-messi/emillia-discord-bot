@@ -986,8 +986,10 @@ async function handleFeatureCooldown(target, userId, featureName) {
   return true;
 }
 
-const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562448503027015680/welcome.gif?ex=6adaafd0&is=6ad95e50&hm=300919bc580932ceac43557c58752efb05950522d0b52fc21484b7e670f1e34e';
-const WELCOME_GIF_PATH = path.join(__dirname, 'assets', 'welcome.gif');
+const WELCOME_BANNER_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562722915332522024/lv_0_20261021211900.gif?ex=6adb06a1&is=6ad9b521&hm=fefca383ddff6ef9858f91d85c58a717b04ebac8ab37588193d966d760c7ba25&';
+const WELCOME_BANNER_PATH = path.join(__dirname, 'assets', 'welcome_banner.gif');
+const WELCOME_GIF_URL = WELCOME_BANNER_URL;
+const WELCOME_GIF_PATH = WELCOME_BANNER_PATH;
 
 // Helper to format the AniPedia Welcome Message
 async function formatWelcomeMessage(guild, member = null) {
@@ -1061,28 +1063,41 @@ async function sendSummonCircleWelcome(channel, member) {
   if (!channel || !member) return;
   const welcomeText = await formatWelcomeMessage(member.guild, member);
 
+  const bannerEmbed = new EmbedBuilder()
+    .setColor(0xED4245) // Discord Red
+    .setImage('attachment://welcome_banner.gif');
+
   const welcomeEmbed = new EmbedBuilder()
     .setColor(0xED4245) // Discord Red
-    .setDescription(welcomeText)
-    .setImage('attachment://welcome.gif');
+    .setDescription(welcomeText);
 
-  const fileAttachment = fs.existsSync(WELCOME_GIF_PATH)
-    ? { attachment: WELCOME_GIF_PATH, name: 'welcome.gif' }
-    : { attachment: WELCOME_GIF_URL, name: 'welcome.gif' };
+  const fileAttachment = fs.existsSync(WELCOME_BANNER_PATH)
+    ? { attachment: WELCOME_BANNER_PATH, name: 'welcome_banner.gif' }
+    : { attachment: WELCOME_BANNER_URL, name: 'welcome_banner.gif' };
 
   try {
     await channel.send({
       content: `Welcome <@${member.id}>`,
-      embeds: [welcomeEmbed],
+      embeds: [bannerEmbed, welcomeEmbed],
       files: [fileAttachment]
     });
   } catch (err) {
-    console.error("Error sending summon circle welcome with attachment:", err);
-    welcomeEmbed.setImage(WELCOME_GIF_URL);
-    await channel.send({
-      content: `Welcome <@${member.id}>`,
-      embeds: [welcomeEmbed]
-    });
+    console.error("Error sending summon circle welcome with primary attachment:", err);
+    try {
+      bannerEmbed.setImage(WELCOME_BANNER_URL);
+      await channel.send({
+        content: `Welcome <@${member.id}>`,
+        embeds: [bannerEmbed, welcomeEmbed],
+        files: [{ attachment: WELCOME_BANNER_URL, name: 'welcome_banner.gif' }]
+      });
+    } catch (fallbackErr) {
+      console.error("Error sending fallback summon circle welcome:", fallbackErr);
+      bannerEmbed.setImage(WELCOME_BANNER_URL);
+      await channel.send({
+        content: `Welcome <@${member.id}>`,
+        embeds: [bannerEmbed, welcomeEmbed]
+      });
+    }
   }
 }
 
