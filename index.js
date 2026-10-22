@@ -213,7 +213,11 @@ const slashCommandsData = [
 
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Show help and available commands')
+    .setDescription('Show help and available commands'),
+
+  new SlashCommandBuilder()
+    .setName('rules')
+    .setDescription('Post the persistent AniPedia rules panel (Staff Only)')
 ];
 
 client.once('ready', async () => {
@@ -1196,6 +1200,199 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
     } catch (err) {
       console.error("Error sending general welcome:", err);
     }
+  }
+}
+
+// ==========================================
+// PERSISTENT RULES PANEL
+// ==========================================
+const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
+
+function createRulesPanelPayload() {
+  const rulesEmbed = new EmbedBuilder()
+    .setColor(0x8B0000)
+    .setTitle('✦ ━━━━━━ 𝐀𝐧𝐢𝐏𝐞𝐝𝐢𝐚 𝐑𝐮𝐥𝐞𝐬 ━━━━━━ ✦')
+    .setDescription(
+      `        ⋆｡°✩ 𝓦𝓮𝓵𝓬𝓸𝓶𝓮 𝓽𝓸 𝓐𝓷𝓲𝓟𝓮𝓭𝓲𝓪 ✩°｡⋆\n\n` +
+      `   To keep AniPedia safe, respectful and enjoyable\n` +
+      `   for everyone, all members are expected to follow\n` +
+      `   the rules below.\n\n` +
+      `   ▸ Ignorance of the rules is not an excuse.\n` +
+      `   ▸ Staff decisions are final.\n` +
+      `   ▸ Even if a rule isn't listed, you may still be\n` +
+      `     warned for inappropriate behavior in chats or\n` +
+      `     voice calls. Use common sense and respect the\n` +
+      `     community guidelines.\n\n` +
+      `   ✦ Select a category below to view the offenses\n` +
+      `     and their punishments.`
+    )
+    .setFooter({ text: 'Stay respectful. Keep the peace. Enjoy the community.' });
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId('anipedia_rules_select')
+    .setPlaceholder('✦ Click to check offenses')
+    .addOptions([
+      {
+        label: 'Warn System',
+        description: 'Tiered warning ladder & decay',
+        value: 'rules_warn_system',
+        emoji: '⚠️'
+      },
+      {
+        label: 'Ⅰ. Chat Disruption',
+        description: 'Spamming, flooding, unauthorized pings',
+        value: 'rules_chat_disruption',
+        emoji: '🟠'
+      },
+      {
+        label: 'Ⅱ. Minor Offenses',
+        description: 'Swearing, bypass attempts, flooding',
+        value: 'rules_minor_offenses',
+        emoji: '🟡'
+      },
+      {
+        label: 'Ⅲ. Serious Offenses',
+        description: 'Slurs, repeated rulebreaks, evading staff',
+        value: 'rules_serious_offenses',
+        emoji: '🔴'
+      },
+      {
+        label: 'Ⅳ. Zero-Tolerance Offenses',
+        description: 'Discrimination, raids, scams, doxxing, NSFW',
+        value: 'rules_zero_tolerance',
+        emoji: '⛔'
+      },
+      {
+        label: 'Moderation Policy',
+        description: 'Staff discretion & appeal guidelines',
+        value: 'rules_mod_policy',
+        emoji: '⚖️'
+      }
+    ]);
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+
+  const payload = {
+    embeds: [rulesEmbed],
+    components: [row]
+  };
+
+  if (fs.existsSync(RULES_BANNER_PATH)) {
+    rulesEmbed.setImage('attachment://rules_banner.png');
+    payload.files = [{ attachment: RULES_BANNER_PATH, name: 'rules_banner.png' }];
+  }
+
+  return payload;
+}
+
+function getRulesOptionEmbed(selected, guild) {
+  const footerObj = { text: 'Stay respectful. Keep the peace. Enjoy the community.' };
+
+  switch (selected) {
+    case 'rules_warn_system':
+      return new EmbedBuilder()
+        .setColor(0xED4245)
+        .setTitle('━━━━━━ ✦ ⚠️ WARN SYSTEM ✦ ━━━━━━')
+        .setDescription(
+          `**AniPedia Tiered Warning Ladder**\n\n` +
+          `• **Level 1** — Nickname tag \`[on warn 1]\`\n` +
+          `  *Duration: 24 hours* (No channel restrictions)\n\n` +
+          `• **Level 2** — Member Restrictions Applied\n` +
+          `  *Duration: 3 days* (No media/links/emojis/stickers, nickname locked)\n\n` +
+          `• **Level 3** — Timeout + Level 2 Restrictions\n` +
+          `  *Duration: 7 days* (\`1 hour\` server timeout + Level 2 restrictions)\n\n` +
+          `• **Level 4** — Extended Timeout + Level 2 Restrictions\n` +
+          `  *Duration: 7 days* (\`1 day\` server timeout + Level 2 restrictions)\n\n` +
+          `• **Level 5** — Maximum Timeout\n` +
+          `  *Duration: 1 week* (\`1 week\` server timeout + nickname tag)\n\n` +
+          `• **Level 6** — Permanent Server Ban\n` +
+          `  *Permanent exile from AniPedia*\n\n` +
+          `*Warnings accumulate upon repeated rulebreaks and decay automatically once their active duration expires.*`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'rules_chat_disruption':
+      return new EmbedBuilder()
+        .setColor(0xE67E22)
+        .setTitle('━━━━━━ ✦ CHAT DISRUPTION ✦ ━━━━━━')
+        .setDescription(
+          `• Spamming or flooding messages\n` +
+          `• Ignoring reasonable instructions from staff\n` +
+          `• Using channels for purposes they were not intended for\n` +
+          `• Unnecessary or repeated pings to members or staff\n\n` +
+          `➜ **Punishment**: Warn System\n` +
+          `  Verbal warning for the first offense. Repeating it may result in a formal warning and mute.`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'rules_minor_offenses':
+      return new EmbedBuilder()
+        .setColor(0xF1C40F)
+        .setTitle('━━━━━━ ✦ MINOR OFFENSES ✦ ━━━━━━')
+        .setDescription(
+          `• Encouraging others to break server rules\n` +
+          `• Excessive swearing or inappropriate language\n` +
+          `• Mentioning NSFW, gore or disturbing content unnecessarily\n` +
+          `• Attempting to bypass, manipulate or exploit server rules\n` +
+          `• Posting excessively loud or ear-piercing audio\n` +
+          `• Flooding chat (6+ lines in a single message)\n\n` +
+          `➜ **Punishment**: Warn System\n` +
+          `  A warning and mute. Mute duration increases with repeated offenses.`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'rules_serious_offenses':
+      return new EmbedBuilder()
+        .setColor(0xED4245)
+        .setTitle('━━━━━━ ✦ SERIOUS OFFENSES ✦ ━━━━━━')
+        .setDescription(
+          `• Using racial, homophobic or other hate-based slurs\n` +
+          `• Repeatedly breaking rules within a short period\n` +
+          `• Evading or ignoring staff warnings and punishments\n` +
+          `• Displaying extreme or targeted toxic behavior\n` +
+          `• Bypassing moderation filters or disguising prohibited terms\n\n` +
+          `➜ **Punishment**: Appealable Ban\n` +
+          `  Severity and duration depend on the offense.`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'rules_zero_tolerance':
+      return new EmbedBuilder()
+        .setColor(0x992D22)
+        .setTitle('━━━━━ ✦ ZERO-TOLERANCE OFFENSES ✦ ━━━━━')
+        .setDescription(
+          `• Racist, homophobic, sexist or other discriminatory behavior\n` +
+          `• Organizing, joining or encouraging raids against communities\n` +
+          `• Sharing someone's private or identifying information without consent\n` +
+          `• Real-money or cross-platform trading\n` +
+          `• Promoting scams, NSFW material or malicious links\n` +
+          `• Posting pornographic content, graphic violence or self-harm content\n\n` +
+          `➜ **Punishment**: Permanent, Non-Appealable Ban`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'rules_mod_policy':
+      return new EmbedBuilder()
+        .setColor(0xFEE75C)
+        .setTitle('━━━━━━ ⚖ MODERATION POLICY ⚖ ━━━━━━')
+        .setDescription(
+          `• Staff may adjust punishments based on severity, frequency and context of an offense\n` +
+          `• Repeated violations may result in stricter penalties\n` +
+          `• Evading a punishment may lead to further action\n` +
+          `• Appeals for eligible punishments must go through the official appeal form\n` +
+          `• Respect staff decisions and use the proper channels to raise concerns\n\n` +
+          `✦ By remaining in AniPedia, you agree to follow these rules.`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    default:
+      return null;
   }
 }
 
@@ -5139,6 +5336,19 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    // --- Persistent Rules Panel Command (<rules) ---
+    const isRulesCmd = words[0] === 'rules' || cleanQuery === 'rules' || lowerQuery === 'rules';
+    if (isRulesCmd) {
+      const modTier = getMemberTier(message.member);
+      if (modTier === 0) {
+        await message.reply("Mou! 🌸 Only server staff can post the rules panel! ❄️");
+        return;
+      }
+      const payload = createRulesPanelPayload();
+      await message.channel.send(payload);
+      return;
+    }
+
     if (lowerQuery === 'ping') {
       const latency = Date.now() - message.createdTimestamp;
       await message.reply(`🏓 Pong! Latency is **${latency}ms**. I'm working hard! ⚡🌸`);
@@ -5810,6 +6020,18 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.reply({
         content: `👋 <@${interaction.user.id}>: ${userMessage}`
       });
+    }
+    return;
+  }
+
+  // Persistent AniPedia Rules Panel Dropdown
+  if (interaction.isStringSelectMenu() && interaction.customId === 'anipedia_rules_select') {
+    const selected = interaction.values[0];
+    const embed = getRulesOptionEmbed(selected, interaction.guild);
+    if (embed) {
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+    } else {
+      await interaction.reply({ content: "Unknown category selected.", ephemeral: true });
     }
     return;
   }
@@ -6524,6 +6746,20 @@ client.on('interactionCreate', async (interaction) => {
         interaction: interaction,
         replyFn: makeReplyFn(interaction)
       });
+      return;
+    }
+
+    // ------------------------------------------
+    // 18. /rules
+    // ------------------------------------------
+    if (commandName === 'rules') {
+      if (modTier === 0) {
+        await interaction.reply({ content: "Mou! 🌸 Only server staff can post the rules panel! ❄️", ephemeral: true });
+        return;
+      }
+      const payload = createRulesPanelPayload();
+      await channel.send(payload);
+      await interaction.reply({ content: "Rules panel posted successfully! 🌸", ephemeral: true });
       return;
     }
   } catch (err) {
