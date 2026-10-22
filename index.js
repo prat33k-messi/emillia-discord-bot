@@ -213,11 +213,7 @@ const slashCommandsData = [
 
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Show help and available commands'),
-
-  new SlashCommandBuilder()
-    .setName('rules')
-    .setDescription('Post the persistent AniPedia rules panel (Staff Only)')
+    .setDescription('Show help and available commands')
 ];
 
 client.once('ready', async () => {
@@ -4542,7 +4538,7 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands', 'rules', 'rule'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -5335,19 +5331,6 @@ client.on('messageCreate', async (message) => {
         channel: message.channel,
         replyFn: makeReplyFn(message.channel)
       });
-      return;
-    }
-
-    // --- Persistent Rules Panel Command (<rules / <rule) ---
-    const isRulesCmd = words[0] === 'rules' || words[0] === 'rule' || cleanQuery === 'rules' || cleanQuery === 'rule' || lowerQuery === 'rules' || lowerQuery === 'rule' || lowerQuery.startsWith('rules') || lowerQuery.startsWith('rule');
-    if (isRulesCmd) {
-      const modTier = getMemberTier(message.member);
-      if (modTier === 0) {
-        await message.reply("Mou! 🌸 Only server staff can post the rules panel! ❄️");
-        return;
-      }
-      const payload = createRulesPanelPayload();
-      await message.channel.send(payload);
       return;
     }
 
@@ -6756,20 +6739,6 @@ client.on('interactionCreate', async (interaction) => {
         interaction: interaction,
         replyFn: makeReplyFn(interaction)
       });
-      return;
-    }
-
-    // ------------------------------------------
-    // 18. /rules
-    // ------------------------------------------
-    if (commandName === 'rules') {
-      if (modTier === 0) {
-        await interaction.reply({ content: "Mou! 🌸 Only server staff can post the rules panel! ❄️", ephemeral: true });
-        return;
-      }
-      const payload = createRulesPanelPayload();
-      await channel.send(payload);
-      await interaction.reply({ content: "Rules panel posted successfully! 🌸", ephemeral: true });
       return;
     }
   } catch (err) {
