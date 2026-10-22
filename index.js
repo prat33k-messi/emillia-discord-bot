@@ -1068,36 +1068,23 @@ async function sendSummonCircleWelcome(channel, member) {
     .setDescription(welcomeText)
     .setImage('attachment://welcome.gif');
 
-  const bannerAttachment = fs.existsSync(WELCOME_BANNER_PATH)
-    ? { attachment: WELCOME_BANNER_PATH, name: 'welcome_banner.gif' }
-    : { attachment: WELCOME_BANNER_URL, name: 'welcome_banner.gif' };
-
-  const bottomAttachment = fs.existsSync(WELCOME_GIF_PATH)
+  const fileAttachment = fs.existsSync(WELCOME_GIF_PATH)
     ? { attachment: WELCOME_GIF_PATH, name: 'welcome.gif' }
     : { attachment: WELCOME_GIF_URL, name: 'welcome.gif' };
 
   try {
     await channel.send({
       content: `Welcome <@${member.id}>`,
-      files: [bannerAttachment, bottomAttachment],
-      embeds: [welcomeEmbed]
+      embeds: [welcomeEmbed],
+      files: [fileAttachment]
     });
   } catch (err) {
-    console.error("Error sending summon circle welcome with attachments:", err);
+    console.error("Error sending summon circle welcome with attachment:", err);
     welcomeEmbed.setImage(WELCOME_GIF_URL);
-    try {
-      await channel.send({
-        content: `Welcome <@${member.id}>`,
-        files: [{ attachment: WELCOME_BANNER_URL, name: 'welcome_banner.gif' }],
-        embeds: [welcomeEmbed]
-      });
-    } catch (fallbackErr) {
-      console.error("Error sending fallback summon circle welcome:", fallbackErr);
-      await channel.send({
-        content: `Welcome <@${member.id}>`,
-        embeds: [welcomeEmbed]
-      });
-    }
+    await channel.send({
+      content: `Welcome <@${member.id}>`,
+      embeds: [welcomeEmbed]
+    });
   }
 }
 
