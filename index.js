@@ -986,8 +986,6 @@ async function handleFeatureCooldown(target, userId, featureName) {
   return true;
 }
 
-const WELCOME_BANNER_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562722915332522024/lv_0_20261021211900.gif?ex=6adb06a1&is=6ad9b521&hm=fefca383ddff6ef9858f91d85c58a717b04ebac8ab37588193d966d760c7ba25&';
-const WELCOME_BANNER_PATH = path.join(__dirname, 'assets', 'welcome_banner.gif');
 const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562448503027015680/welcome.gif?ex=6adaafd0&is=6ad95e50&hm=300919bc580932ceac43557c58752efb05950522d0b52fc21484b7e670f1e34e';
 const WELCOME_GIF_PATH = path.join(__dirname, 'assets', 'welcome.gif');
 
