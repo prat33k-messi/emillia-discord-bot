@@ -986,7 +986,8 @@ async function handleFeatureCooldown(target, userId, featureName) {
   return true;
 }
 
-const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562132739241541843/download_1.gif?ex=6ad8e0fc&is=6ad78f7c&hm=b592d0a87d565073fdbcbc6aa59d32df0bf32f2f8dac9fdf6d274fec10f470d9&';
+const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562448503027015680/welcome.gif?ex=6adaafd0&is=6ad95e50&hm=300919bc580932ceac43557c58752efb05950522d0b52fc21484b7e670f1e34e';
+const WELCOME_GIF_PATH = path.join(__dirname, 'assets', 'welcome.gif');
 
 // Helper to format the AniPedia Welcome Message
 async function formatWelcomeMessage(guild, member = null) {
@@ -1064,22 +1065,33 @@ async function sendSummonCircleWelcome(channel, member) {
     .setDescription(welcomeText)
     .setImage('attachment://welcome.gif');
 
+  const fileAttachment = fs.existsSync(WELCOME_GIF_PATH)
+    ? { attachment: WELCOME_GIF_PATH, name: 'welcome.gif' }
+    : { attachment: WELCOME_GIF_URL, name: 'welcome.gif' };
+
   try {
     await channel.send({
       content: `Welcome <@${member.id}>`,
       embeds: [welcomeEmbed],
-      files: [{
-        attachment: WELCOME_GIF_URL,
-        name: 'welcome.gif'
-      }]
+      files: [fileAttachment]
     });
   } catch (err) {
-    console.error("Error sending summon circle welcome with attachment:", err);
-    welcomeEmbed.setImage(WELCOME_GIF_URL);
-    await channel.send({
-      content: `Welcome <@${member.id}>`,
-      embeds: [welcomeEmbed]
-    });
+    console.error("Error sending summon circle welcome with primary attachment:", err);
+    try {
+      // Secondary fallback
+      await channel.send({
+        content: `Welcome <@${member.id}>`,
+        embeds: [welcomeEmbed],
+        files: [{ attachment: WELCOME_GIF_URL, name: 'welcome.gif' }]
+      });
+    } catch (fallbackErr) {
+      console.error("Error sending fallback summon circle welcome:", fallbackErr);
+      welcomeEmbed.setImage(WELCOME_GIF_URL);
+      await channel.send({
+        content: `Welcome <@${member.id}>`,
+        embeds: [welcomeEmbed]
+      });
+    }
   }
 }
 
