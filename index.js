@@ -369,15 +369,21 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
   try {
     const stateDoc = await db.collection('user_warn_states').doc(newMember.id).get();
-    if (!stateDoc.exists) return;
-    const state = stateDoc.data();
+    const state = stateDoc.exists ? stateDoc.data() : null;
 
-    if (state.restrictionsActive && state.currentLevel >= 1 && state.currentLevel <= 5) {
+    if (state && state.restrictionsActive && state.currentLevel >= 1 && state.currentLevel <= 5) {
       const expectedTag = `[on warn ${state.currentLevel}]`;
       const currentNick = newMember.nickname || '';
       if (!currentNick.endsWith(expectedTag)) {
         const correctNick = formatWarnNickname(state.originalNickname || newMember.user.displayName, state.currentLevel);
         await setMemberWarnNickname(newMember, correctNick);
+      }
+    } else {
+      // If user is not actively warned by staff, strip any unauthorized fake [on warn ...] tag
+      const currentNick = newMember.nickname || '';
+      if (/\[on warn \d+\]/i.test(currentNick)) {
+        const cleanNick = currentNick.replace(/\s*\[on warn \d+\]/gi, '').trim();
+        await setMemberWarnNickname(newMember, cleanNick || null);
       }
     }
   } catch (err) {
@@ -2988,18 +2994,12 @@ function formatWarnNickname(originalNick, level) {
 
 function getActiveWarnLevel(member) {
   if (!member || !member.id) return 0;
-  // 1. Check in-memory active warn states
+  // 1. Check in-memory active warn states (verified official moderation records)
   const state = activeWarnStatesCache.get(member.id);
   if (state && state.restrictionsActive && state.currentLevel) {
     return state.currentLevel;
   }
-  // 2. Check nickname tag [on warn N]
-  const nick = member.nickname || member.displayName || '';
-  const match = nick.match(/\[on warn (\d+)\]$/i);
-  if (match) {
-    return parseInt(match[1], 10);
-  }
-  // 3. Check Warned role
+  // 2. Check Warned role (fallback only if assigned by moderation system)
   const hasWarnedRole = member.roles?.cache?.some(r => r.name.toLowerCase() === 'warned');
   if (hasWarnedRole) {
     if (state && state.currentLevel) return state.currentLevel;
