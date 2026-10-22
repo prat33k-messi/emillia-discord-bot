@@ -1289,7 +1289,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
             `**Staff Role Permissions:**\n` +
             `• **Shogun**: Full administrative and server authority.\n` +
             `• **Community Admins**: Full moderation access, jail/unjail, permanent warn resets.\n` +
-            `• **Supervisor**: Intermediate staff management, moderation, jail/unjail.\n` +
+            `• **Supervisor**: Intermediate staff management, moderation, ban/kick, jail/unjail.\n` +
             `• **Senior Moderator**: Mute, warn, jail/unjail access.\n` +
             `• **Moderator**: Mute and warn permissions.`
           )
@@ -4527,8 +4527,8 @@ client.on('messageCreate', async (message) => {
       }
 
       // 2. Action-Specific Role Hierarchy & Permission Checks
-      if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 4) {
-        await message.reply("Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to banish members from Anipedia! ❄️");
+      if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 3) {
+        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to banish members from Anipedia! ❄️");
         return;
       }
 
@@ -6216,8 +6216,8 @@ client.on('interactionCreate', async (interaction) => {
     // 7. /ban
     // ------------------------------------------
     if (commandName === 'ban') {
-      if (modTier < 4) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to ban members! ❄️", ephemeral: true });
+      if (modTier < 3) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to ban members! ❄️", ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
@@ -6300,8 +6300,8 @@ client.on('interactionCreate', async (interaction) => {
     // 8. /unban
     // ------------------------------------------
     if (commandName === 'unban') {
-      if (modTier < 4) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to unban members! ❄️", ephemeral: true });
+      if (modTier < 3) {
+        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to unban members! ❄️", ephemeral: true });
         return;
       }
       const targetId = options.getString('user_id').trim();
