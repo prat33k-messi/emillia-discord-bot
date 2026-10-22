@@ -1212,9 +1212,9 @@ const userLastRulesInteraction = new Map();
 function createRulesPanelPayload() {
   const rulesEmbed = new EmbedBuilder()
     .setColor(0x8B0000)
-    .setTitle('✦ ━━━━━━ 𝐀𝐧𝐢𝐏𝐞𝐝𝐢𝐚 𝐑𝐮𝐥𝐞𝐬 ━━━━━━ ✦')
+    .setTitle('━━━━━━ ✦ ANIPEDIA RULES ✦ ━━━━━━')
     .setDescription(
-      `⋆｡°✩ **Welcome to AniPedia** ✩°｡⋆\n\n` +
+      `━━━━━━ ✦ WELCOME TO ANIPEDIA ✦ ━━━━━━\n\n` +
       `To keep AniPedia safe, respectful and enjoyable for everyone, all members are expected to follow the rules below.\n\n` +
       `▸ Ignorance of the rules is not an excuse.\n\n` +
       `▸ Staff decisions are final.\n\n` +
@@ -1292,22 +1292,22 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_warn_system':
       return new EmbedBuilder()
         .setColor(0xED4245)
-        .setTitle('━━━━━━ ✦ ⚠️ WARN SYSTEM ✦ ━━━━━━')
+        .setTitle('━━━━━━ ✦ WARN SYSTEM ✦ ━━━━━━')
         .setDescription(
           `**AniPedia Tiered Warning Ladder**\n\n` +
           `• **Level 1** — Nickname tag \`[on warn 1]\`\n` +
-          `  *Duration: 24 hours* (No channel restrictions)\n\n` +
+          `  Duration: **24 hours** (No channel restrictions)\n\n` +
           `• **Level 2** — Member Restrictions Applied\n` +
-          `  *Duration: 3 days* (No media/links/emojis/stickers, nickname locked)\n\n` +
+          `  Duration: **3 days** (No media/links/emojis/stickers, nickname locked)\n\n` +
           `• **Level 3** — Timeout + Level 2 Restrictions\n` +
-          `  *Duration: 7 days* (\`1 hour\` server timeout + Level 2 restrictions)\n\n` +
+          `  Duration: **7 days** (\`1 hour\` server timeout + Level 2 restrictions)\n\n` +
           `• **Level 4** — Extended Timeout + Level 2 Restrictions\n` +
-          `  *Duration: 7 days* (\`1 day\` server timeout + Level 2 restrictions)\n\n` +
+          `  Duration: **7 days** (\`1 day\` server timeout + Level 2 restrictions)\n\n` +
           `• **Level 5** — Maximum Timeout\n` +
-          `  *Duration: 1 week* (\`1 week\` server timeout + nickname tag)\n\n` +
+          `  Duration: **1 week** (\`1 week\` server timeout + nickname tag)\n\n` +
           `• **Level 6** — Permanent Server Ban\n` +
-          `  *Permanent exile from AniPedia*\n\n` +
-          `*Warnings accumulate upon repeated rulebreaks and decay automatically once their active duration expires.*`
+          `  Permanent exile from AniPedia\n\n` +
+          `Warnings accumulate upon repeated rulebreaks and decay automatically once their active duration expires.`
         )
         .setFooter(footerObj)
         .setTimestamp();
@@ -1363,7 +1363,7 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_zero_tolerance':
       return new EmbedBuilder()
         .setColor(0x992D22)
-        .setTitle('━━━━━ ✦ ZERO-TOLERANCE OFFENSES ✦ ━━━━━')
+        .setTitle('━━━━━━ ✦ ZERO-TOLERANCE OFFENSES ✦ ━━━━━━')
         .setDescription(
           `• Racist, homophobic, sexist or other discriminatory behavior\n` +
           `• Organizing, joining or encouraging raids against communities\n` +
@@ -1379,7 +1379,7 @@ function getRulesOptionEmbed(selected, guild) {
     case 'rules_mod_policy':
       return new EmbedBuilder()
         .setColor(0xFEE75C)
-        .setTitle('━━━━━━ ⚖ MODERATION POLICY ⚖ ━━━━━━')
+        .setTitle('━━━━━━ ✦ MODERATION POLICY ✦ ━━━━━━')
         .setDescription(
           `• Staff may adjust punishments based on severity, frequency and context of an offense\n` +
           `• Repeated violations may result in stricter penalties\n` +
