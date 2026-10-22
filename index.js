@@ -1207,6 +1207,7 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 // PERSISTENT RULES PANEL
 // ==========================================
 const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
+const APPEAL_CHANNEL_ID = null; // Set to channel ID string (e.g. '123456789012345678') to enable clickable channel mention
 const userLastRulesInteraction = new Map();
 
 function createRulesPanelPayload() {
@@ -1286,6 +1287,7 @@ function createRulesPanelPayload() {
 
 function getRulesOptionEmbed(selected, guild) {
   const footerObj = { text: 'Stay respectful. Keep the peace. Enjoy the community.' };
+  const appealChannelRef = APPEAL_CHANNEL_ID ? `<#${APPEAL_CHANNEL_ID}>` : 'appeal channel';
 
   switch (selected) {
     case 'rules_warn_system':
@@ -1306,7 +1308,8 @@ function getRulesOptionEmbed(selected, guild) {
           `  Duration: **1 week** (\`1 week\` server timeout + nickname tag)\n\n` +
           `• **Level 6** — Permanent Server Ban\n` +
           `  Permanent exile from AniPedia\n\n` +
-          `Warnings accumulate upon repeated rulebreaks and decay automatically once their active duration expires.`
+          `Warnings accumulate upon repeated rulebreaks and decay automatically once their active duration expires.\n\n` +
+          `**Appeals:** To appeal a warning or punishment, go to the ${appealChannelRef} in AniPedia.`
         )
         .setFooter(footerObj)
         .setTimestamp();
@@ -1383,7 +1386,7 @@ function getRulesOptionEmbed(selected, guild) {
           `• Staff may adjust punishments based on severity, frequency and context of an offense\n\n` +
           `• Repeated violations may result in stricter penalties\n\n` +
           `• Evading a punishment may lead to further action\n\n` +
-          `• Appeals for eligible punishments must go through the official appeal form\n\n` +
+          `• Appeals for eligible punishments must go through the official ${appealChannelRef} in AniPedia\n\n` +
           `• Respect staff decisions and use the proper channels to raise concerns\n\n` +
           `✦ By remaining in AniPedia, you agree to follow these rules.`
         )
