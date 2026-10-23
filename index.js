@@ -213,11 +213,7 @@ const slashCommandsData = [
 
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Show help and available commands'),
-
-  new SlashCommandBuilder()
-    .setName('staff')
-    .setDescription('Post the persistent AniPedia staff directory panel (Staff Only)')
+    .setDescription('Show help and available commands')
 ];
 
 client.once('ready', async () => {
@@ -4749,7 +4745,7 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands', 'staff'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -5542,19 +5538,6 @@ client.on('messageCreate', async (message) => {
         channel: message.channel,
         replyFn: makeReplyFn(message.channel)
       });
-      return;
-    }
-
-    // --- Persistent Staff Directory Panel Command (<staff) ---
-    const isStaffCmd = words[0] === 'staff' || cleanQuery === 'staff' || lowerQuery === 'staff' || lowerQuery.startsWith('staff');
-    if (isStaffCmd) {
-      const modTier = getMemberTier(message.member);
-      if (modTier === 0) {
-        await message.reply("Mou! 🌸 Only server staff can post the staff directory panel! ❄️");
-        return;
-      }
-      const payload = createStaffPanelPayload();
-      await message.channel.send(payload);
       return;
     }
 
@@ -6983,20 +6966,6 @@ client.on('interactionCreate', async (interaction) => {
         interaction: interaction,
         replyFn: makeReplyFn(interaction)
       });
-      return;
-    }
-
-    // ------------------------------------------
-    // 18. /staff
-    // ------------------------------------------
-    if (commandName === 'staff') {
-      if (modTier === 0) {
-        await interaction.reply({ content: "Mou! 🌸 Only server staff can post the staff directory panel! ❄️", ephemeral: true });
-        return;
-      }
-      const payload = createStaffPanelPayload();
-      await channel.send(payload);
-      await interaction.reply({ content: "Staff directory panel posted successfully! 🌸", ephemeral: true });
       return;
     }
   } catch (err) {
