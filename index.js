@@ -506,12 +506,12 @@ function getMemberTier(member) {
       return 2;
     }
 
-    // Tier 1: Junior Moderator / Moderator
-    if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.MODERATOR) ||
-        member.roles.cache.some(r => {
-          const n = r.name.toLowerCase().trim();
-          return n === 'moderator' || n === 'junior moderator' || n === 'jr moderator' || n === 'jr. moderator' || n === 'junior mod';
-        })) {
+    // Tier 1: Moderator (Junior Moderators have 0 moderation permissions)
+    if (member.roles.cache.some(r => {
+      const n = r.name.toLowerCase().trim();
+      if (n.includes('junior') || n.includes('jr')) return false;
+      return (OFFICIAL_STAFF_ROLE_IDS.MODERATOR && r.id === OFFICIAL_STAFF_ROLE_IDS.MODERATOR) || n === 'moderator' || n === 'mod';
+    })) {
       return 1;
     }
   }
@@ -3421,7 +3421,7 @@ async function executeWarn(source, ctx, targetMember, reason) {
   const modTier = getMemberTier(member);
 
   if (modTier === 0) {
-    await replyFn({ content: "Mou! 🌸 Only staff (Shogun, Community Admins, Supervisor, Senior Moderator, Moderator) can issue warnings! ❄️", ephemeral: true });
+    await replyFn({ description: `<@${user.id}> • You can't ask me to do that! Only server staff can use moderation commands!`, ephemeral: true });
     return;
   }
 
@@ -3430,15 +3430,13 @@ async function executeWarn(source, ctx, targetMember, reason) {
     return;
   }
   if (targetMember.id === user.id) {
-    await replyFn({ content: "Mou! 🌸 You cannot warn yourself! ❄️", ephemeral: true });
+    await replyFn({ description: `<@${user.id}> • You cannot perform moderation actions on yourself!`, ephemeral: true });
     return;
   }
 
   const targetTier = getMemberTier(targetMember);
   if (targetTier >= modTier) {
-    const targetRankName = getTierName(targetTier, targetMember);
-    const modRankName = getTierName(modTier, member);
-    await replyFn({ content: `Mou! 🌸 You cannot warn <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    await replyFn({ description: `<@${user.id}> • You can't warn authorities of same rank or above than yours`, ephemeral: true });
     return;
   }
 
@@ -3762,9 +3760,7 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
 
   const targetTier = getMemberTier(targetMember);
   if (targetTier >= modTier) {
-    const targetRankName = getTierName(targetTier, targetMember);
-    const modRankName = getTierName(modTier, member);
-    await replyFn({ content: `Mou! 🌸 You cannot modify warnings for <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    await replyFn({ description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
     return;
   }
 
@@ -3884,9 +3880,7 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
 
   const targetTier = getMemberTier(targetMember);
   if (targetTier >= modTier) {
-    const targetRankName = getTierName(targetTier, targetMember);
-    const modRankName = getTierName(modTier, member);
-    await replyFn({ content: `Mou! 🌸 You cannot modify warnings for <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    await replyFn({ description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
     return;
   }
 
@@ -4157,9 +4151,7 @@ async function executeJail(source, ctx, targetMember, reason) {
 
   const targetTier = getMemberTier(targetMember);
   if (targetTier >= modTier) {
-    const targetRankName = getTierName(targetTier, targetMember);
-    const modRankName = getTierName(modTier, member);
-    await replyFn({ content: `Mou! 🌸 You cannot jail <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+    await replyFn({ description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
     return;
   }
 
@@ -4924,33 +4916,33 @@ client.on('messageCreate', async (message) => {
 
       // 1. Staff Authorization Check
       if (modTier === 0) {
-        await message.reply("Mou! 🌸 You can't ask me to do that! Only server staff (Shogun, Community Admins, Supervisor, Senior Moderator, Moderator) can use moderation commands! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • You can't ask me to do that! Only server staff can use moderation commands!`);
         return;
       }
 
       // 2. Action-Specific Role Hierarchy & Permission Checks
       if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 3) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to banish members from Anipedia! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to banish members from Anipedia!`);
         return;
       }
 
       if (actionKeyword === 'clearwarnperm' && modTier < 4) {
-        await message.reply("Mou! 🌸 Only 'Shogun' and 'Community Admins' have permission to permanently reset warnings! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • Only 'Shogun' and 'Community Admins' have permission to permanently reset warnings!`);
         return;
       }
 
       if (actionKeyword === 'kick' && modTier < 3) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members!`);
         return;
       }
 
       if (actionKeyword === 'clearwarntemp' && modTier < 3) {
-        await message.reply("Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to lift warning restrictions! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to lift warning restrictions!`);
         return;
       }
 
       if ((actionKeyword === 'jail' || actionKeyword === 'unjail') && modTier < 2) {
-        await message.reply("Mou! 🌸 Only 'Senior Moderator', 'Supervisor', 'Community Admins', and 'Shogun' have permission to use the jail feature! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • Only 'Senior Moderator', 'Supervisor', 'Community Admins', and 'Shogun' have permission to use the jail feature!`);
         return;
       }
 
@@ -4965,25 +4957,23 @@ client.on('messageCreate', async (message) => {
       
       // We need a target member for everything except unban and purge
       if (actionKeyword !== 'unban' && actionKeyword !== 'purge' && !targetMember) {
-        await message.reply(`Who should I perform this action on? Please mention the user, like this: \`<${actionKeyword} @user <reason>\`! 🌸`);
+        await sendContainer(message, `<@${message.author.id}> • Who should I perform this action on? Please mention the user: \`<${actionKeyword} @user <reason>\``);
         return;
       }
 
       // 3. Target Hierarchy Validation
       if (targetMember) {
         if (targetMember.id === message.author.id) {
-          await message.reply("Mou! 🌸 You cannot perform moderation actions on yourself! ❄️");
+          await sendContainer(message, `<@${message.author.id}> • You cannot perform moderation actions on yourself!`);
           return;
         }
 
         const targetTier = getMemberTier(targetMember);
         if (targetTier >= modTier) {
-          const targetRankName = getTierName(targetTier, targetMember);
-          const modRankName = getTierName(modTier, message.member);
-          if (targetTier === modTier) {
-            await message.reply(`Mou! 🌸 You cannot moderate <@${targetMember.id}> because they hold an equal rank (**${targetRankName}**) to you! ❄️`);
+          if (actionKeyword === 'warn') {
+            await sendContainer(message, `<@${message.author.id}> • You can't warn authorities of same rank or above than yours`);
           } else {
-            await message.reply(`Mou! 🌸 You cannot moderate <@${targetMember.id}>! Their rank (**${targetRankName}**) is higher than yours (**${modRankName}**)! ❄️`);
+            await sendContainer(message, `<@${message.author.id}> • You can't moderate authorities of same rank or above than yours`);
           }
           return;
         }
@@ -6428,9 +6418,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const targetTier = getMemberTier(targetMember);
       if (targetTier >= modTier) {
-        const targetRankName = getTierName(targetTier);
-        const modRankName = getTierName(modTier);
-        await interaction.reply({ content: `Mou! 🌸 You cannot timeout <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
         return;
       }
 
@@ -6592,9 +6580,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const targetTier = getMemberTier(targetMember);
       if (targetTier >= modTier) {
-        const targetRankName = getTierName(targetTier, targetMember);
-        const modRankName = getTierName(modTier, member);
-        await interaction.reply({ content: `Mou! 🌸 You cannot kick <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
         return;
       }
 
@@ -6676,9 +6662,7 @@ client.on('interactionCreate', async (interaction) => {
 
       const targetTier = getMemberTier(targetMember);
       if (targetTier >= modTier) {
-        const targetRankName = getTierName(targetTier, targetMember);
-        const modRankName = getTierName(modTier, member);
-        await interaction.reply({ content: `Mou! 🌸 You cannot ban <@${targetMember.id}>! Their rank (**${targetRankName}**) is equal to or higher than yours (**${modRankName}**)! ❄️`, ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
         return;
       }
 
