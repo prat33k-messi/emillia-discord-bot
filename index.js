@@ -1418,7 +1418,7 @@ function createStaffPanelPayload() {
       `Welcome to the official staff directory of AniPedia. Our team is dedicated to keeping the community safe, friendly, and enjoyable for all members.\n\n` +
       `▸ Staff decisions are made in accordance with server guidelines and should be respected.\n\n` +
       `▸ Higher tiers supervise lower tiers to ensure fair and balanced moderation.\n\n` +
-      `▸ For reports or concerns, please reach out to the appropriate staff tier or open a ticket in <#${APPEAL_CHANNEL_ID}>.\n\n` +
+      `▸ For reports or concerns, please reach out to the appropriate staff tier, or open <#${APPEAL_CHANNEL_ID}> and tag higher authorities.\n\n` +
       `✦ Select a role below to view its duties, administrative powers, and commands.`
     )
     .setFooter({ text: 'Stay respectful. Keep the peace. Enjoy the community.' });
