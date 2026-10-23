@@ -213,7 +213,11 @@ const slashCommandsData = [
 
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Show help and available commands')
+    .setDescription('Show help and available commands'),
+
+  new SlashCommandBuilder()
+    .setName('staff')
+    .setDescription('Post the persistent AniPedia staff directory panel (Staff Only)')
 ];
 
 client.once('ready', async () => {
@@ -1391,6 +1395,213 @@ function getRulesOptionEmbed(selected, guild) {
           `• Appeals for eligible punishments must go through the official ${appealChannelRef} in AniPedia\n\n` +
           `• Respect staff decisions and use the proper channels to raise concerns\n\n` +
           `✦ By remaining in AniPedia, you agree to follow these rules.`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    default:
+      return null;
+  }
+}
+
+// ==========================================
+// PERSISTENT STAFF DIRECTORY PANEL
+// ==========================================
+const STAFF_BANNER_PATH = path.join(__dirname, 'assets', 'staff_banner.png');
+const userLastStaffInteraction = new Map();
+
+function createStaffPanelPayload() {
+  const staffEmbed = new EmbedBuilder()
+    .setColor(0x6C5CE7)
+    .setDescription(
+      `# ANIPEDIA STAFF DIRECTORY\n\n` +
+      `Welcome to the official staff directory of AniPedia. Our team is dedicated to keeping the community safe, friendly, and enjoyable for all members.\n\n` +
+      `▸ Staff decisions are made in accordance with server guidelines and should be respected.\n\n` +
+      `▸ Higher tiers supervise lower tiers to ensure fair and balanced moderation.\n\n` +
+      `▸ For reports or concerns, please reach out to the appropriate staff tier or open a ticket in <#${APPEAL_CHANNEL_ID}>.\n\n` +
+      `✦ Select a role below to view its duties, administrative powers, and commands.`
+    )
+    .setFooter({ text: 'Stay respectful. Keep the peace. Enjoy the community.' });
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId('anipedia_staff_select')
+    .setPlaceholder('✦ Click to check staff roles')
+    .addOptions([
+      {
+        label: 'Junior Moderator',
+        description: 'Chat monitoring & community assistance',
+        value: 'staff_junior_moderator',
+        emoji: '🟢'
+      },
+      {
+        label: 'Moderator',
+        description: 'Warning ladder, timeouts & chat purges',
+        value: 'staff_moderator',
+        emoji: '🔵'
+      },
+      {
+        label: 'Senior Moderator',
+        description: 'Jail isolation, oversight & chat enforcement',
+        value: 'staff_senior_moderator',
+        emoji: '🔴'
+      },
+      {
+        label: 'Supervisor',
+        description: 'Bans, kicks, restriction management & supervision',
+        value: 'staff_supervisor',
+        emoji: '🟢'
+      },
+      {
+        label: 'Community Admin',
+        description: 'Full server administration & warning resets',
+        value: 'staff_community_admin',
+        emoji: '🟣'
+      }
+    ]);
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+
+  const bannerEmbed = new EmbedBuilder()
+    .setColor(0x6C5CE7)
+    .setImage('attachment://staff_banner.png');
+
+  const hasBanner = fs.existsSync(STAFF_BANNER_PATH);
+
+  const payload = {
+    embeds: hasBanner ? [bannerEmbed, staffEmbed] : [staffEmbed],
+    components: [row]
+  };
+
+  if (hasBanner) {
+    payload.files = [{ attachment: STAFF_BANNER_PATH, name: 'staff_banner.png' }];
+  }
+
+  return payload;
+}
+
+function getStaffOptionEmbed(selected, guild) {
+  const footerObj = { text: 'Stay respectful. Keep the peace. Enjoy the community.' };
+
+  switch (selected) {
+    case 'staff_junior_moderator':
+      return new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setDescription(
+          `## JUNIOR MODERATOR\n\n` +
+          `• First-tier staff members learning moderation protocols and assisting the community\n\n` +
+          `• Monitor public text channels and voice chats for rule infractions and toxic behavior\n\n` +
+          `• Inform higher moderation staff when rules are broken or disputes escalate\n\n` +
+          `• Help new members navigate channels, understand guidelines, and get roles\n\n` +
+          `**✦ Administrative Powers:**\n` +
+          `• Observation & reporting role with no direct punishment powers\n` +
+          `• Serves as the eyes and ears of the staff team in active chats\n\n` +
+          `**✦ Available Commands:**\n` +
+          `• \`<warns [@user]\` • View a member's warning history\n` +
+          `• \`<help\` • Open the interactive command guide`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'staff_moderator':
+      return new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setDescription(
+          `## MODERATOR\n\n` +
+          `• Active server moderators handling frontline enforcement and chat disputes\n\n` +
+          `• Enforce the AniPedia rules across text channels, voice calls, and threads\n\n` +
+          `• Issue official tiered warnings and apply timeouts to disruptive members\n\n` +
+          `• Clear spam, inappropriate content, and purge compromised messages\n\n` +
+          `**✦ Administrative Powers:**\n` +
+          `• Tiered warning issuance (Levels 1–5)\n` +
+          `• Temporary member timeouts (mute)\n` +
+          `• Bulk chat message purging\n\n` +
+          `**✦ Available Commands:**\n` +
+          `• \`<warn @user [reason]\` • Issue official tiered warning\n` +
+          `• \`<timeout @user <duration> [reason]\` • Temporarily timeout member\n` +
+          `• \`<untimeout @user\` • Lift member timeout early\n` +
+          `• \`<purge <amount> [@user]\` • Bulk delete chat messages\n` +
+          `• \`<warns [@user]\` • Inspect member warning status`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'staff_senior_moderator':
+      return new EmbedBuilder()
+        .setColor(0xED4245)
+        .setDescription(
+          `## SENIOR MODERATOR\n\n` +
+          `• Experienced moderation staff overseeing chat operations and complex situations\n\n` +
+          `• Guide and assist Junior Moderators and Moderators during active discussions\n\n` +
+          `• Isolate severely disruptive individuals using the server Jail facility\n\n` +
+          `• Handle intermediate escalations and manage sensitive moderation issues\n\n` +
+          `**✦ Administrative Powers:**\n` +
+          `• Full Moderator capabilities (Warn, Timeout, Purge)\n` +
+          `• High-security member isolation via Jail / Unjail\n` +
+          `• Escalated dispute resolution\n\n` +
+          `**✦ Available Commands:**\n` +
+          `• \`<jail @user [reason]\` • Confine member to isolated jail\n` +
+          `• \`<unjail @user\` • Release member from jail\n` +
+          `• \`<warn @user [reason]\` • Issue official tiered warning\n` +
+          `• \`<timeout @user <duration> [reason]\` • Temporarily timeout member\n` +
+          `• \`<untimeout @user\` • Lift member timeout early\n` +
+          `• \`<purge <amount> [@user]\` • Bulk delete chat messages\n` +
+          `• \`<warns [@user]\` • Inspect member warning record`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'staff_supervisor':
+      return new EmbedBuilder()
+        .setColor(0x27AE60)
+        .setDescription(
+          `## SUPERVISOR\n\n` +
+          `• Department supervisors managing staff operations and high-level enforcement\n\n` +
+          `• Coordinate moderation shifts, verify warning ladder accuracy, and assist admins\n\n` +
+          `• Authorize server expulsions (Kicks) and banishments (Bans) for severe offenses\n\n` +
+          `• Review punishment appeals and manage temporary restriction removals\n\n` +
+          `**✦ Administrative Powers:**\n` +
+          `• Server expulsion: Ban and Unban authorization\n` +
+          `• Server removal: Kick authorization\n` +
+          `• Lift active warning restrictions (\`clearwarntemp\`)\n` +
+          `• Full Jail and Moderator command suite\n\n` +
+          `**✦ Available Commands:**\n` +
+          `• \`<ban @user [reason]\` • Banish member from the server\n` +
+          `• \`<unban <user_id> [reason]\` • Pardon and unban a member\n` +
+          `• \`<kick @user [reason]\` • Expel member from the server\n` +
+          `• \`<clearwarntemp @user [reason]\` • Lift active warn restrictions\n` +
+          `• \`<jail @user [reason]\` • Confine member to isolated jail\n` +
+          `• \`<unjail @user\` • Release member from jail\n` +
+          `• \`<warn @user [reason]\` • Issue official tiered warning\n` +
+          `• \`<timeout @user <duration> [reason]\` • Temporarily timeout member\n` +
+          `• \`<purge <amount> [@user]\` • Bulk delete chat messages`
+        )
+        .setFooter(footerObj)
+        .setTimestamp();
+
+    case 'staff_community_admin':
+      return new EmbedBuilder()
+        .setColor(0x9B59B6)
+        .setDescription(
+          `## COMMUNITY ADMIN\n\n` +
+          `• Executive server administration overseeing all staff and community systems\n\n` +
+          `• Highest staff authority below the Shogun and Server Ownership\n\n` +
+          `• Supervise overall server safety, staff conduct, and appeal decisions\n\n` +
+          `• Permanent warning resets and structural moderation management\n\n` +
+          `**✦ Administrative Powers:**\n` +
+          `• Supreme moderation clearance: All bans, kicks, jailing, timeouts & warns\n` +
+          `• Permanent warning history wipe (\`clearwarnperm\`)\n` +
+          `• Staff hierarchy management & final escalation authority\n\n` +
+          `**✦ Available Commands:**\n` +
+          `• \`<clearwarnperm @user [reason]\` • Permanently wipe warning history\n` +
+          `• \`<clearwarntemp @user [reason]\` • Lift active warn restrictions\n` +
+          `• \`<ban @user [reason]\` • Banish member from the server\n` +
+          `• \`<unban <user_id> [reason]\` • Pardon and unban a member\n` +
+          `• \`<kick @user [reason]\` • Expel member from the server\n` +
+          `• \`<jail @user [reason]\` • Confine member to isolated jail\n` +
+          `• \`<unjail @user\` • Release member from jail\n` +
+          `• \`<warn @user [reason]\` • Issue official tiered warning\n` +
+          `• \`<timeout @user <duration> [reason]\` • Temporarily timeout member\n` +
+          `• \`<purge <amount> [@user]\` • Bulk delete chat messages`
         )
         .setFooter(footerObj)
         .setTimestamp();
@@ -4538,7 +4749,7 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands', 'staff'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -5334,6 +5545,19 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    // --- Persistent Staff Directory Panel Command (<staff) ---
+    const isStaffCmd = words[0] === 'staff' || cleanQuery === 'staff' || lowerQuery === 'staff' || lowerQuery.startsWith('staff');
+    if (isStaffCmd) {
+      const modTier = getMemberTier(message.member);
+      if (modTier === 0) {
+        await message.reply("Mou! 🌸 Only server staff can post the staff directory panel! ❄️");
+        return;
+      }
+      const payload = createStaffPanelPayload();
+      await message.channel.send(payload);
+      return;
+    }
+
     if (lowerQuery === 'ping') {
       const latency = Date.now() - message.createdTimestamp;
       await message.reply(`🏓 Pong! Latency is **${latency}ms**. I'm working hard! ⚡🌸`);
@@ -6021,6 +6245,26 @@ client.on('interactionCreate', async (interaction) => {
     } else {
       await interaction.reply({ content: "Unknown category selected.", ephemeral: true });
       userLastRulesInteraction.set(interaction.user.id, interaction);
+    }
+
+    if (prev) {
+      prev.deleteReply().catch(() => {});
+    }
+    return;
+  }
+
+  // Persistent AniPedia Staff Directory Panel Dropdown
+  if (interaction.isStringSelectMenu() && interaction.customId === 'anipedia_staff_select') {
+    const selected = interaction.values[0];
+    const embed = getStaffOptionEmbed(selected, interaction.guild);
+    const prev = userLastStaffInteraction.get(interaction.user.id);
+
+    if (embed) {
+      await interaction.reply({ embeds: [embed], ephemeral: true });
+      userLastStaffInteraction.set(interaction.user.id, interaction);
+    } else {
+      await interaction.reply({ content: "Unknown role selected.", ephemeral: true });
+      userLastStaffInteraction.set(interaction.user.id, interaction);
     }
 
     if (prev) {
@@ -6739,6 +6983,20 @@ client.on('interactionCreate', async (interaction) => {
         interaction: interaction,
         replyFn: makeReplyFn(interaction)
       });
+      return;
+    }
+
+    // ------------------------------------------
+    // 18. /staff
+    // ------------------------------------------
+    if (commandName === 'staff') {
+      if (modTier === 0) {
+        await interaction.reply({ content: "Mou! 🌸 Only server staff can post the staff directory panel! ❄️", ephemeral: true });
+        return;
+      }
+      const payload = createStaffPanelPayload();
+      await channel.send(payload);
+      await interaction.reply({ content: "Staff directory panel posted successfully! 🌸", ephemeral: true });
       return;
     }
   } catch (err) {
