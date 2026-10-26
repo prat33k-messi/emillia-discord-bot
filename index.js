@@ -752,7 +752,8 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     if (typeof target === 'function') {
       return await target(contentOrOptions);
     } else if (target.reply && typeof target.reply === 'function') {
-      if (target.replied || target.deferred) return await target.followUp(contentOrOptions);
+      if (target.deferred && !target.replied) return await target.editReply(contentOrOptions);
+      if (target.replied) return await target.followUp(contentOrOptions);
       return await target.reply(contentOrOptions);
     } else if (target.send && typeof target.send === 'function') {
       return await target.send(contentOrOptions);
@@ -765,7 +766,8 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     if (typeof target === 'function') {
       return await target(payload);
     } else if (target.reply && typeof target.reply === 'function') {
-      if (target.replied || target.deferred) return await target.followUp(payload);
+      if (target.deferred && !target.replied) return await target.editReply(payload);
+      if (target.replied) return await target.followUp(payload);
       return await target.reply(payload);
     } else if (target.send && typeof target.send === 'function') {
       return await target.send(payload);
@@ -786,7 +788,8 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     if (typeof target === 'function') {
       return await target(sendOpts);
     } else if (target.reply && typeof target.reply === 'function') {
-      if (target.replied || target.deferred) return await target.followUp(sendOpts);
+      if (target.deferred && !target.replied) return await target.editReply(sendOpts);
+      if (target.replied) return await target.followUp(sendOpts);
       return await target.reply(sendOpts);
     } else if (target.send && typeof target.send === 'function') {
       return await target.send(sendOpts);
@@ -6450,6 +6453,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const durationInfo = parseDuration(durationStr);
+      await interaction.deferReply();
 
       try {
         await targetMember.timeout(durationInfo.ms, reason);
@@ -6614,6 +6618,8 @@ client.on('interactionCreate', async (interaction) => {
       const targetId = targetMember.id;
       const targetTag = targetMember.user.tag;
 
+      await interaction.deferReply();
+
       try {
         const dmEmbed = new EmbedBuilder()
           .setTitle(`${toSmallCaps('Expulsion Notice')}`)
@@ -6675,7 +6681,34 @@ client.on('interactionCreate', async (interaction) => {
         await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to ban members! ❄️", ephemeral: true });
         return;
       }
-      const targetMember = options.getMember('user');
+
+      const targetUser = options.getUser('user');
+      let targetMember = options.getMember('user');
+      if (!targetMember && targetUser && guild) {
+        targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
+      }
+
+      if (!targetUser && !targetMember) {
+        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        return;
+      }
+
+      const targetId = targetMember ? targetMember.id : targetUser.id;
+      const targetTag = targetMember ? targetMember.user.tag : targetUser.tag;
+
+      if (targetId === user.id) {
+        await interaction.reply({ content: "Mou! 🌸 You cannot ban yourself! ❄️", ephemeral: true });
+        return;
+      }
+
+      if (targetMember) {
+        const targetTier = getMemberTier(targetMember);
+        if (targetTier >= modTier) {
+          await sendContainer(interaction, { description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
+          return;
+        }
+      }
+
       let reason = options.getString('reason') || 'No reason specified';
       const evidenceAttachment = options.getAttachment('evidence');
       let evidenceUrl = evidenceAttachment?.url || null;
@@ -6688,23 +6721,8 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      if (!targetMember) {
-        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
-        return;
-      }
-      if (targetMember.id === user.id) {
-        await interaction.reply({ content: "Mou! 🌸 You cannot ban yourself! ❄️", ephemeral: true });
-        return;
-      }
-
-      const targetTier = getMemberTier(targetMember);
-      if (targetTier >= modTier) {
-        await sendContainer(interaction, { description: `<@${user.id}> • You can't moderate authorities of same rank or above than yours`, ephemeral: true });
-        return;
-      }
-
-      const targetId = targetMember.id;
-      const targetTag = targetMember.user.tag;
+      // Defer interaction reply immediately so Discord never times out
+      await interaction.deferReply();
 
       try {
         const dmEmbed = new EmbedBuilder()
@@ -6721,12 +6739,20 @@ client.on('interactionCreate', async (interaction) => {
         if (evidenceUrl) {
           dmEmbed.setImage(evidenceUrl);
         }
-        await sendContainer(targetMember, dmEmbed).catch(() => {});
+        if (targetMember) {
+          await sendContainer(targetMember, dmEmbed).catch(() => {});
+        } else {
+          await sendContainer(targetUser, dmEmbed).catch(() => {});
+        }
       } catch (err) {}
 
       try {
         const deletedCount = await deleteUserRecentMessages(channel, targetId, 15);
-        await targetMember.ban({ reason, deleteMessageSeconds: 86400 });
+        if (targetMember) {
+          await targetMember.ban({ reason, deleteMessageSeconds: 86400 });
+        } else {
+          await guild.members.ban(targetId, { reason, deleteMessageSeconds: 86400 });
+        }
 
         if (db) {
           await db.collection('moderation_logs').add({
@@ -6770,7 +6796,11 @@ client.on('interactionCreate', async (interaction) => {
         logToEmilliaLog(guild, 'ban', targetTag, targetId, user.tag, reason, logFields);
       } catch (err) {
         console.error("Ban slash command error:", err);
-        await interaction.reply({ content: "Failed to ban this member! 😰", ephemeral: true });
+        if (err.code === 50013) {
+          await sendContainer(interaction, { description: `<@${user.id}> • Mou! 🌸 I couldn't ban this member because my role is placed below their role in Server Settings -> Roles! Please drag my role higher up! ❄️` });
+        } else {
+          await sendContainer(interaction, { content: "Failed to ban this member! 😰" });
+        }
       }
       return;
     }
