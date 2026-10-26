@@ -162,7 +162,8 @@ const slashCommandsData = [
     .setName('ban')
     .setDescription('Permanently ban a member from the server')
     .addUserOption(opt => opt.setName('user').setDescription('The member to ban').setRequired(true))
-    .addStringOption(opt => opt.setName('reason').setDescription('Reason for the ban').setRequired(false)),
+    .addStringOption(opt => opt.setName('reason').setDescription('Reason for the ban').setRequired(false))
+    .addAttachmentOption(opt => opt.setName('evidence').setDescription('Optional screenshot/evidence image').setRequired(false)),
 
   new SlashCommandBuilder()
     .setName('unban')
@@ -5341,10 +5342,20 @@ client.on('messageCreate', async (message) => {
         return;
 
       } else if (actionKeyword === 'ban') {
-        const reason = getReason(cleanQuery, 'ban', targetMember);
+        let reason = getReason(cleanQuery, 'ban', targetMember);
         const targetTag = targetMember.user.tag;
         const targetId = targetMember.id;
         const { verify, dot } = await getModEmojis(message.guild);
+
+        // Detect attached screenshot/evidence or image link
+        let evidenceUrl = message.attachments?.first()?.url || null;
+        if (!evidenceUrl) {
+          const urlMatch = reason.match(/(https?:\/\/[^\s]+(?:\.png|\.jpg|\.jpeg|\.gif|\.webp)[^\s]*)/i);
+          if (urlMatch) {
+            evidenceUrl = urlMatch[1];
+            reason = reason.replace(urlMatch[1], '').trim();
+          }
+        }
 
         // Try to DM before banning
         let dmSent = true;
@@ -5354,10 +5365,15 @@ client.on('messageCreate', async (message) => {
             .setDescription(
               `<@${targetId}>\n` +
               `${toSmallCaps('By')} • <@${message.author.tag}>\n` +
-              `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}`
+              `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}` +
+              (evidenceUrl ? `\n${toSmallCaps('Evidence')} • Attached below` : '')
             )
             .setTimestamp()
             .setFooter({ text: toSmallCaps('AniPedia') });
+
+          if (evidenceUrl) {
+            dmEmbed.setImage(evidenceUrl);
+          }
           await sendContainer(targetMember, dmEmbed);
         } catch (err) {
           dmSent = false;
@@ -5377,6 +5393,7 @@ client.on('messageCreate', async (message) => {
               moderatorId: message.author.id,
               moderatorTag: message.author.tag,
               reason: reason,
+              evidenceUrl: evidenceUrl || null,
               deletedMessages: deletedCount,
               timestamp: FieldValue.serverTimestamp()
             });
@@ -5390,15 +5407,25 @@ client.on('messageCreate', async (message) => {
               `<@${targetId}>\n` +
               `${toSmallCaps('By')} • <@${message.author.id}>\n` +
               `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}\n` +
+              (evidenceUrl ? `${toSmallCaps('Evidence')} • [View Attachment](${evidenceUrl})\n` : '') +
               `${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\``
             )
             .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild.iconURL() || client.user.displayAvatarURL() })
             .setTimestamp();
 
+          if (evidenceUrl) {
+            banEmbed.setImage(evidenceUrl);
+          }
+
           await sendContainer(message.channel, banEmbed);
-          logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, [
+
+          const logFields = [
             { name: `${dot} Message Cleanup`, value: `\`${deletedCount} message(s) purged\``, inline: true }
-          ]);
+          ];
+          if (evidenceUrl) {
+            logFields.push({ name: `${dot} Evidence`, value: `[Screenshot](${evidenceUrl})`, inline: true });
+          }
+          logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, logFields);
         } catch (err) {
           console.error("Ban execution error:", err);
           if (err.code === 50013) {
@@ -6649,7 +6676,17 @@ client.on('interactionCreate', async (interaction) => {
         return;
       }
       const targetMember = options.getMember('user');
-      const reason = options.getString('reason') || 'No reason specified';
+      let reason = options.getString('reason') || 'No reason specified';
+      const evidenceAttachment = options.getAttachment('evidence');
+      let evidenceUrl = evidenceAttachment?.url || null;
+
+      if (!evidenceUrl) {
+        const urlMatch = reason.match(/(https?:\/\/[^\s]+(?:\.png|\.jpg|\.jpeg|\.gif|\.webp)[^\s]*)/i);
+        if (urlMatch) {
+          evidenceUrl = urlMatch[1];
+          reason = reason.replace(urlMatch[1], '').trim();
+        }
+      }
 
       if (!targetMember) {
         await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
@@ -6675,10 +6712,15 @@ client.on('interactionCreate', async (interaction) => {
           .setDescription(
             `<@${targetId}>\n` +
             `${toSmallCaps('By')} • <@${user.tag}>\n` +
-            `${toSmallCaps('Reason')} • ${reason}`
+            `${toSmallCaps('Reason')} • ${reason}` +
+            (evidenceUrl ? `\n${toSmallCaps('Evidence')} • Attached below` : '')
           )
           .setTimestamp()
           .setFooter({ text: toSmallCaps('AniPedia') });
+
+        if (evidenceUrl) {
+          dmEmbed.setImage(evidenceUrl);
+        }
         await sendContainer(targetMember, dmEmbed).catch(() => {});
       } catch (err) {}
 
@@ -6694,6 +6736,7 @@ client.on('interactionCreate', async (interaction) => {
             moderatorId: user.id,
             moderatorTag: user.tag,
             reason: reason,
+            evidenceUrl: evidenceUrl || null,
             deletedMessages: deletedCount,
             timestamp: FieldValue.serverTimestamp()
           });
@@ -6706,15 +6749,25 @@ client.on('interactionCreate', async (interaction) => {
             `<@${targetId}>\n` +
             `${toSmallCaps('By')} • <@${user.id}>\n` +
             `${toSmallCaps('Reason')} • ${reason}\n` +
+            (evidenceUrl ? `${toSmallCaps('Evidence')} • [View Attachment](${evidenceUrl})\n` : '') +
             `${toSmallCaps('Messages Purged')} • \`${deletedCount} message(s)\``
           )
           .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild.iconURL() || client.user.displayAvatarURL() })
           .setTimestamp();
 
+        if (evidenceUrl) {
+          banEmbed.setImage(evidenceUrl);
+        }
+
         await sendContainer(interaction, banEmbed);
-        logToEmilliaLog(guild, 'ban', targetTag, targetId, user.tag, reason, [
+
+        const logFields = [
           { name: `${dot} ${toSmallCaps('Message Cleanup')}`, value: `-# \`${deletedCount} message(s) purged\``, inline: true }
-        ]);
+        ];
+        if (evidenceUrl) {
+          logFields.push({ name: `${dot} ${toSmallCaps('Evidence')}`, value: `[Screenshot](${evidenceUrl})`, inline: true });
+        }
+        logToEmilliaLog(guild, 'ban', targetTag, targetId, user.tag, reason, logFields);
       } catch (err) {
         console.error("Ban slash command error:", err);
         await interaction.reply({ content: "Failed to ban this member! 😰", ephemeral: true });
