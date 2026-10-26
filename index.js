@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags, StringSelectMenuBuilder, ComponentType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { Client, GatewayIntentBits, EmbedBuilder, SlashCommandBuilder, AttachmentBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, AuditLogEvent, PermissionFlagsBits, ChannelType, OverwriteType, ContainerBuilder, TextDisplayBuilder, SectionBuilder, ThumbnailBuilder, SeparatorBuilder, MessageFlags, StringSelectMenuBuilder, ComponentType, ModalBuilder, TextInputBuilder, TextInputStyle, MediaGalleryBuilder, MediaGalleryItemBuilder } = require('discord.js');
 const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
@@ -655,6 +655,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
       title: d.title,
       description: d.description,
       thumbnail: d.thumbnail?.url,
+      image: d.image?.url || contentOrOptions.image || legacyOptions.image,
       fields: d.fields,
       footer: d.footer?.text,
       timestamp: d.timestamp ? new Date(d.timestamp).getTime() : false,
@@ -666,6 +667,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
       title: d.title,
       description: d.description,
       thumbnail: d.thumbnail?.url,
+      image: d.image?.url || contentOrOptions.image || legacyOptions.image,
       fields: d.fields,
       footer: d.footer?.text,
       timestamp: d.timestamp ? new Date(d.timestamp).getTime() : false,
@@ -680,6 +682,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
       description: contentOrOptions.description || contentOrOptions.content || '',
       title: contentOrOptions.title,
       thumbnail: contentOrOptions.thumbnail,
+      image: contentOrOptions.image || legacyOptions.image,
       fields: contentOrOptions.fields,
       footer: contentOrOptions.footer,
       timestamp: contentOrOptions.timestamp,
@@ -718,6 +721,17 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     container.addSectionComponents(section);
   } else {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
+  }
+
+  if (opts.image) {
+    try {
+      const gallery = new MediaGalleryBuilder().addItems(
+        new MediaGalleryItemBuilder().setURL(opts.image)
+      );
+      container.addMediaGalleryComponents(gallery);
+    } catch (e) {
+      console.warn("Failed to add MediaGallery to container:", e);
+    }
   }
 
   if (opts.footer || opts.timestamp) {
@@ -760,7 +774,16 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     }
   }
 
-  let opts = typeof contentOrOptions === 'string' ? { description: contentOrOptions, ...legacyOptions } : (contentOrOptions || {});
+  let opts = {};
+  if (contentOrOptions instanceof EmbedBuilder || (contentOrOptions && contentOrOptions.data)) {
+    const d = contentOrOptions.data || contentOrOptions;
+    opts = { title: d.title, description: d.description, thumbnail: d.thumbnail?.url, image: d.image?.url, fields: d.fields, footer: d.footer?.text, timestamp: d.timestamp, ...legacyOptions };
+  } else if (typeof contentOrOptions === 'string') {
+    opts = { description: contentOrOptions, ...legacyOptions };
+  } else {
+    opts = { ...(contentOrOptions || {}), ...legacyOptions };
+  }
+
   try {
     const payload = createContainerMessage(contentOrOptions, legacyOptions);
     if (typeof target === 'function') {
@@ -778,6 +801,7 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     if (opts.title) fallback.setTitle(opts.title);
     if (opts.description) fallback.setDescription(opts.description);
     if (opts.thumbnail) fallback.setThumbnail(opts.thumbnail);
+    if (opts.image?.url || opts.image) fallback.setImage(opts.image?.url || opts.image);
     if (opts.footer) fallback.setFooter({ text: opts.footer });
     if (opts.timestamp) fallback.setTimestamp();
     if (opts.fields && Array.isArray(opts.fields)) fallback.addFields(opts.fields);
@@ -5367,7 +5391,7 @@ client.on('messageCreate', async (message) => {
             .setTitle(`${toSmallCaps('Permanent Exile Notice')}`)
             .setDescription(
               `<@${targetId}>\n` +
-              `${toSmallCaps('By')} • <@${message.author.tag}>\n` +
+              `${toSmallCaps('By')} • <@${message.author.id}>\n` +
               `${toSmallCaps('Reason')} • ${reason || 'No reason specified'}` +
               (evidenceUrl ? `\n${toSmallCaps('Evidence')} • Attached below` : '')
             )
@@ -6729,7 +6753,7 @@ client.on('interactionCreate', async (interaction) => {
           .setTitle(`${toSmallCaps('Permanent Exile Notice')}`)
           .setDescription(
             `<@${targetId}>\n` +
-            `${toSmallCaps('By')} • <@${user.tag}>\n` +
+            `${toSmallCaps('By')} • <@${user.id}>\n` +
             `${toSmallCaps('Reason')} • ${reason}` +
             (evidenceUrl ? `\n${toSmallCaps('Evidence')} • Attached below` : '')
           )
