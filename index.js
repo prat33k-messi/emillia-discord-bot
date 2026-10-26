@@ -4719,6 +4719,21 @@ client.on('messageCreate', async (message) => {
     try {
       const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
       if (referencedMessage.author.id === client.user.id) {
+        // If user is replying to a welcome message/card, they are simply greeting the newcomer
+        // (e.g. saying "welcome", "welcome welcome", "wlcm", etc.). Ignore completely unless with prefix '<'.
+        const refContent = (referencedMessage.content || '').toLowerCase();
+        const refEmbeds = referencedMessage.embeds || [];
+        const isRefWelcome = refContent.startsWith('welcome') ||
+                             refEmbeds.some(e => {
+                               const title = (e.title || '').toLowerCase();
+                               const desc = (e.description || '').toLowerCase();
+                               return title.includes('welcome') || desc.includes('welcome');
+                             });
+
+        if (isRefWelcome && !startsWithPrefix) {
+          return;
+        }
+
         isReplyToBot = true;
       }
     } catch (error) {
@@ -4765,8 +4780,11 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'welcome', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
+    if (startsWithPrefix || isMentioned) {
+      commandKeywords.push('welcome');
+    }
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
     if (!hasCommandWord) {
@@ -5629,8 +5647,10 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- Welcome Test Command (<welcome) ---
-    const isWelcomeCmd = words[0] === 'welcome' || cleanQuery === 'welcome' || cleanQuery.startsWith('welcome ') ||
-                         lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ');
+    const isWelcomeCmd = (startsWithPrefix || isMentioned) && (
+      words[0] === 'welcome' || cleanQuery === 'welcome' || cleanQuery.startsWith('welcome ') ||
+      lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ')
+    );
 
     if (isWelcomeCmd) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
