@@ -5660,7 +5660,7 @@ client.on('messageCreate', async (message) => {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'av');
       if (!allowed) return;
 
-      let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
 
       if (!targetMember) {
         const queryArg = cleanQuery.replace(/^(avatars?|av)\s*/i, '').trim();
@@ -5728,7 +5728,7 @@ client.on('messageCreate', async (message) => {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'bestie');
       if (!allowed) return;
 
-      let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
 
       // If no direct mention, look up by username, nickname or ID in the arguments
       if (!targetMember) {
@@ -5765,7 +5765,7 @@ client.on('messageCreate', async (message) => {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
       if (!allowed) return;
 
-      let targetMember = message.mentions.members.filter(m => m.id !== message.author.id).first();
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
 
       if (!targetMember) {
         const queryArg = cleanQuery.replace(/^iq\s*/i, '').trim();
