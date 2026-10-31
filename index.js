@@ -4713,35 +4713,20 @@ client.on('messageCreate', async (message) => {
   const isDiscordTag = /^<(?:@[!&]?|#|a?:[a-zA-Z0-9_]+:)\d+>/.test(trimmedContent);
   const startsWithPrefix = trimmedContent.startsWith('<') && !isDiscordTag;
 
-  // Check if message is a reply to the bot
-  let isReplyToBot = false;
+  // If user is replying to the bot, only allow it if they explicitly use the '<' prefix.
+  // Casual replies (e.g. saying "welcome", "iq", "aura", "bestie", "thanks", etc.) must be ignored completely.
   if (message.reference && message.reference.messageId) {
     try {
       const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
-      if (referencedMessage.author.id === client.user.id) {
-        // If user is replying to a welcome message/card, they are simply greeting the newcomer
-        // (e.g. saying "welcome", "welcome welcome", "wlcm", etc.). Ignore completely unless with prefix '<'.
-        const refContent = (referencedMessage.content || '').toLowerCase();
-        const refEmbeds = referencedMessage.embeds || [];
-        const isRefWelcome = refContent.startsWith('welcome') ||
-                             refEmbeds.some(e => {
-                               const title = (e.title || '').toLowerCase();
-                               const desc = (e.description || '').toLowerCase();
-                               return title.includes('welcome') || desc.includes('welcome');
-                             });
-
-        if (isRefWelcome && !startsWithPrefix) {
-          return;
-        }
-
-        isReplyToBot = true;
+      if (referencedMessage.author.id === client.user.id && !startsWithPrefix) {
+        return;
       }
     } catch (error) {
       console.error("Error fetching referenced message:", error);
     }
   }
 
-  if (!startsWithPrefix && !isMentioned && !isReplyToBot) return;
+  if (!startsWithPrefix && !isMentioned) return;
 
   try {
     const username = message.author.username;
@@ -4922,39 +4907,41 @@ client.on('messageCreate', async (message) => {
     let isModAction = false;
     let actionKeyword = null;
 
-    if (words.includes('clearwarntemp') || words.includes('tempclearwarn') || words.includes('clearwarnt')) {
-      isModAction = true;
-      actionKeyword = 'clearwarntemp';
-    } else if (words.includes('clearwarnperm') || words.includes('permclearwarn') || words.includes('clearwarnp')) {
-      isModAction = true;
-      actionKeyword = 'clearwarnperm';
-    } else if (words.includes('purge') || words.includes('clean')) {
-      isModAction = true;
-      actionKeyword = 'purge';
-    } else if (words.includes('untimeout') || words.includes('unmute')) {
-      isModAction = true;
-      actionKeyword = 'untimeout';
-    } else if (words.includes('unban')) {
-      isModAction = true;
-      actionKeyword = 'unban';
-    } else if (words.includes('unjail')) {
-      isModAction = true;
-      actionKeyword = 'unjail';
-    } else if (words.includes('jail')) {
-      isModAction = true;
-      actionKeyword = 'jail';
-    } else if (words.includes('warn')) {
-      isModAction = true;
-      actionKeyword = 'warn';
-    } else if (words.includes('timeout') || words.includes('mute')) {
-      isModAction = true;
-      actionKeyword = words.includes('timeout') ? 'timeout' : 'mute';
-    } else if (words.includes('kick')) {
-      isModAction = true;
-      actionKeyword = 'kick';
-    } else if (words.includes('ban')) {
-      isModAction = true;
-      actionKeyword = 'ban';
+    if (startsWithPrefix) {
+      if (words.includes('clearwarntemp') || words.includes('tempclearwarn') || words.includes('clearwarnt')) {
+        isModAction = true;
+        actionKeyword = 'clearwarntemp';
+      } else if (words.includes('clearwarnperm') || words.includes('permclearwarn') || words.includes('clearwarnp')) {
+        isModAction = true;
+        actionKeyword = 'clearwarnperm';
+      } else if (words.includes('purge') || words.includes('clean')) {
+        isModAction = true;
+        actionKeyword = 'purge';
+      } else if (words.includes('untimeout') || words.includes('unmute')) {
+        isModAction = true;
+        actionKeyword = 'untimeout';
+      } else if (words.includes('unban')) {
+        isModAction = true;
+        actionKeyword = 'unban';
+      } else if (words.includes('unjail')) {
+        isModAction = true;
+        actionKeyword = 'unjail';
+      } else if (words.includes('jail')) {
+        isModAction = true;
+        actionKeyword = 'jail';
+      } else if (words.includes('warn')) {
+        isModAction = true;
+        actionKeyword = 'warn';
+      } else if (words.includes('timeout') || words.includes('mute')) {
+        isModAction = true;
+        actionKeyword = words.includes('timeout') ? 'timeout' : 'mute';
+      } else if (words.includes('kick')) {
+        isModAction = true;
+        actionKeyword = 'kick';
+      } else if (words.includes('ban')) {
+        isModAction = true;
+        actionKeyword = 'ban';
+      }
     }
 
     if (isModAction) {
@@ -5486,7 +5473,7 @@ client.on('messageCreate', async (message) => {
     // ==========================================
     // 2. UTILITY COMMANDS (AFK, HELP, PING, RESET, PROFILE, LEADERBOARD, WARNS)
     // ==========================================
-    if (words[0] === 'afks' || words[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk')) {
+    if (startsWithPrefix && (words[0] === 'afks' || words[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk'))) {
       if (!canUseAfk(message.member)) {
         return; // Silent ignore — no response, no warning
       }
@@ -5516,7 +5503,7 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    if (words.includes('warnings') || words.includes('warns') || words.includes('leaderboard') || words.includes('top')) {
+    if (startsWithPrefix && (words.includes('warnings') || words.includes('warns') || words.includes('leaderboard') || words.includes('top'))) {
       // Check if user specifically asked for the leaderboard
       const isLeaderboard = words.includes('leaderboard') || 
                             words.includes('top') || 
@@ -5592,7 +5579,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- Help Command (Interactive Menu) ---
-    if (lowerQuery === 'help' || lowerQuery.includes('what can you do') || lowerQuery.includes('commands') || cleanQuery === 'help' || words[0] === 'help') {
+    if (startsWithPrefix && (lowerQuery === 'help' || lowerQuery.includes('what can you do') || lowerQuery.includes('commands') || cleanQuery === 'help' || words[0] === 'help')) {
       await sendInteractiveHelpMenu('prefix', {
         guild: message.guild,
         member: message.member,
@@ -5603,13 +5590,13 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    if (lowerQuery === 'ping') {
+    if (startsWithPrefix && lowerQuery === 'ping') {
       const latency = Date.now() - message.createdTimestamp;
       await message.reply(`🏓 Pong! Latency is **${latency}ms**. I'm working hard! ⚡🌸`);
       return;
     }
 
-    if (lowerQuery === 'reset') {
+    if (startsWithPrefix && lowerQuery === 'reset') {
       if (!isWhitelistedUser(message.author)) {
         await message.reply("Mou! 🌸 Only Aerion-sama and whitelisted administrators can reset my memories! You can't make me forget things! ❄️");
         return;
@@ -5628,8 +5615,10 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    const isProfileCmd = words[0] === 'profile' || cleanQuery === 'profile' || cleanQuery.startsWith('profile ') ||
-                         lowerQuery === 'profile' || lowerQuery === 'about me' || lowerQuery === 'aiko' || lowerQuery === 'about aiko';
+    const isProfileCmd = startsWithPrefix && (
+      words[0] === 'profile' || cleanQuery === 'profile' || cleanQuery.startsWith('profile ') ||
+      lowerQuery === 'profile' || lowerQuery === 'about me' || lowerQuery === 'aiko' || lowerQuery === 'about aiko'
+    );
 
     if (isProfileCmd) {
       const aikoProfileEmbed = new EmbedBuilder()
@@ -5647,7 +5636,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- Welcome Test Command (<welcome) ---
-    const isWelcomeCmd = (startsWithPrefix || isMentioned) && (
+    const isWelcomeCmd = startsWithPrefix && (
       words[0] === 'welcome' || cleanQuery === 'welcome' || cleanQuery.startsWith('welcome ') ||
       lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ')
     );
@@ -5658,12 +5647,14 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Avatar Command (-av & -avatar) ---
-    const isAvCmd = words[0] === 'av' || words[0] === 'avatar' || 
-                    cleanQuery === 'av' || cleanQuery === 'avatar' ||
-                    cleanQuery.startsWith('av ') || cleanQuery.startsWith('avatar ') ||
-                    lowerQuery === 'av' || lowerQuery === 'avatar' ||
-                    lowerQuery.startsWith('av ') || lowerQuery.startsWith('avatar ');
+    // --- Avatar Command (<av & <avatar) ---
+    const isAvCmd = startsWithPrefix && (
+      words[0] === 'av' || words[0] === 'avatar' || 
+      cleanQuery === 'av' || cleanQuery === 'avatar' ||
+      cleanQuery.startsWith('av ') || cleanQuery.startsWith('avatar ') ||
+      lowerQuery === 'av' || lowerQuery === 'avatar' ||
+      lowerQuery.startsWith('av ') || lowerQuery.startsWith('avatar ')
+    );
 
     if (isAvCmd) {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'av');
@@ -5692,12 +5683,14 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Aura Command (-aura & -auras) ---
-    const isAuraCmd = words[0] === 'aura' || words[0] === 'auras' || 
-                      cleanQuery === 'aura' || cleanQuery === 'auras' || 
-                      cleanQuery.startsWith('aura ') || cleanQuery.startsWith('auras ') || 
-                      lowerQuery === 'aura' || lowerQuery === 'auras' || 
-                      lowerQuery.startsWith('aura ') || lowerQuery.startsWith('auras ');
+    // --- Aura Command (<aura & <auras) ---
+    const isAuraCmd = startsWithPrefix && (
+      words[0] === 'aura' || words[0] === 'auras' || 
+      cleanQuery === 'aura' || cleanQuery === 'auras' || 
+      cleanQuery.startsWith('aura ') || cleanQuery.startsWith('auras ') || 
+      lowerQuery === 'aura' || lowerQuery === 'auras' || 
+      lowerQuery.startsWith('aura ') || lowerQuery.startsWith('auras ')
+    );
 
     if (isAuraCmd) {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'aura');
@@ -5722,12 +5715,14 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Bestie Command (-bestie & -besties) ---
-    const isBestieCmd = words[0] === 'bestie' || words[0] === 'besties' || 
-                        cleanQuery === 'bestie' || cleanQuery === 'besties' ||
-                        cleanQuery.startsWith('bestie ') || cleanQuery.startsWith('besties ') ||
-                        lowerQuery === 'bestie' || lowerQuery === 'besties' ||
-                        lowerQuery.startsWith('bestie ') || lowerQuery.startsWith('besties ');
+    // --- Bestie Command (<bestie & <besties) ---
+    const isBestieCmd = startsWithPrefix && (
+      words[0] === 'bestie' || words[0] === 'besties' || 
+      cleanQuery === 'bestie' || cleanQuery === 'besties' ||
+      cleanQuery.startsWith('bestie ') || cleanQuery.startsWith('besties ') ||
+      lowerQuery === 'bestie' || lowerQuery === 'besties' ||
+      lowerQuery.startsWith('bestie ') || lowerQuery.startsWith('besties ')
+    );
 
     if (isBestieCmd) {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'bestie');
@@ -5748,7 +5743,7 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!targetMember) {
-        await message.reply("Please use `-bestie <username>`!");
+        await message.reply("Please use `<bestie <username>`!");
         return;
       }
 
@@ -5757,12 +5752,14 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- IQ Command (-iq) ---
-    const isIqCmd = words[0] === 'iq' || 
-                    cleanQuery === 'iq' || 
-                    cleanQuery.startsWith('iq ') || 
-                    lowerQuery === 'iq' || 
-                    lowerQuery.startsWith('iq ');
+    // --- IQ Command (<iq) ---
+    const isIqCmd = startsWithPrefix && (
+      words[0] === 'iq' || 
+      cleanQuery === 'iq' || 
+      cleanQuery.startsWith('iq ') || 
+      lowerQuery === 'iq' || 
+      lowerQuery.startsWith('iq ')
+    );
 
     if (isIqCmd) {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
@@ -5792,7 +5789,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- Warn Command (<warn) ---
-    const isPrefixWarn = words[0] === 'warn' || cleanQuery === 'warn' || cleanQuery.startsWith('warn ');
+    const isPrefixWarn = startsWithPrefix && (words[0] === 'warn' || cleanQuery === 'warn' || cleanQuery.startsWith('warn '));
     if (isPrefixWarn) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       let queryArg = cleanQuery.replace(/^warn\s*/i, '').trim();
@@ -5824,7 +5821,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- Warns Command (<warns) ---
-    const isPrefixWarns = words[0] === 'warns' || cleanQuery === 'warns' || cleanQuery.startsWith('warns ');
+    const isPrefixWarns = startsWithPrefix && (words[0] === 'warns' || cleanQuery === 'warns' || cleanQuery.startsWith('warns '));
     if (isPrefixWarns) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       if (!targetMember) {
@@ -5850,7 +5847,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- ClearWarnTemp Command (<clearwarntemp) ---
-    const isPrefixClearWarnTemp = words[0] === 'clearwarntemp' || cleanQuery === 'clearwarntemp' || cleanQuery.startsWith('clearwarntemp ');
+    const isPrefixClearWarnTemp = startsWithPrefix && (words[0] === 'clearwarntemp' || cleanQuery === 'clearwarntemp' || cleanQuery.startsWith('clearwarntemp '));
     if (isPrefixClearWarnTemp) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       let queryArg = cleanQuery.replace(/^clearwarntemp\s*/i, '').trim();
@@ -5882,7 +5879,7 @@ client.on('messageCreate', async (message) => {
     }
 
     // --- ClearWarnPerm Command (<clearwarnperm) ---
-    const isPrefixClearWarnPerm = words[0] === 'clearwarnperm' || cleanQuery === 'clearwarnperm' || cleanQuery.startsWith('clearwarnperm ');
+    const isPrefixClearWarnPerm = startsWithPrefix && (words[0] === 'clearwarnperm' || cleanQuery === 'clearwarnperm' || cleanQuery.startsWith('clearwarnperm '));
     if (isPrefixClearWarnPerm) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       let queryArg = cleanQuery.replace(/^clearwarnperm\s*/i, '').trim();
