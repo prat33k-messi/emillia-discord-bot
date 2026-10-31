@@ -5679,7 +5679,7 @@ client.on('messageCreate', async (message) => {
       }
 
       const avPayload = await buildAvatarPayload(targetMember);
-      await message.channel.send(avPayload);
+      await message.reply(avPayload);
       return;
     }
 
@@ -5711,7 +5711,7 @@ client.on('messageCreate', async (message) => {
         targetMember = message.member;
       }
       const auraPayload = await buildAuraPayload(targetMember, message.guild);
-      await message.channel.send(auraPayload);
+      await message.reply(auraPayload);
       return;
     }
 
@@ -5748,7 +5748,7 @@ client.on('messageCreate', async (message) => {
       }
 
       const bestiePayload = await buildBestiePayload(message.member, targetMember, message.guild);
-      await message.channel.send(bestiePayload);
+      await message.reply(bestiePayload);
       return;
     }
 
@@ -5784,7 +5784,7 @@ client.on('messageCreate', async (message) => {
       }
 
       const iqPayload = await buildIqPayload(targetMember, message.guild);
-      await message.channel.send(iqPayload);
+      await message.reply(iqPayload);
       return;
     }
 
