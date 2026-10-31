@@ -552,7 +552,7 @@ function getMemberLevel(member) {
   return maxLevel;
 }
 
-// Helper to check if a member can use AFK (Level 20+ or Staff / Master / Owner)
+// Helper to check if a member can use AFK (Level 5+ or Staff / Master / Owner)
 function canUseAfk(member) {
   if (!member) return false;
 
@@ -563,8 +563,8 @@ function canUseAfk(member) {
   // Staff (Moderator, Supervisor, Community Admins, Shogun)
   if (getMemberTier(member) >= 1) return true;
 
-  // Level 20+ requirement
-  return getMemberLevel(member) >= 20;
+  // Level 5+ requirement
+  return getMemberLevel(member) >= 5;
 }
 
 // Helper to check if a member can post GIFs (Level 5+ or Staff / Master / Owner)
@@ -1781,7 +1781,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           .setTimestamp();
       } else if (selected === 'general') {
         const generalLines = source === 'slash' ? [
-          `• \`/afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
+          `• \`/afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 5+)*`,
           `• \`/aura [user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
           `• \`/besties <user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
           `• \`/avatar [user]\` — ${toSmallCaps('View User Avatar')}`,
@@ -1789,7 +1789,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           `• \`/profile\` — ${toSmallCaps('View Aiko Profile')}`,
           `• \`/help\` — ${toSmallCaps('Show Command Guide')}`
         ] : [
-          `• \`<afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 20+)*`,
+          `• \`<afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 5+)*`,
           `• \`<aura [@user]\` — ${toSmallCaps('Check Spiritual Aura')}`,
           `• \`<bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
           `• \`<av [@user]\` — ${toSmallCaps('View User Avatar')}`,
@@ -6352,7 +6352,7 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'afk') {
       if (!canUseAfk(member)) {
         const afkWarnEmbed = new EmbedBuilder()
-          .setDescription(`<@${user.id}> • Reach level 20+ to use afk`);
+          .setDescription(`<@${user.id}> • Reach level 5+ to use afk`);
         if (url1) afkWarnEmbed.setThumbnail(url1);
 
         await sendContainer(interaction, afkWarnEmbed).catch(() => {});
