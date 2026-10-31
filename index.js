@@ -4781,7 +4781,7 @@ client.on('messageCreate', async (message) => {
     if (isAfkAttempt && !canUseAfk(message.member)) {
       const { url1 } = await getAikoEmojis(message.guild);
       const afkWarnEmbed = new EmbedBuilder()
-        .setDescription(`<@${message.author.id}> • Reach level 20+ to use afk`);
+        .setDescription(`<@${message.author.id}> • Reach level 5+ to use afk`);
       if (url1) afkWarnEmbed.setThumbnail(url1);
 
       const warnMsg = await sendContainer(message, afkWarnEmbed).catch(() => {});
