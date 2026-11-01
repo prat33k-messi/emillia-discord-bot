@@ -926,10 +926,10 @@ async function handleFeatureCooldown(target, userId, featureName) {
   const now = Date.now();
   const cooldownKey = `${userId}_${featureName}`;
   const lastUsed = featureCooldowns.get(cooldownKey) || 0;
-  const cooldownMs = 10000;
+  const cooldownMs = 5000;
 
   if (now - lastUsed < cooldownMs) {
-    const cdText = `<@${userId}> • You have a 10s cooldown on this feature!`;
+    const cdText = `<@${userId}> • You have a 5s cooldown on <${featureName}!`;
     try {
       if (target.reply && target.channel) {
 
