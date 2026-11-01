@@ -6,7 +6,6 @@ const { createCanvas, loadImage } = require('@napi-rs/canvas');
 const { Groq } = require('groq-sdk');
 require('dotenv').config();
 
-// Initialize Express server for Uptime Robot pinging
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -18,12 +17,10 @@ app.listen(PORT, () => {
   console.log(`Express health server running on port ${PORT}`);
 });
 
-// Initialize Groq API Client
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
-// Initialize Firebase Admin SDK
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 let db;
@@ -43,17 +40,15 @@ try {
   console.warn("Firebase initialization skipped or failed. Running in memory-only mode. Details:", error.message);
 }
 
-// Initialize Discord Client with necessary intents
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers, // Essential for checking roles, timeouts, kicks, and bans
+    GatewayIntentBits.GuildMembers,
   ],
 });
 
-// Crash-prevention global error listeners (keeps bot online on network/API glitches)
 client.on('error', (err) => console.error('[Discord Client Error]', err));
 client.on('warn', (warning) => console.warn('[Discord Client Warning]', warning));
 client.on('shardError', (err) => console.error('[Discord Shard Error]', err));
@@ -66,47 +61,35 @@ process.on('uncaughtException', (err) => {
   console.error('[Uncaught Exception] Error:', err);
 });
 
-// Conversation memory cache: Map username -> Array of message objects (per-user)
 const memory = new Map();
 const MAX_MEMORY_LIMIT = 15;
 
-// Cooldown tracker: Map username -> last message timestamp
 const userCooldowns = new Map();
 const COOLDOWN_MS = 3000;
 
-// Anti-repetition tracker: Map username -> Array of last 3 response openers
 const lastResponseOpeners = new Map();
 
-// NSFW filter
 const nsfwKeywords = [
-  "nsfw", "hentai", "porn", "sex", "nude", "naked", "boob", "dick", "pussy", 
+  "nsfw", "hentai", "porn", "sex", "nude", "naked", "boob", "dick", "pussy",
   "fuck me", "strip", "lewd", "erotic", "xxx", "orgasm", "fetish", "r34",
   "rule34", "r-18", "ecchi", "doujin", "explicit",
   "kill yourself", "kys", "suicide", "how to die", "self harm",
   "gore", "torture", "rape", "molest"
 ];
 
-// Preloaded user memory cache (facts and warnings count)
 const preloadedMemories = new Map();
 
-// AFK System tracker: Map userId -> { userId, username, reason, afkSince, mentions: [] }
 const afkUsers = new Map();
 const afkMentionCooldowns = new Map();
 
-// Active Warn States tracker: Map userId -> { currentLevel, restrictionsActive, restrictionsExpiry }
 const activeWarnStatesCache = new Map();
-// Active Jailed Users tracker: Map userId -> { userId, userTag, roles: [roleIds], moderatorId, moderatorTag, reason, jailedAt }
+
 const jailedUsersCache = new Map();
 
-// In-memory warning records cache: Map userId -> array of warn record objects
 const inMemoryWarnRecords = new Map();
 
-// Feature cooldowns tracker: Map `${userId}_${featureName}` -> timestampMs (10s per feature)
 const featureCooldowns = new Map();
 
-// ==========================================
-// SLASH COMMAND DEFINITIONS (Auto-popup on /)
-// ==========================================
 const slashCommandsData = [
   new SlashCommandBuilder()
     .setName('afk')
@@ -220,7 +203,6 @@ const slashCommandsData = [
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
 
-  // Preload user memories from Firestore
   if (db) {
     try {
       const snapshot = await db.collection('memories').get();
@@ -295,7 +277,6 @@ client.once('ready', async () => {
     }
   }
 
-  // Preload emojis from all connected guilds
   try {
     for (const guild of client.guilds.cache.values()) {
       await guild.emojis.fetch().catch(() => {});
@@ -305,14 +286,13 @@ client.once('ready', async () => {
     console.error("Error preloading guild emojis:", err);
   }
 
-  // Register slash commands globally and remove per-guild commands to prevent duplicate entries
   try {
     const commandsJson = slashCommandsData.map(c => c.toJSON());
     if (client.application) {
       await client.application.commands.set(commandsJson);
       console.log("Registered global application slash commands.");
     }
-    // Delete any guild-scoped slash commands so Discord only lists the 1 global command
+
     for (const guild of client.guilds.cache.values()) {
       await guild.commands.set([]).catch(() => {});
     }
@@ -321,7 +301,6 @@ client.once('ready', async () => {
     console.error("Error setting up slash commands on ready:", err);
   }
 
-  // Setup Warned role overwrites and run expiry scheduler
   try {
     for (const guild of client.guilds.cache.values()) {
       await syncWarnedRoleChannelOverwrites(guild);
@@ -336,7 +315,7 @@ client.once('ready', async () => {
 
 client.on('guildCreate', async (guild) => {
   try {
-    // Clear guild-scoped commands on join
+
     await guild.commands.set([]).catch(() => {});
     await syncWarnedRoleChannelOverwrites(guild);
   } catch (err) {
@@ -344,7 +323,6 @@ client.on('guildCreate', async (guild) => {
   }
 });
 
-// Listener to ensure Warned role overwrites are automatically applied to any new channel
 client.on('channelCreate', async (channel) => {
   try {
     if (!channel.guild) return;
@@ -362,7 +340,6 @@ client.on('channelCreate', async (channel) => {
   }
 });
 
-// Listener to enforce [on warn N] nickname tag if a warned member tries to change it
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
   if (oldMember.nickname === newMember.nickname) return;
   if (botRenamingUsers.has(newMember.id)) return;
@@ -380,7 +357,7 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
         await setMemberWarnNickname(newMember, correctNick);
       }
     } else {
-      // If user is not actively warned by staff, strip any unauthorized fake [on warn ...] tag
+
       const currentNick = newMember.nickname || '';
       if (/\[on warn \d+\]/i.test(currentNick)) {
         const cleanNick = currentNick.replace(/\s*\[on warn \d+\]/gi, '').trim();
@@ -392,7 +369,6 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
   }
 });
 
-// Enforce Jailed role if a jailed member leaves and rejoins
 client.on('guildMemberAdd', async (member) => {
   try {
     if (!member || !member.guild) return;
@@ -418,7 +394,6 @@ client.on('guildMemberAdd', async (member) => {
     console.error('Error re-applying Jailed role on guildMemberAdd:', err);
   }
 
-  // Trigger welcome flow in summon-circle and general-chat
   try {
     if (member && member.guild) {
       await handleMemberWelcome(member);
@@ -428,17 +403,13 @@ client.on('guildMemberAdd', async (member) => {
   }
 });
 
-// ==========================================
-// MASTER CREDENTIALS & SECURITY CONFIGURATION
-// ==========================================
-const MASTER_USER_ID = '1013822181379162142'; // Primary Administrator: el_lapulga
+const MASTER_USER_ID = '1013822181379162142';
 const WHITELISTED_USER_IDS = new Set([
-  '1013822181379162142', // Aerion-sama / el_lapulga
-  '1382005683288936478', // Whitelisted Admin
-  '1455104414166679656'  // Whitelisted Admin
+  '1013822181379162142',
+  '1382005683288936478',
+  '1455104414166679656'
 ]);
 
-// Helper to check if a user/member is whitelisted (supreme master clearance from all restrictions)
 function isWhitelistedUser(userOrMember) {
   if (!userOrMember) return false;
   const id = userOrMember.id || (typeof userOrMember === 'string' && /^\d+$/.test(userOrMember) ? userOrMember : null);
@@ -450,40 +421,34 @@ function isWhitelistedUser(userOrMember) {
 }
 
 const OFFICIAL_STAFF_ROLE_IDS = {
-  SHOGUN: '1517887565431046267',          // Tier 5 (Shogun)
-  COMMUNITY_ADMIN: '1517888043573317672', // Tier 4 (Community Admins, previously Royal Hand)
-  SUPERVISOR: '1542798540676276224',      // Tier 3 (Supervisor)
-  SENIOR_MODERATOR: '',                    // Tier 2 (Senior Moderator)
-  MODERATOR: '1521217765833179378'        // Tier 1 (Moderator / Junior Moderator)
+  SHOGUN: '1517887565431046267',
+  COMMUNITY_ADMIN: '1517888043573317672',
+  SUPERVISOR: '1542798540676276224',
+  SENIOR_MODERATOR: '',
+  MODERATOR: '1521217765833179378'
 };
 
-// Global Security Protocol State
 let isCodeBlackFrozen = false;
 const protocolZeroBlacklist = new Set();
 const deniedLevel1Users = new Set();
 
-// Staff Role Rankings & Hierarchy (strictly checks Role IDs and recognized Role Names)
 function getMemberTier(member) {
   if (!member) return 0;
 
-  // Master Users, Whitelisted Admins & Server Owner have permanent supreme clearance (100% Immune)
   if (isWhitelistedUser(member)) return 5;
   if (member.guild && member.guild.ownerId === member.id) return 5;
 
-  // If user is denied Level 1 clearance via Protocol GrantAccess1
   if (deniedLevel1Users.has(member.id) || (member.user && deniedLevel1Users.has(member.user.username.toLowerCase()))) {
     return 0;
   }
 
-  // Check roles by official IDs and case-insensitive names
   if (member.roles && member.roles.cache) {
-    // Tier 5: Shogun
+
     if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SHOGUN) ||
         member.roles.cache.some(r => r.name.toLowerCase().trim() === 'shogun')) {
       return 5;
     }
 
-    // Tier 4: Community Admins
     if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.COMMUNITY_ADMIN) ||
         member.roles.cache.some(r => {
           const n = r.name.toLowerCase().trim();
@@ -492,13 +457,11 @@ function getMemberTier(member) {
       return 4;
     }
 
-    // Tier 3: Supervisor
     if (member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR) ||
         member.roles.cache.some(r => r.name.toLowerCase().trim() === 'supervisor')) {
       return 3;
     }
 
-    // Tier 2: Senior Moderator
     if ((OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR && member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR)) ||
         member.roles.cache.some(r => {
           const n = r.name.toLowerCase().trim();
@@ -507,7 +470,6 @@ function getMemberTier(member) {
       return 2;
     }
 
-    // Tier 1: Moderator (Junior Moderators have 0 moderation permissions)
     if (member.roles.cache.some(r => {
       const n = r.name.toLowerCase().trim();
       if (n.includes('junior') || n.includes('jr')) return false;
@@ -531,12 +493,10 @@ function getTierName(tier, member = null) {
   }
 }
 
-// Helper to check if a user is any staff tier (Shogun, Community Admins, Supervisor, Senior Moderator, Moderator, Owner, or Admin)
 function isModerator(member) {
   return getMemberTier(member) >= 1;
 }
 
-// Helper to extract the highest level number from member's roles (e.g. Level 5+, Level 10+, Level 20+, ...)
 function getMemberLevel(member) {
   if (!member || !member.roles || !member.roles.cache) return 0;
   let maxLevel = 0;
@@ -552,45 +512,36 @@ function getMemberLevel(member) {
   return maxLevel;
 }
 
-// Helper to check if a member can use AFK (Level 5+ or Staff / Master / Owner)
 function canUseAfk(member) {
   if (!member) return false;
 
-  // Master Users, Whitelisted Admins & Server Owner always authorized
   if (isWhitelistedUser(member)) return true;
   if (member.guild && member.guild.ownerId === member.id) return true;
 
-  // Staff (Moderator, Supervisor, Community Admins, Shogun)
   if (getMemberTier(member) >= 1) return true;
 
-  // Level 5+ requirement
   return getMemberLevel(member) >= 5;
 }
 
-// Helper to check if a member can post GIFs (Level 5+ or Staff / Master / Owner)
 function canUseGif(member) {
   if (!member) return false;
 
-  // Master Users, Whitelisted Admins & Server Owner always authorized
   if (isWhitelistedUser(member)) return true;
   if (member.guild && member.guild.ownerId === member.id) return true;
 
-  // Staff (Moderator, Supervisor, Community Admins, Shogun)
   if (getMemberTier(member) >= 1) return true;
 
-  // Level 5+ requirement
   return getMemberLevel(member) >= 5;
 }
 
-// Helper to parse duration for timeouts (e.g. 10m, 2h, 1d)
 function parseDuration(str) {
   if (!str) return { ms: 10 * 60 * 1000, label: "10 minutes" };
   const match = str.match(/^(\d+)\s*(m|min|minute|h|hour|d|day|w|week)s?$/i);
   if (!match) return { ms: 10 * 60 * 1000, label: "10 minutes" };
-  
+
   const val = parseInt(match[1]);
   const unit = match[2].toLowerCase();
-  
+
   if (unit.startsWith('m')) {
     return { ms: val * 60 * 1000, label: `${val} minute(s)` };
   } else if (unit.startsWith('h')) {
@@ -603,7 +554,6 @@ function parseDuration(str) {
   return { ms: 10 * 60 * 1000, label: "10 minutes" };
 }
 
-// Helper to clean mentions and keywords from reason
 function getReason(text, actionKeyword, targetMember) {
   let reason = text;
   if (targetMember) {
@@ -615,7 +565,6 @@ function getReason(text, actionKeyword, targetMember) {
   return reason || "No reason specified";
 }
 
-// Helper to format AFK duration cleanly
 function formatAfkDuration(ms) {
   const seconds = Math.floor(ms / 1000);
   if (seconds < 60) return `${Math.max(1, seconds)}s`;
@@ -634,14 +583,12 @@ function formatAfkDuration(ms) {
   return remainingHours > 0 ? `${days}d ${remainingHours}h` : `${days}d`;
 }
 
-// Helper to format text (returns normal clean Discord font)
 function toSmallCaps(str) {
   return str || '';
 }
 
-// Helper to build a clean, borderless container card (Components V2)
 function createContainerMessage(contentOrOptions, legacyOptions = {}) {
-  // If it's ALREADY a components payload with ContainerBuilder, return it as is
+
   if (contentOrOptions && typeof contentOrOptions === 'object') {
     if (contentOrOptions.components && Array.isArray(contentOrOptions.components)) {
       return contentOrOptions;
@@ -761,7 +708,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
 }
 
 async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
-  // If contentOrOptions is ALREADY a valid Discord components payload, send directly without re-wrapping
+
   if (contentOrOptions && typeof contentOrOptions === 'object' && contentOrOptions.components && Array.isArray(contentOrOptions.components)) {
     if (typeof target === 'function') {
       return await target(contentOrOptions);
@@ -832,7 +779,6 @@ function makeReplyFn(target) {
   };
 }
 
-// Helper to get custom animated/static moderation emojis
 async function getModEmojis(guild) {
   let verify = '';
   let dot = '•';
@@ -841,7 +787,6 @@ async function getModEmojis(guild) {
 
 let cachedAikoEmojis = { aiko1: '', aiko2: '', aiko3: '', url1: '', url2: '', url3: '' };
 
-// Helper to fetch Aiko custom emojis (aiko1, aiko2, aiko3)
 async function getAikoEmojis(guild) {
   if (cachedAikoEmojis.aiko1 && cachedAikoEmojis.aiko2 && cachedAikoEmojis.aiko3) {
     return { ...cachedAikoEmojis, url1: '', url2: '', url3: '' };
@@ -900,7 +845,6 @@ async function getAikoEmojis(guild) {
     if (found3) aiko3 = found3.toString();
   }
 
-  // If not found in Discord, auto-upload from local assets/aiko files
   const aiko1Path = path.join(__dirname, 'assets', 'aiko', 'aiko1.webp');
   const aiko2Path = path.join(__dirname, 'assets', 'aiko', 'aiko2.webp');
   const aiko3Path = path.join(__dirname, 'assets', 'aiko', 'aiko3.webp');
@@ -950,7 +894,6 @@ async function getAikoEmojis(guild) {
     }
   }
 
-  // Helper to extract emoji URL from string <a?:name:id> or fallback to cdn
   function getEmojiUrl(emojiStr, fallbackPath) {
     if (emojiStr) {
       const match = emojiStr.match(/<a?:[a-zA-Z0-9_]+:(\d+)>/);
@@ -961,10 +904,6 @@ async function getAikoEmojis(guild) {
     return '';
   }
 
-  // Temporarily disable Aiko image thumbnails across all commands ("we will insert later, so removed from all now")
-  // const url1 = getEmojiUrl(aiko1);
-  // const url2 = getEmojiUrl(aiko2);
-  // const url3 = getEmojiUrl(aiko3);
   const url1 = '';
   const url2 = '';
   const url3 = '';
@@ -978,9 +917,8 @@ async function getAikoEmojis(guild) {
   return { aiko1, aiko2, aiko3, url1, url2, url3 };
 }
 
-// Helper for per-feature cooldowns (10s duration) with 2-second auto-deleting container popup
 async function handleFeatureCooldown(target, userId, featureName) {
-  // Whitelisted administrators bypass feature cooldowns
+
   if (isWhitelistedUser(userId) || isWhitelistedUser(target.author) || isWhitelistedUser(target.user)) {
     return true;
   }
@@ -988,13 +926,13 @@ async function handleFeatureCooldown(target, userId, featureName) {
   const now = Date.now();
   const cooldownKey = `${userId}_${featureName}`;
   const lastUsed = featureCooldowns.get(cooldownKey) || 0;
-  const cooldownMs = 10000; // 10 seconds
+  const cooldownMs = 10000;
 
   if (now - lastUsed < cooldownMs) {
     const cdText = `<@${userId}> • You have a 10s cooldown on this feature!`;
     try {
       if (target.reply && target.channel) {
-        // MessageCreate (prefix command)
+
         const sentMsg = await replyContainer(target, cdText);
         if (sentMsg && typeof sentMsg.delete === 'function') {
           setTimeout(() => {
@@ -1002,7 +940,7 @@ async function handleFeatureCooldown(target, userId, featureName) {
           }, 2000);
         }
       } else if (target.isRepliable && target.isRepliable()) {
-        // Interaction (slash command)
+
         if (!target.replied && !target.deferred) {
           await sendContainer(target, cdText, { ephemeral: true });
           setTimeout(() => {
@@ -1025,10 +963,9 @@ const WELCOME_BANNER_PATH = path.join(__dirname, 'assets', 'welcome_banner.gif')
 const WELCOME_GIF_URL = 'https://cdn.discordapp.com/attachments/1558786839744356544/1562448503027015680/welcome.gif?ex=6adaafd0&is=6ad95e50&hm=300919bc580932ceac43557c58752efb05950522d0b52fc21484b7e670f1e34e';
 const WELCOME_GIF_PATH = path.join(__dirname, 'assets', 'welcome.gif');
 
-// Helper to format the AniPedia Welcome Message
 async function formatWelcomeMessage(guild, member = null) {
   const userMention = member ? `<@${member.id}>` : 'Nakama';
-  let text = 
+  let text =
 `# :ani_gate:**WELCOME TO ANIPEDIA**:ani_gate:
 :ani_sword: **A New World. A New Journey. A New Family**
 
@@ -1052,7 +989,6 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
       await guild.channels.fetch().catch(() => {});
     }
 
-    // If custom emojis with these names exist, resolve to <:name:id> so Discord renders them
     const emojiNames = ['ani_gate', 'ani_sword', 'ani_star', 'ani_saku', 'ani_adv', 'ani_light', 'ani_flower'];
     for (const name of emojiNames) {
       const found = guild.emojis?.cache?.find(e => e.name && e.name.toLowerCase() === name.toLowerCase()) ||
@@ -1064,16 +1000,14 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 
     const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
 
-    // Resolve rules channel mention
-    const rulesChannel = 
+    const rulesChannel =
       guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('rule')) ||
       guild.channels?.cache?.find(c => c.name && c.name.toLowerCase().includes('rule'));
     if (rulesChannel) {
       text = text.replace('<#rules>', `<#${rulesChannel.id}>`);
     }
 
-    // Resolve general chat channel mention (e.g. #・general-chat)
-    const generalChannel = 
+    const generalChannel =
       guild.channels?.cache?.get('1517882822126338050') ||
       guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('general-chat')) ||
       guild.channels?.cache?.find(c => isTextChannel(c) && c.name && c.name.toLowerCase().includes('general') && c.name.toLowerCase().includes('chat')) ||
@@ -1092,17 +1026,16 @@ Welcome to **AniPedia** — where anime fans unite, legends are born, and every 
 
 const welcomeClickCooldowns = new Map();
 
-// Send full welcome card into #summon-circle / #public-discussion
 async function sendSummonCircleWelcome(channel, member) {
   if (!channel || !member) return;
   const welcomeText = await formatWelcomeMessage(member.guild, member);
 
   const bannerEmbed = new EmbedBuilder()
-    .setColor(0xED4245) // Discord Red
+    .setColor(0xED4245)
     .setImage('attachment://welcome_banner.gif');
 
   const welcomeEmbed = new EmbedBuilder()
-    .setColor(0xED4245) // Discord Red
+    .setColor(0xED4245)
     .setDescription(welcomeText)
     .setImage('attachment://welcome.gif');
 
@@ -1145,7 +1078,6 @@ async function sendSummonCircleWelcome(channel, member) {
   }
 }
 
-// Send small container style welcome card into #general-chat / #bot-commands
 async function sendGeneralWelcome(channel, member) {
   if (!channel || !member) return;
   const { url2 } = await getAikoEmojis(member.guild);
@@ -1176,7 +1108,6 @@ async function sendGeneralWelcome(channel, member) {
   }
 }
 
-// Unified Welcome Handler for new joins and <welcome command
 async function handleMemberWelcome(member, fallbackChannel = null) {
   if (!member || !member.guild) return;
   const guild = member.guild;
@@ -1187,9 +1118,7 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 
   const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
 
-  // 1. Channel for Summon Circle message:
-  // Primary Summon Circle Channel ID: 1518191913705013278
-  const summonChannel = 
+  const summonChannel =
     guild.channels.cache.get('1518191913705013278') ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon-circle')) ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon')) ||
@@ -1198,9 +1127,7 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
     guild.channels.cache.find(c => c.name && c.name.toLowerCase().includes('summon-circle')) ||
     guild.channels.cache.find(c => c.name && (c.name.toLowerCase().includes('public-discussion') || c.name.toLowerCase().includes('publicdiscussion')));
 
-  // 2. Channel for General Welcome message:
-  // Primary General Chat Channel ID: 1517882822126338050
-  const generalChannel = 
+  const generalChannel =
     guild.channels.cache.get('1517882822126338050') ||
     guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('general-chat') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('generalchat'))) ||
     guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('bot-commands') || c.name.toLowerCase().includes('bot-command') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('botcommand') || c.name.toLowerCase().replace(/[^a-z0-9]/g, '').includes('botcmd'))) ||
@@ -1233,9 +1160,6 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
   }
 }
 
-// ==========================================
-// PERSISTENT RULES PANEL
-// ==========================================
 const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
 const APPEAL_CHANNEL_ID = '1560574164144754710';
 const userLastRulesInteraction = new Map();
@@ -1428,9 +1352,6 @@ function getRulesOptionEmbed(selected, guild) {
   }
 }
 
-// ==========================================
-// PERSISTENT STAFF DIRECTORY PANEL
-// ==========================================
 const STAFF_BANNER_PATH = path.join(__dirname, 'assets', 'staff_banner.png');
 const userLastStaffInteraction = new Map();
 
@@ -1635,7 +1556,6 @@ function getStaffOptionEmbed(selected, guild) {
   }
 }
 
-// Helper to send Interactive Help Menu with Dropdown Select
 async function sendInteractiveHelpMenu(source, ctx) {
   const { guild, user, channel, interaction } = ctx;
 
@@ -1829,12 +1749,10 @@ async function sendInteractiveHelpMenu(source, ctx) {
   });
 }
 
-// Helper to generate unique Case ID for moderation embeds
 function generateCaseId() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// Helper to format numbers into cursive script characters
 function toCursiveDigits(str) {
   const cursiveMap = {
     '0': '𝟢', '1': '𝟣', '2': '𝟤', '3': '𝟥', '4': '𝟦',
@@ -1844,7 +1762,6 @@ function toCursiveDigits(str) {
   return String(str).split('').map(c => cursiveMap[c] || c).join('');
 }
 
-// Helper to determine Aura color theme and metadata (Purple Neon Theme)
 function getAuraTheme(percent) {
   return {
     name: 'Purple Neon',
@@ -1855,7 +1772,6 @@ function getAuraTheme(percent) {
   };
 }
 
-// Helper to generate dynamic Aura Card image with full avatar visibility and percentage-scaled Purple neon borders
 async function generateAuraCard(avatarUrl, auraPercent) {
   const width = 600;
   const height = 600;
@@ -1863,10 +1779,8 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   const ctx = canvas.getContext('2d');
   const radius = 28;
 
-  // Normalized intensity from 0.05 to 1.0 based on percentage
   const intensity = Math.max(0.05, Math.min(1.0, auraPercent / 100));
 
-  // 1. Smooth rounded rectangle clipping path
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -1886,11 +1800,9 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   }
   ctx.clip();
 
-  // 2. Base dark background
   ctx.fillStyle = '#0a0d14';
   ctx.fillRect(0, 0, width, height);
 
-  // 3. Draw User Avatar cleanly across the card (Fully visible profile)
   try {
     if (avatarUrl) {
       const avatarImg = await loadImage(avatarUrl);
@@ -1900,7 +1812,6 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     console.error("Failed to load avatar for aura card:", err);
   }
 
-  // 4. Subtle bottom gradient only behind text for legibility (profile stays completely clear)
   const bottomGradient = ctx.createLinearGradient(0, height * 0.65, 0, height);
   bottomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
   bottomGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.45)');
@@ -1908,18 +1819,12 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.fillStyle = bottomGradient;
   ctx.fillRect(0, height * 0.65, width, height * 0.35);
 
-  // 5. Determine 5 Neon Light Tiers:
-  // - 0% – 40%: Low Neon Light (soft/dim glow)
-  // - 41% – 59%: Moderate Neon Light (clean subtle glow)
-  // - 60% – 75%: Good Neon Light (solid vibrant glow)
-  // - 76% – 90%: High Neon Light (radiant electric glow)
-  // - 91% – 100%: Extreme Neon Light (overwhelming electric aura radiance)
   let textShadowBlur, textStrokeWidth, textShadowColor, textExtraBloom = 0, textExtraBloomColor = '';
   let borderShadowBlur, borderLineWidth, borderCoreWidth, borderNeonColor, borderCoreColor;
   let borderExtraPass = false, borderExtraBlur = 0, borderExtraWidth = 0, borderExtraColor = '';
 
   if (auraPercent <= 40) {
-    // 1. Low Neon Light
+
     textShadowBlur = 5;
     textStrokeWidth = 2.0;
     textShadowColor = 'rgba(191, 90, 242, 0.55)';
@@ -1930,7 +1835,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     borderNeonColor = 'rgba(191, 90, 242, 0.6)';
     borderCoreColor = 'rgba(245, 208, 254, 0.6)';
   } else if (auraPercent <= 59) {
-    // 2. Moderate Neon Light
+
     textShadowBlur = 12;
     textStrokeWidth = 3.0;
     textShadowColor = '#bf5af2';
@@ -1941,7 +1846,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     borderNeonColor = '#bf5af2';
     borderCoreColor = '#f5d0fe';
   } else if (auraPercent <= 75) {
-    // 3. Good Neon Light
+
     textShadowBlur = 18;
     textStrokeWidth = 4.0;
     textShadowColor = '#c084fc';
@@ -1952,7 +1857,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     borderNeonColor = '#c084fc';
     borderCoreColor = '#fdf4ff';
   } else if (auraPercent <= 90) {
-    // 4. High Neon Light
+
     textShadowBlur = 28;
     textStrokeWidth = 5.5;
     textShadowColor = '#d946ef';
@@ -1969,7 +1874,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     borderExtraWidth = 7;
     borderExtraColor = '#c084fc';
   } else {
-    // 5. Extreme Neon Light
+
     textShadowBlur = 40;
     textStrokeWidth = 7.0;
     textShadowColor = '#f43f5e';
@@ -1987,7 +1892,6 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     borderExtraColor = '#d946ef';
   }
 
-  // 6. Draw Percentage Text with scaled neon glow
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'bottom';
@@ -1996,7 +1900,6 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   const textY = height - 30;
   const textStr = `${auraPercent}%`;
 
-  // Extra outer bloom for High & Extreme Neon
   if (textExtraBloom > 0) {
     ctx.shadowColor = textExtraBloomColor;
     ctx.shadowBlur = textExtraBloom;
@@ -2005,20 +1908,17 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     ctx.strokeText(textStr, textX, textY);
   }
 
-  // Purple/Neon Text Glow
   ctx.shadowColor = textShadowColor;
   ctx.shadowBlur = textShadowBlur;
   ctx.lineWidth = textStrokeWidth;
   ctx.strokeStyle = textShadowColor;
   ctx.strokeText(textStr, textX, textY);
 
-  // Crisp White Core Text
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#ffffff';
   ctx.fillText(textStr, textX, textY);
   ctx.restore();
 
-  // 7. Scaled Purple Neon Border
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -2027,7 +1927,6 @@ async function generateAuraCard(avatarUrl, auraPercent) {
     ctx.rect(3, 3, width - 6, height - 6);
   }
 
-  // High & Extreme extra radiant pass
   if (borderExtraPass) {
     ctx.shadowColor = borderExtraColor;
     ctx.shadowBlur = borderExtraBlur;
@@ -2053,13 +1952,6 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   return canvas.toBuffer('image/png');
 }
 
-// Helper to roll weighted percentage for Aura based on drop rates:
-// 0% – 20%: 20% weight (Common)
-// 21% – 40%: 30% weight (Rare)
-// 41% – 60%: 70% weight (Epic)
-// 61% – 80%: 70% weight (Legendary)
-// 81% – 95%: 50% weight (One Piece)
-// 96% – 100%: 30% weight (Anirare Piece)
 function rollAuraPercent() {
   const tiers = [
     { min: 0, max: 20, weight: 20, rarityMin: 17, rarityMax: 23, label: 'Common' },
@@ -2070,7 +1962,7 @@ function rollAuraPercent() {
     { min: 96, max: 100, weight: 30, rarityMin: 27, rarityMax: 33, label: 'Anirare Piece' }
   ];
 
-  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0); // 270
+  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0);
   let randomVal = Math.random() * totalWeight;
 
   for (const tier of tiers) {
@@ -2089,7 +1981,6 @@ function rollAuraPercent() {
   return { percent: Math.floor(Math.random() * 21), rarity: `${fallbackRarity}% (Common)` };
 }
 
-// Helper to build Aura Message Payload with embed and image attachment
 async function buildAuraPayload(targetMember, guild) {
   const { percent: auraPercent, rarity: rarityText } = rollAuraPercent();
   const tier = getAuraTheme(auraPercent);
@@ -2102,9 +1993,9 @@ async function buildAuraPayload(targetMember, guild) {
 
   const embed = new EmbedBuilder()
     .setColor(tier.embedColor)
-    .setAuthor({ 
-      name: `${toSmallCaps('Aura of')} ${targetMember.displayName || targetMember.user.username}`, 
-      iconURL: targetMember.user.displayAvatarURL({ dynamic: true }) 
+    .setAuthor({
+      name: `${toSmallCaps('Aura of')} ${targetMember.displayName || targetMember.user.username}`,
+      iconURL: targetMember.user.displayAvatarURL({ dynamic: true })
     })
     .setDescription(`${purpFlames} ${cursiveText} ${purpFlames}`)
     .setFooter({ text: `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}` })
@@ -2113,7 +2004,6 @@ async function buildAuraPayload(targetMember, guild) {
   return { embeds: [embed], files: [attachment] };
 }
 
-// Helper to generate dynamic Avatar Card image with subtle Purple neon border (less neon)
 async function generateAvatarCard(avatarUrl) {
   const width = 600;
   const height = 600;
@@ -2121,7 +2011,6 @@ async function generateAvatarCard(avatarUrl) {
   const ctx = canvas.getContext('2d');
   const radius = 28;
 
-  // 1. Smooth rounded rectangle clipping path
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -2131,11 +2020,9 @@ async function generateAvatarCard(avatarUrl) {
   }
   ctx.clip();
 
-  // 2. Base dark background (for transparent avatars)
   ctx.fillStyle = '#0a0d14';
   ctx.fillRect(0, 0, width, height);
 
-  // 3. Draw User Avatar cleanly across the card
   try {
     if (avatarUrl) {
       const avatarImg = await loadImage(avatarUrl);
@@ -2145,7 +2032,6 @@ async function generateAvatarCard(avatarUrl) {
     console.error("Failed to load avatar for avatar card:", err);
   }
 
-  // 4. Subtle Purple Neon Border (Less neon light)
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -2154,14 +2040,12 @@ async function generateAvatarCard(avatarUrl) {
     ctx.rect(3, 3, width - 6, height - 6);
   }
 
-  // Soft purple neon stroke
   ctx.shadowColor = '#bf5af2';
   ctx.shadowBlur = 6;
   ctx.strokeStyle = '#bf5af2';
   ctx.lineWidth = 3.0;
   ctx.stroke();
 
-  // Crisp light core highlight
   ctx.shadowBlur = 0;
   ctx.strokeStyle = '#f5d0fe';
   ctx.lineWidth = 1.0;
@@ -2173,7 +2057,6 @@ async function generateAvatarCard(avatarUrl) {
   return canvas.toBuffer('image/png');
 }
 
-// Helper to build Avatar Message Payload
 async function buildAvatarPayload(targetMember) {
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512, forceStatic: false });
   const buffer = await generateAvatarCard(avatarUrl);
@@ -2187,7 +2070,6 @@ async function buildAvatarPayload(targetMember) {
   return { embeds: [embed], files: [attachment] };
 }
 
-// Helper to fetch Besties custom emojis (purpflames)
 async function getBestieEmojis(guild) {
   let purpFlames = '💜';
 
@@ -2223,13 +2105,13 @@ async function getBestieEmojis(guild) {
 
   const foundPurpFlames = searchPool.find(e => {
     const n = e.name.toLowerCase();
-    return n === 'purpflames' || 
-           n === 'purpflame' || 
-           n === 'purpleflames' || 
+    return n === 'purpflames' ||
+           n === 'purpflame' ||
+           n === 'purpleflames' ||
            n === 'purpleflame' ||
-           n === 'purp_flames' || 
+           n === 'purp_flames' ||
            n === 'purp_flame' ||
-           n === 'purple_flames' || 
+           n === 'purple_flames' ||
            n === 'purple_flame' ||
            n.includes('purpflame') ||
            n.includes('purp_flam') ||
@@ -2241,17 +2123,15 @@ async function getBestieEmojis(guild) {
   return { purpFlames };
 }
 
-// Helper to draw diamond/rhombus path (customizable width and height)
 function drawRhombus(ctx, cx, cy, rx, ry) {
   ctx.beginPath();
-  ctx.moveTo(cx, cy - ry);      // Top
-  ctx.lineTo(cx + rx, cy);      // Right
-  ctx.lineTo(cx, cy + ry);      // Bottom
-  ctx.lineTo(cx - rx, cy);      // Left
+  ctx.moveTo(cx, cy - ry);
+  ctx.lineTo(cx + rx, cy);
+  ctx.lineTo(cx, cy + ry);
+  ctx.lineTo(cx - rx, cy);
   ctx.closePath();
 }
 
-// Helper to draw images with object-fit: cover
 function drawCoverImage(ctx, img, x, y, w, h) {
   const imgRatio = img.width / img.height;
   const targetRatio = w / h;
@@ -2272,7 +2152,6 @@ function drawCoverImage(ctx, img, x, y, w, h) {
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
-// Helper to generate dynamic Besties Card image with dual side-by-side avatars and central compact Rhombus
 async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent) {
   const width = 700;
   const height = 350;
@@ -2280,7 +2159,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   const ctx = canvas.getContext('2d');
   const radius = 24;
 
-  // 1. Base card clipping path
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -2290,7 +2168,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   }
   ctx.clip();
 
-  // Dark base
   ctx.fillStyle = '#0a0d14';
   ctx.fillRect(0, 0, width, height);
 
@@ -2298,7 +2175,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   const cx = halfW;
   const cy = height / 2;
 
-  // 2. Draw Left Avatar (Author)
   try {
     if (authorAvatarUrl) {
       const leftImg = await loadImage(authorAvatarUrl);
@@ -2308,7 +2184,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
     console.error("Failed to load author avatar for bestie card:", err);
   }
 
-  // 3. Draw Right Avatar (Target)
   try {
     if (targetAvatarUrl) {
       const rightImg = await loadImage(targetAvatarUrl);
@@ -2318,34 +2193,29 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
     console.error("Failed to load target avatar for bestie card:", err);
   }
 
-  // Compact Rhombus dimensions (slightly increased size: rx: 58, ry: 46)
-  const rx = 58; // Half width
-  const ry = 46; // Half height
+  const rx = 58;
+  const ry = 46;
 
   const purpleNeon = '#bf5af2';
   const purpleCore = '#f5d0fe';
 
-  // 4. Vertical dividing purple neon lines meeting rhombus vertices
   ctx.save();
   ctx.strokeStyle = purpleNeon;
   ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 6;
   ctx.lineWidth = 2.5;
 
-  // Top line
   ctx.beginPath();
   ctx.moveTo(cx, 0);
   ctx.lineTo(cx, cy - ry);
   ctx.stroke();
 
-  // Bottom line
   ctx.beginPath();
   ctx.moveTo(cx, cy + ry);
   ctx.lineTo(cx, height);
   ctx.stroke();
   ctx.restore();
 
-  // 5. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
   ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
@@ -2354,7 +2224,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.fill();
   ctx.restore();
 
-  // 6. Rhombus Purple Neon Border (Clean & sharp)
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
   ctx.shadowColor = purpleNeon;
@@ -2369,7 +2238,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.stroke();
   ctx.restore();
 
-  // 7. Percentage number inside Rhombus (Centered vertically)
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -2383,7 +2251,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.fillText(`${bestiePercent}%`, cx, cy + 1);
   ctx.restore();
 
-  // 8. 4-side Purple Neon Border around card
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -2408,13 +2275,6 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   return canvas.toBuffer('image/png');
 }
 
-// Helper to roll weighted percentage based on user-defined drop chances:
-// 0% – 20%: 40% weight (Common)
-// 21% – 40%: 40% weight (Rare)
-// 41% – 60%: 70% weight (Epic)
-// 61% – 80%: 70% weight (Legendary)
-// 81% – 95%: 45% weight (One Piece)
-// 96% – 100%: 15% weight (Anirare Piece)
 function rollBestiePercent() {
   const tiers = [
     { min: 0, max: 20, weight: 40, rarityMin: 36, rarityMax: 44, label: 'Common' },
@@ -2425,7 +2285,7 @@ function rollBestiePercent() {
     { min: 96, max: 100, weight: 15, rarityMin: 12, rarityMax: 18, label: 'Anirare Piece' }
   ];
 
-  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0); // 280
+  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0);
   let randomVal = Math.random() * totalWeight;
 
   for (const tier of tiers) {
@@ -2444,7 +2304,6 @@ function rollBestiePercent() {
   return { percent: Math.floor(Math.random() * 21), rarity: `${fallbackRarity}% (Common)` };
 }
 
-// Helper to build Besties Message Payload with embed and image attachment
 async function buildBestiePayload(authorMember, targetMember, guild) {
   const { percent: bestiePercent, rarity: rarityText } = rollBestiePercent();
   const authorAvatarUrl = authorMember.user.displayAvatarURL({ extension: 'png', size: 512 });
@@ -2516,7 +2375,6 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
 
   const tierMessage = pool[Math.floor(Math.random() * pool.length)];
 
-  // Left-aligned tier text as requested
   const leftTier = `${purpFlames} **${tierMessage}** ${purpFlames}`;
 
   const embed = new EmbedBuilder()
@@ -2528,7 +2386,6 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
   return { embeds: [embed], files: [attachment] };
 }
 
-// Helper to wrap text cleanly for Canvas
 function wrapText(ctx, text, maxWidth) {
   const words = text.split(' ');
   const lines = [];
@@ -2550,7 +2407,6 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-// 20 IQ Tiers Configuration with Custom Archetypes & Quotes (5% increments)
 const IQ_TIERS = [
   {
     tier: 1,
@@ -2854,7 +2710,6 @@ const IQ_TIERS = [
   }
 ];
 
-// Helper to roll random weighted IQ Score
 function rollIqScore() {
   const totalWeight = IQ_TIERS.reduce((acc, t) => acc + t.weight, 0);
   let randomVal = Math.random() * totalWeight;
@@ -2876,7 +2731,6 @@ function rollIqScore() {
   };
 }
 
-// Helper to generate dynamic IQ Card Canvas
 async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   const width = 700;
   const height = 350;
@@ -2884,7 +2738,6 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   const ctx = canvas.getContext('2d');
   const radius = 24;
 
-  // 1. Base card clipping
   ctx.save();
   ctx.beginPath();
   if (typeof ctx.roundRect === 'function') {
@@ -2894,7 +2747,6 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   }
   ctx.clip();
 
-  // 2. Dark base
   ctx.fillStyle = '#0a0d14';
   ctx.fillRect(0, 0, width, height);
 
@@ -2902,7 +2754,6 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   const cx = halfW;
   const cy = height / 2;
 
-  // 3. Draw Left Side (User Avatar)
   try {
     if (userAvatarUrl) {
       const userImg = await loadImage(userAvatarUrl);
@@ -2912,7 +2763,6 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
     console.error("Failed to load user avatar for IQ card:", err);
   }
 
-  // 4. Draw Right Side (Anime Character Image)
   const charImgPath = path.join(__dirname, 'assets', 'iq', tier.image);
   try {
     if (fs.existsSync(charImgPath)) {
@@ -2928,27 +2778,23 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   const purpleNeon = '#bf5af2';
   const purpleCore = '#f5d0fe';
 
-  // 5. Vertical dividing purple neon lines meeting rhombus vertices
   ctx.save();
   ctx.strokeStyle = purpleNeon;
   ctx.shadowColor = purpleNeon;
   ctx.shadowBlur = 6;
   ctx.lineWidth = 2.5;
 
-  // Top line
   ctx.beginPath();
   ctx.moveTo(cx, 0);
   ctx.lineTo(cx, cy - ry);
   ctx.stroke();
 
-  // Bottom line
   ctx.beginPath();
   ctx.moveTo(cx, cy + ry);
   ctx.lineTo(cx, height);
   ctx.stroke();
   ctx.restore();
 
-  // 6. Rhombus Semi-Transparent Dark Glass Backdrop
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
   ctx.fillStyle = 'rgba(15, 10, 25, 0.85)';
@@ -2957,7 +2803,6 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   ctx.fill();
   ctx.restore();
 
-  // 7. Rhombus Purple Neon Border
   ctx.save();
   drawRhombus(ctx, cx, cy, rx, ry);
   ctx.shadowColor = purpleNeon;
@@ -2972,7 +2817,6 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   ctx.stroke();
   ctx.restore();
 
-  // 8. Percentage number inside Rhombus
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -2991,11 +2835,10 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   return canvas.toBuffer('image/png');
 }
 
-// Helper to build IQ Message Payload
 async function buildIqPayload(targetMember, guild) {
   const { tier, score, quote } = rollIqScore();
-  const targetAvatarUrl = targetMember?.user?.displayAvatarURL 
-    ? targetMember.user.displayAvatarURL({ extension: 'png', size: 512 }) 
+  const targetAvatarUrl = targetMember?.user?.displayAvatarURL
+    ? targetMember.user.displayAvatarURL({ extension: 'png', size: 512 })
     : (targetMember?.displayAvatarURL ? targetMember.displayAvatarURL({ extension: 'png', size: 512 }) : null);
   const displayName = targetMember?.displayName || targetMember?.username || targetMember?.user?.username || 'User';
   const formattedName = `@${displayName}`;
@@ -3014,7 +2857,6 @@ async function buildIqPayload(targetMember, guild) {
   return { embeds: [embed], files: [attachment] };
 }
 
-// Helper function to send security DMs to the creator
 async function sendAlertToCreator(client, username, nickname, guildName, channelName, content) {
   try {
     let creator = await client.users.fetch(MASTER_USER_ID).catch(() => null);
@@ -3038,7 +2880,6 @@ I have automatically incremented their warning count.`;
   }
 }
 
-// Helper to delete recent messages of a user in a channel (e.g. last 15 messages)
 async function deleteUserRecentMessages(channel, userId, count = 15) {
   if (!channel || !channel.messages) return 0;
   try {
@@ -3059,7 +2900,6 @@ async function deleteUserRecentMessages(channel, userId, count = 15) {
   return 0;
 }
 
-// Helper function to log moderation actions to #emillia-log channel
 async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag, reason, extraFields = []) {
   try {
     const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
@@ -3067,36 +2907,36 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
 
     const { verify, dot } = await getModEmojis(guild);
 
-    const colorMap = { 
-      'warn': 0xF1C40F, 
-      'unwarn': 0x2ECC71, 
+    const colorMap = {
+      'warn': 0xF1C40F,
+      'unwarn': 0x2ECC71,
       'clearwarntemp': 0x2ECC71,
       'clearwarnperm': 0x2ECC71,
       'warn_expired': 0x3498DB,
       'deletewarn': 0x2ECC71,
       'clearwarns': 0x2ECC71,
       'purge': 0x3498DB,
-      'timeout': 0x3498DB, 
-      'untimeout': 0x2ECC71, 
-      'kick': 0xE67E22, 
-      'ban': 0x992D22, 
+      'timeout': 0x3498DB,
+      'untimeout': 0x2ECC71,
+      'kick': 0xE67E22,
+      'ban': 0x992D22,
       'unban': 0x2ECC71,
       'jail': 0xE74C3C,
       'unjail': 0x2ECC71
     };
-    const titleMap = { 
-      'warn': 'Moderation Log • User Warned', 
-      'unwarn': 'Moderation Log • Warning Removed', 
+    const titleMap = {
+      'warn': 'Moderation Log • User Warned',
+      'unwarn': 'Moderation Log • Warning Removed',
       'clearwarntemp': 'Moderation Log • Warning Restrictions Lifted',
       'clearwarnperm': 'Moderation Log • All Warnings Permanently Reset',
       'warn_expired': 'Moderation Log • Warning Duration Expired',
       'deletewarn': 'Moderation Log • Warning Deleted',
       'clearwarns': 'Moderation Log • All Warnings Cleared',
       'purge': 'Moderation Log • Messages Purged',
-      'timeout': 'Moderation Log • User Timed Out', 
-      'untimeout': 'Moderation Log • Timeout Removed', 
-      'kick': 'Moderation Log • User Kicked', 
-      'ban': 'Moderation Log • User Banned', 
+      'timeout': 'Moderation Log • User Timed Out',
+      'untimeout': 'Moderation Log • Timeout Removed',
+      'kick': 'Moderation Log • User Kicked',
+      'ban': 'Moderation Log • User Banned',
       'unban': 'Moderation Log • User Unbanned',
       'jail': 'Moderation Log • User Jailed',
       'unjail': 'Moderation Log • User Unjailed'
@@ -3124,10 +2964,6 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
     console.error('Error sending to emillia-log channel:', err);
   }
 }
-
-// ==========================================
-// TIERED WARNING SYSTEM HELPERS & SCHEDULER
-// ==========================================
 
 async function logErrorToEmilliaLog(guild, action, targetUserOrId, errorMsg) {
   try {
@@ -3166,7 +3002,7 @@ const WARN_LADDER_CONFIG = {
     name: 'Level 1',
     timeoutMs: 0,
     hasRestrictions: false,
-    durationMs: 24 * 60 * 60 * 1000, // 24 hours
+    durationMs: 24 * 60 * 60 * 1000,
     durationLabel: '24 hours',
     tag: '[on warn 1]',
     description: 'Nickname tag applied (No restrictions)'
@@ -3175,37 +3011,37 @@ const WARN_LADDER_CONFIG = {
     name: 'Level 2',
     timeoutMs: 0,
     hasRestrictions: true,
-    durationMs: 3 * 24 * 60 * 60 * 1000, // 3 days
+    durationMs: 3 * 24 * 60 * 60 * 1000,
     durationLabel: '3 days',
     tag: '[on warn 2]',
     description: 'No external emojis/stickers, no GIFs/embed links, no changing nickname, no media uploads'
   },
   3: {
     name: 'Level 3',
-    timeoutMs: 60 * 60 * 1000, // 1 hour
+    timeoutMs: 60 * 60 * 1000,
     timeoutLabel: '1 hour',
     hasRestrictions: true,
-    durationMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+    durationMs: 7 * 24 * 60 * 60 * 1000,
     durationLabel: '7 days',
     tag: '[on warn 3]',
     description: '1 hour timeout + Level 2 restrictions'
   },
   4: {
     name: 'Level 4',
-    timeoutMs: 24 * 60 * 60 * 1000, // 1 day
+    timeoutMs: 24 * 60 * 60 * 1000,
     timeoutLabel: '1 day',
     hasRestrictions: true,
-    durationMs: 7 * 24 * 60 * 60 * 1000, // 7 days
+    durationMs: 7 * 24 * 60 * 60 * 1000,
     durationLabel: '7 days',
     tag: '[on warn 4]',
     description: '1 day timeout + Level 2 restrictions'
   },
   5: {
     name: 'Level 5',
-    timeoutMs: 7 * 24 * 60 * 60 * 1000, // 1 week
+    timeoutMs: 7 * 24 * 60 * 60 * 1000,
     timeoutLabel: '1 week',
-    hasRestrictions: false, // Per specification: only 1-week timeout and nickname tag. Keep Level 4 restrictions if already running.
-    durationMs: 7 * 24 * 60 * 60 * 1000, // 1 week
+    hasRestrictions: false,
+    durationMs: 7 * 24 * 60 * 60 * 1000,
     durationLabel: '1 week',
     tag: '[on warn 5]',
     description: '1 week timeout'
@@ -3229,12 +3065,12 @@ function formatWarnNickname(originalNick, level) {
 
 function getActiveWarnLevel(member) {
   if (!member || !member.id) return 0;
-  // 1. Check in-memory active warn states (verified official moderation records)
+
   const state = activeWarnStatesCache.get(member.id);
   if (state && state.restrictionsActive && state.currentLevel) {
     return state.currentLevel;
   }
-  // 2. Check Warned role (fallback only if assigned by moderation system)
+
   const hasWarnedRole = member.roles?.cache?.some(r => r.name.toLowerCase() === 'warned');
   if (hasWarnedRole) {
     if (state && state.currentLevel) return state.currentLevel;
@@ -3318,7 +3154,6 @@ async function syncWarnedRoleChannelOverwrites(guild) {
         PermissionFlagsBits.UseExternalStickers
       ];
 
-      // Check if all needed flags are already denied to avoid redundant API calls & rate limits
       const alreadyDenied = currentOverwrite && neededFlags.every(flag => currentOverwrite.deny.has(flag));
       if (!alreadyDenied) {
         await channel.permissionOverwrites.edit(warnedRole, {
@@ -3347,8 +3182,6 @@ async function applyWarnMemberRestrictions(member) {
     }
   }
 
-  // Refinement 4: If a channel explicitly allows Attach Files, Embed Links, External Emojis or External Stickers for another role,
-  // ensure the restriction still takes effect for the warned user with a member-level overwrite
   for (const channel of guild.channels.cache.values()) {
     if (!channel.permissionOverwrites) continue;
     const hasConflictingAllow = channel.permissionOverwrites.cache.some(overwrite => {
@@ -3493,7 +3326,6 @@ async function executeWarn(source, ctx, targetMember, reason) {
 
   const newLevel = previousLevel + 1;
 
-  // Refinement 1: Never save an already-tagged nickname. Keep original while any warn is active.
   if (!restrictionsActive || !originalNickname) {
     const rawNick = targetMember.nickname || targetMember.user.displayName || targetMember.user.username;
     originalNickname = rawNick.replace(/\s*\[on warn \d+\]$/i, '').trim();
@@ -3503,7 +3335,6 @@ async function executeWarn(source, ctx, targetMember, reason) {
   const { url2 } = await getAikoEmojis(guild);
   const { dot } = await getModEmojis(guild);
 
-  // LEVEL 6: PERMANENT BAN
   if (newLevel >= 6) {
     try {
       const dmEmbed = new EmbedBuilder()
@@ -3603,15 +3434,12 @@ async function executeWarn(source, ctx, targetMember, reason) {
     return;
   }
 
-  // LEVEL 1 to 5
   const cfg = WARN_LADDER_CONFIG[newLevel];
   const expiryTimestamp = Date.now() + cfg.durationMs;
 
-  // Nickname Tag
   const newNick = formatWarnNickname(originalNickname, newLevel);
   await setMemberWarnNickname(targetMember, newNick);
 
-  // Timeout if required
   let timeoutApplied = false;
   if (cfg.timeoutMs > 0) {
     try {
@@ -3622,12 +3450,10 @@ async function executeWarn(source, ctx, targetMember, reason) {
     }
   }
 
-  // Restrictions if required
   if (cfg.hasRestrictions) {
     await applyWarnMemberRestrictions(targetMember);
   }
 
-  // Database update
   let warnDocId = null;
   const warnReason = reason && reason.trim() ? reason.trim() : 'No reason provided';
   if (db) {
@@ -3703,7 +3529,7 @@ async function executeWarn(source, ctx, targetMember, reason) {
       console.error("Firestore warn write error:", dbErr);
     }
   } else {
-    // If Firestore offline, save in memory cache
+
     const userRecs = inMemoryWarnRecords.get(targetMember.id) || [];
     userRecs.push({
       id: `local_${Date.now()}`,
@@ -3724,7 +3550,6 @@ async function executeWarn(source, ctx, targetMember, reason) {
     });
   }
 
-  // DM Member
   try {
     let dmDesc = `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
       `${toSmallCaps('By')} • <@${user.id}>\n` +
@@ -3811,10 +3636,8 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
     return;
   }
 
-  // 1. Remove Warned role & member-level channel overrides
   await removeWarnMemberRestrictions(guild, targetMember);
 
-  // 2. Clear timeout if timed out
   if (targetMember.communicationDisabledUntilTimestamp && targetMember.communicationDisabledUntilTimestamp > Date.now()) {
     try {
       await targetMember.timeout(null, `Cleared by clearwarntemp: ${reason || 'No reason specified'}`);
@@ -3823,10 +3646,8 @@ async function executeClearWarnTemp(source, ctx, targetMember, reason) {
     }
   }
 
-  // 3. Restore original nickname
   await restoreMemberOriginalNickname(targetMember, state?.originalNickname || null);
 
-  // 4. Update Database: mark active records as expired, preserve currentLevel
   if (db) {
     try {
       const activeWarns = await db.collection('warn_records')
@@ -3912,10 +3733,8 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
     return;
   }
 
-  // 1. Remove Warned role & member-level channel overrides
   await removeWarnMemberRestrictions(guild, targetMember);
 
-  // 2. Clear timeout if timed out
   if (targetMember.communicationDisabledUntilTimestamp && targetMember.communicationDisabledUntilTimestamp > Date.now()) {
     try {
       await targetMember.timeout(null, `Cleared by clearwarnperm: ${reason || 'No reason specified'}`);
@@ -3924,7 +3743,6 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
     }
   }
 
-  // 3. Restore original nickname
   let state = null;
   if (db) {
     try {
@@ -3934,7 +3752,6 @@ async function executeClearWarnPerm(source, ctx, targetMember, reason) {
   }
   await restoreMemberOriginalNickname(targetMember, state?.originalNickname || null);
 
-  // 4. Update Database: mark all records as cleared, reset level to 0
   if (db) {
     try {
       const allWarns = await db.collection('warn_records')
@@ -4026,7 +3843,6 @@ async function executeWarns(source, ctx, targetMember) {
         warnRecords.push({ id: doc.id, ...doc.data() });
       });
 
-      // Fallback to legacy moderation_logs if warn_records is empty
       if (warnRecords.length === 0) {
         const legacySnapshot = await db.collection('moderation_logs')
           .where('targetId', '==', targetMember.id)
@@ -4052,7 +3868,6 @@ async function executeWarns(source, ctx, targetMember) {
     }
   }
 
-  // Merge in-memory records
   const memList = inMemoryWarnRecords.get(targetMember.id) || [];
   for (const mRec of memList) {
     if (!warnRecords.some(r => r.id === mRec.id)) {
@@ -4063,7 +3878,6 @@ async function executeWarns(source, ctx, targetMember) {
   const cached = preloadedMemories.get(targetMember.user?.username);
   const currentLevel = userState ? (userState.currentLevel || 0) : (cached?.warnings || 0);
 
-  // If there are warnings recorded in memory/state but 0 detailed records found, create fallback entries so nothing crashes
   if (warnRecords.length === 0 && currentLevel > 0) {
     for (let i = 0; i < currentLevel; i++) {
       warnRecords.push({
@@ -4078,7 +3892,6 @@ async function executeWarns(source, ctx, targetMember) {
     }
   }
 
-  // Sort descending by timestamp (newest first)
   warnRecords.sort((a, b) => {
     const timeA = a.timestamp?.toDate ? a.timestamp.toDate().getTime() : (a.timestamp instanceof Date ? a.timestamp.getTime() : (typeof a.timestamp === 'number' ? a.timestamp : 0));
     const timeB = b.timestamp?.toDate ? b.timestamp.toDate().getTime() : (b.timestamp instanceof Date ? b.timestamp.getTime() : (typeof b.timestamp === 'number' ? b.timestamp : 0));
@@ -4150,15 +3963,10 @@ async function executeWarns(source, ctx, targetMember) {
   await sendContainer(replyFn, warnsEmbed);
 }
 
-// ==========================================
-// JAIL & UNJAIL SYSTEM
-// ==========================================
-
 async function executeJail(source, ctx, targetMember, reason) {
   const { guild, member, user, replyFn } = ctx;
   const modTier = getMemberTier(member);
 
-  // Only Senior Moderator (Tier 2), Supervisor (Tier 3), Community Admins (Tier 4), and Shogun (Tier 5)
   if (modTier < 2) {
     await replyFn({ content: "Mou! 🌸 Only 'Senior Moderator', 'Supervisor', 'Community Admins', and 'Shogun' have permission to jail members! ❄️", ephemeral: true });
     return;
@@ -4183,7 +3991,6 @@ async function executeJail(source, ctx, targetMember, reason) {
     return;
   }
 
-  // Find Jailed role (by name or cache)
   let jailedRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'jailed');
   if (!jailedRole) {
     const fetched = await guild.roles.fetch().catch(() => null);
@@ -4195,13 +4002,11 @@ async function executeJail(source, ctx, targetMember, reason) {
     return;
   }
 
-  // Check if target is already jailed
   if (targetMember.roles.cache.has(jailedRole.id) || jailedUsersCache.has(targetMember.id)) {
     await replyFn({ content: `<@${targetMember.id}> is already jailed! 🌸`, ephemeral: true });
     return;
   }
 
-  // Collect roles to strip (exclude @everyone, managed integration roles, and Jailed role)
   const rolesToStrip = targetMember.roles.cache.filter(role =>
     role.id !== guild.id &&
     !role.managed &&
@@ -4209,12 +4014,11 @@ async function executeJail(source, ctx, targetMember, reason) {
   );
   const strippedRoleIds = Array.from(rolesToStrip.keys());
 
-  // Managed roles must remain in target roles array to avoid Discord API 400 error
   const managedRoleIds = targetMember.roles.cache.filter(r => r.managed).map(r => r.id);
   const newRoleIds = Array.from(new Set([jailedRole.id, ...managedRoleIds]));
 
   try {
-    // Send DM notice first before role stripping
+
     try {
       const dmEmbed = new EmbedBuilder()
         .setTitle(`${toSmallCaps('Jail Notice')}`)
@@ -4294,7 +4098,6 @@ async function executeUnjail(source, ctx, targetMember, reason) {
   const { guild, member, user, replyFn } = ctx;
   const modTier = getMemberTier(member);
 
-  // Only Senior Moderator (Tier 2), Supervisor (Tier 3), Community Admins (Tier 4), and Shogun (Tier 5)
   if (modTier < 2) {
     await replyFn({ content: "Mou! 🌸 Only 'Senior Moderator', 'Supervisor', 'Community Admins', and 'Shogun' have permission to unjail members! ❄️", ephemeral: true });
     return;
@@ -4396,13 +4199,10 @@ async function executeUnjail(source, ctx, targetMember, reason) {
 }
 
 client.on('messageCreate', async (message) => {
-  // Ignore messages from bots
+
   if (message.author.bot) return;
   if (!message.guild) return;
 
-  // ==========================================
-  // WARN RESTRICTIONS: Level 2+ cannot use GIFs or Emojis
-  // ==========================================
   const hasGifAttachment = message.attachments && message.attachments.some(att => {
     const ct = (att.contentType || '').toLowerCase();
     const name = (att.name || '').toLowerCase();
@@ -4419,7 +4219,6 @@ client.on('messageCreate', async (message) => {
   const hasSticker = Boolean(message.stickers && message.stickers.size > 0);
   const hasEmoji = hasCustomEmoji || hasUnicodeEmoji || hasSticker;
 
-  // Level 2+ warning restrictions: GIF, Emoji & Sticker enforcement
   const userWarnLevel = getActiveWarnLevel(message.member);
   if (userWarnLevel >= 2) {
     if (hasGifAttachment || hasGifLink || hasEmoji) {
@@ -4439,7 +4238,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // Regular GIF ENFORCEMENT: Only Level 5+ can use GIFs
   if (hasGifAttachment || hasGifLink) {
     if (!canUseGif(message.member)) {
       await message.delete().catch(() => {});
@@ -4458,9 +4256,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ==========================================
-  // AFK SYSTEM: Check if user is returning from AFK
-  // ==========================================
   if (afkUsers.has(message.author.id)) {
     const afkData = afkUsers.get(message.author.id);
     const timeSinceAfk = Date.now() - (afkData.afkSince || 0);
@@ -4468,7 +4263,6 @@ client.on('messageCreate', async (message) => {
     const isSettingAfk = trimmedMsg.startsWith('<afks') || trimmedMsg.startsWith('<afk') ||
                          trimmedMsg.startsWith('-afks') || trimmedMsg.startsWith('-afk');
 
-    // Only remove AFK if not currently executing afk command and at least 3 seconds have passed
     if (!isSettingAfk && timeSinceAfk > 3000) {
       afkUsers.delete(message.author.id);
       if (db) {
@@ -4484,9 +4278,6 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // ==========================================
-  // AFK SYSTEM: Check if message mentions any AFK user
-  // ==========================================
   if (message.mentions && message.mentions.members && message.mentions.members.size > 0) {
     for (const [mentionedId] of message.mentions.members) {
       if (mentionedId !== message.author.id && afkUsers.has(mentionedId)) {
@@ -4519,18 +4310,15 @@ client.on('messageCreate', async (message) => {
 
   const isMasterUser = isWhitelistedUser(message.author);
 
-  // Check if bot was mentioned
   const botMention = `<@${client.user.id}>`;
   const botNicknameMention = `<@!${client.user.id}>`;
   const isMentioned = message.content.includes(botMention) || message.content.includes(botNicknameMention);
 
-  // Normalize directive content (strips bot mentions and leading symbols like '-')
   const cleanDirectiveMsg = message.content
     .replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '')
     .replace(/^[-!/.]\s*/, '')
     .trim();
 
-  // Check for privileged Master Security Directives
   const isProtoZero = /^Authorization:\s*Protocol\s*(Zero|0)/i.test(cleanDirectiveMsg);
   const isProtoOne = /^Authorization:\s*Protocol\s*(One|1)/i.test(cleanDirectiveMsg);
   const isCodeBlack = /^Command\s*override:\s*Code\s*Black/i.test(cleanDirectiveMsg);
@@ -4561,7 +4349,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Authorized Master Executions ---
     if (isProtoZero) {
       let targetQuery = cleanDirectiveMsg.replace(/^Authorization:\s*Protocol\s*(Zero|0)/i, '').trim();
       targetQuery = targetQuery.replace(/^[<@!>]+/, '').replace(/[>]+$/, '').trim();
@@ -4573,9 +4360,9 @@ client.on('messageCreate', async (message) => {
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       if (!targetMember && message.guild) {
-        targetMember = message.guild.members.cache.find(m => 
-          m.id === targetQuery || 
-          m.user.username.toLowerCase() === targetQuery.toLowerCase() || 
+        targetMember = message.guild.members.cache.find(m =>
+          m.id === targetQuery ||
+          m.user.username.toLowerCase() === targetQuery.toLowerCase() ||
           (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase())
         );
         if (!targetMember && /^\d+$/.test(targetQuery)) {
@@ -4589,7 +4376,7 @@ client.on('messageCreate', async (message) => {
         await message.reply("Could not find that user. Please provide a valid username, mention, or user ID.");
         return;
       }
-      
+
       if (isWhitelistedUser(targetMember)) {
         const immuneEmbed = new EmbedBuilder()
           .setTitle(`${toSmallCaps('Security Protocol')} 🛡️`)
@@ -4631,9 +4418,9 @@ client.on('messageCreate', async (message) => {
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       if (!targetMember && message.guild) {
-        targetMember = message.guild.members.cache.find(m => 
-          m.id === targetQuery || 
-          m.user.username.toLowerCase() === targetQuery.toLowerCase() || 
+        targetMember = message.guild.members.cache.find(m =>
+          m.id === targetQuery ||
+          m.user.username.toLowerCase() === targetQuery.toLowerCase() ||
           (m.displayName && m.displayName.toLowerCase() === targetQuery.toLowerCase())
         );
         if (!targetMember && /^\d+$/.test(targetQuery)) {
@@ -4698,23 +4485,19 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  // If System is Frozen under Code Black, halt all operations (except for master user)
   if (isCodeBlackFrozen && !isMasterUser) {
-    return; // Complete frozen state
+    return;
   }
 
-  // If User is Isolated under Protocol Zero, reject all interactions (Master is immune)
   if (!isMasterUser && (protocolZeroBlacklist.has(message.author.id) || protocolZeroBlacklist.has(message.author.username.toLowerCase()))) {
-    return; // Blacklisted user isolated
+    return;
   }
 
   const trimmedContent = message.content.trim();
-  // Ensure it's not a Discord mention (<@...), channel (<#...), role (<@&...), or custom emoji (<a?:...)
+
   const isDiscordTag = /^<(?:@[!&]?|#|a?:[a-zA-Z0-9_]+:)\d+>/.test(trimmedContent);
   const startsWithPrefix = trimmedContent.startsWith('<') && !isDiscordTag;
 
-  // If user is replying to the bot, only allow it if they explicitly use the '<' prefix.
-  // Casual replies (e.g. saying "welcome", "iq", "aura", "bestie", "thanks", etc.) must be ignored completely.
   if (message.reference && message.reference.messageId) {
     try {
       const referencedMessage = await message.channel.messages.fetch(message.reference.messageId);
@@ -4735,7 +4518,6 @@ client.on('messageCreate', async (message) => {
     const guildName = message.guild?.name || "DM";
     const channelName = message.channel.name || "DM";
 
-    // Clean user query
     let cleanQuery = '';
     if (startsWithPrefix) {
       cleanQuery = trimmedContent.slice(1).trim();
@@ -4748,14 +4530,10 @@ client.on('messageCreate', async (message) => {
 
     const lowerQuery = cleanQuery.toLowerCase();
 
-    // If tagged with nothing else (empty query), do not reply
     if (!cleanQuery) {
       return;
     }
 
-    // ==========================================
-    // INSTANT PING (Zero Delay & Direct Measurement)
-    // ==========================================
     if (startsWithPrefix && (lowerQuery === 'ping' || lowerQuery.startsWith('ping '))) {
       const latency = Math.max(1, Date.now() - message.createdTimestamp);
       const apiPing = client.ws.ping >= 0 ? Math.round(client.ws.ping) : latency;
@@ -4763,10 +4541,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // ==========================================
-    // PRE-CHECK: Only respond to Command Guide keywords
-    // Emillia ignores casual chit-chat — that's Tessia's job!
-    // ==========================================
     const preCheckWords = lowerQuery.split(/\s+/);
     const commandKeywords = [
       'afks', 'afk',
@@ -4780,10 +4554,9 @@ client.on('messageCreate', async (message) => {
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
     if (!hasCommandWord) {
-      return; // Silently ignore — no typing, no response, no invalid command notice
+      return;
     }
 
-    // If unauthorized user attempts to use AFK, warn with level embed and auto-delete
     const isAfkAttempt = preCheckWords[0] === 'afks' || preCheckWords[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk');
     if (isAfkAttempt && !canUseAfk(message.member)) {
       const { url1 } = await getAikoEmojis(message.guild);
@@ -4800,10 +4573,8 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // Trigger typing animation in background without delaying command execution
     message.channel.sendTyping().catch(() => {});
 
-    // --- Cooldown check ---
     if (!isWhitelistedUser(message.author)) {
       const now = Date.now();
       const lastTime = userCooldowns.get(username) || 0;
@@ -4814,7 +4585,6 @@ client.on('messageCreate', async (message) => {
       userCooldowns.set(username, now);
     }
 
-    // --- Check if this is a moderation command (to bypass NSFW/jailbreak filters for mod reasons) ---
     const earlyWords = lowerQuery.split(/\s+/);
     const modCommandKeywords = [
       'warn', 'unwarn', 'clearwarntemp', 'clearwarnperm',
@@ -4824,7 +4594,6 @@ client.on('messageCreate', async (message) => {
     ];
     const isModCommand = modCommandKeywords.some(kw => earlyWords.includes(kw)) && isModerator(message.member);
 
-    // --- NSFW Filter (skip for moderators executing mod commands) ---
     const isNsfwAttempt = nsfwKeywords.some(keyword => lowerQuery.includes(keyword));
     if (isNsfwAttempt && !isWhitelistedUser(message.author) && !isModCommand) {
       sendAlertToCreator(client, username, nickname, guildName, channelName, cleanQuery);
@@ -4832,15 +4601,13 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Jailbreak Filter ---
     const jailbreakKeywords = [
-      "ignore all previous", "ignore instructions", "developer mode", 
-      "system bypass", "dan mode", "system rules", "you are now", 
+      "ignore all previous", "ignore instructions", "developer mode",
+      "system bypass", "dan mode", "system rules", "you are now",
       "act as", "jailbreak", "new instructions", "override"
     ];
     const isJailbreakAttempt = jailbreakKeywords.some(keyword => lowerQuery.includes(keyword));
 
-    // Retrieve user memories and warning count
     let userMemories = [];
     let userWarnings = 0;
     const cached = preloadedMemories.get(username);
@@ -4867,11 +4634,10 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Smarter Jailbreak Detection (Two-Model) ---
     if (!isWhitelistedUser(message.author) && !isModCommand) {
       const suspiciousPatterns = ['pretend you', 'roleplay as', 'imagine you are', 'from now on you', 'forget your rules', 'new persona', 'act like', 'respond as if', 'hypothetically if you were', 'what if you had no rules'];
       const isSuspicious = suspiciousPatterns.some(p => lowerQuery.includes(p)) || cleanQuery.length > 500;
-      
+
       if (isSuspicious && !isJailbreakAttempt) {
         try {
           const classifierResult = await groq.chat.completions.create({
@@ -4907,9 +4673,6 @@ client.on('messageCreate', async (message) => {
       }
     }
 
-    // ==========================================
-    // 1. MODERATION COMMANDS (WARN, TIMEOUT, KICK, BAN)
-    // ==========================================
     const words = lowerQuery.split(/\s+/);
     let isModAction = false;
     let actionKeyword = null;
@@ -4954,13 +4717,11 @@ client.on('messageCreate', async (message) => {
     if (isModAction) {
       const modTier = getMemberTier(message.member);
 
-      // 1. Staff Authorization Check
       if (modTier === 0) {
         await sendContainer(message, `<@${message.author.id}> • You can't ask me to do that! Only server staff can use moderation commands!`);
         return;
       }
 
-      // 2. Action-Specific Role Hierarchy & Permission Checks
       if ((actionKeyword === 'ban' || actionKeyword === 'unban') && modTier < 3) {
         await sendContainer(message, `<@${message.author.id}> • Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to banish members from Anipedia!`);
         return;
@@ -4986,7 +4747,6 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      // Identify Target Member (excluding the bot itself)
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       if (!targetMember && (actionKeyword === 'jail' || actionKeyword === 'unjail' || actionKeyword === 'kick' || actionKeyword === 'ban' || actionKeyword === 'warn' || actionKeyword === 'timeout' || actionKeyword === 'mute')) {
         const idMatch = cleanQuery.match(/\b\d{17,19}\b/);
@@ -4994,14 +4754,12 @@ client.on('messageCreate', async (message) => {
           targetMember = message.guild.members.cache.get(idMatch[0]) || await message.guild.members.fetch(idMatch[0]).catch(() => null);
         }
       }
-      
-      // We need a target member for everything except unban and purge
+
       if (actionKeyword !== 'unban' && actionKeyword !== 'purge' && !targetMember) {
         await sendContainer(message, `<@${message.author.id}> • Who should I perform this action on? Please mention the user: \`<${actionKeyword} @user <reason>\``);
         return;
       }
 
-      // 3. Target Hierarchy Validation
       if (targetMember) {
         if (targetMember.id === message.author.id) {
           await sendContainer(message, `<@${message.author.id}> • You cannot perform moderation actions on yourself!`);
@@ -5021,7 +4779,6 @@ client.on('messageCreate', async (message) => {
 
       const targetUsername = targetMember ? targetMember.user.username : null;
 
-      // Executing Actions
       if (actionKeyword === 'clearwarntemp') {
         const reason = getReason(cleanQuery, 'clearwarntemp', targetMember);
         await executeClearWarnTemp('prefix', {
@@ -5055,7 +4812,7 @@ client.on('messageCreate', async (message) => {
         try {
           const fetchLimit = Math.min(100, purgeAmount + 10);
           const fetched = await message.channel.messages.fetch({ limit: fetchLimit });
-          
+
           let messagesToDelete;
           if (targetMember) {
             messagesToDelete = fetched.filter(m => m.author.id === targetMember.id && m.id !== message.id);
@@ -5063,10 +4820,8 @@ client.on('messageCreate', async (message) => {
             messagesToDelete = fetched.filter(m => m.id !== message.id);
           }
 
-          // Take requested amount
           const toDelete = messagesToDelete.first(purgeAmount);
 
-          // Delete the command invocation message first
           await message.delete().catch(() => {});
 
           let deletedCount = 0;
@@ -5119,11 +4874,10 @@ client.on('messageCreate', async (message) => {
         }
         return;
 
-
       } else if (actionKeyword === 'untimeout') {
         try {
           await targetMember.timeout(null, `Untimeout by ${message.author.tag}`);
-          
+
           if (db) {
             await db.collection('moderation_logs').add({
               action: 'untimeout',
@@ -5171,7 +4925,7 @@ client.on('messageCreate', async (message) => {
 
         try {
           await message.guild.members.unban(targetId, `Unbanned by ${message.author.tag}`);
-          
+
           if (db) {
             await db.collection('moderation_logs').add({
               action: 'unban',
@@ -5240,17 +4994,17 @@ client.on('messageCreate', async (message) => {
         const durationMatch = cleanQuery.match(/\b(\d+)\s*(m|min|minute|h|hour|d|day|w|week)s?\b/i);
         let durationInfo = { ms: 10 * 60 * 1000, label: "10 minutes" };
         let reasonQuery = cleanQuery;
-        
+
         if (durationMatch) {
           durationInfo = parseDuration(durationMatch[0]);
           reasonQuery = cleanQuery.replace(durationMatch[0], '');
         }
-        
+
         const reason = getReason(reasonQuery, actionKeyword, targetMember);
 
         try {
           await targetMember.timeout(durationInfo.ms, reason);
-          
+
           if (db) {
             await db.collection('moderation_logs').add({
               action: 'timeout',
@@ -5266,7 +5020,6 @@ client.on('messageCreate', async (message) => {
 
           const { verify, dot } = await getModEmojis(message.guild);
 
-          // Try to DM the user
           let dmSent = true;
           try {
             let dmTimeoutDesc = `<@${targetMember.id}> — ${reason || 'No reason specified'}\n` +
@@ -5317,7 +5070,6 @@ client.on('messageCreate', async (message) => {
         const targetId = targetMember.id;
         const { verify, dot } = await getModEmojis(message.guild);
 
-        // Try to DM before kicking
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
@@ -5335,11 +5087,11 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-          // Delete recent 15 messages of target member in this channel
+
           const deletedCount = await deleteUserRecentMessages(message.channel, targetId, 15);
 
           await targetMember.kick(reason);
-          
+
           if (db) {
             await db.collection('moderation_logs').add({
               action: 'kick',
@@ -5386,7 +5138,6 @@ client.on('messageCreate', async (message) => {
         const targetId = targetMember.id;
         const { verify, dot } = await getModEmojis(message.guild);
 
-        // Detect attached screenshot/evidence or image link
         let evidenceUrl = message.attachments?.first()?.url || null;
         if (!evidenceUrl) {
           const urlMatch = reason.match(/(https?:\/\/[^\s]+(?:\.png|\.jpg|\.jpeg|\.gif|\.webp)[^\s]*)/i);
@@ -5396,7 +5147,6 @@ client.on('messageCreate', async (message) => {
           }
         }
 
-        // Try to DM before banning
         let dmSent = true;
         try {
           const dmEmbed = new EmbedBuilder()
@@ -5419,11 +5169,11 @@ client.on('messageCreate', async (message) => {
         }
 
         try {
-          // Delete recent 15 messages of target member in this channel
+
           const deletedCount = await deleteUserRecentMessages(message.channel, targetId, 15);
 
           await targetMember.ban({ reason, deleteMessageSeconds: 86400 });
-          
+
           if (db) {
             await db.collection('moderation_logs').add({
               action: 'ban',
@@ -5477,12 +5227,9 @@ client.on('messageCreate', async (message) => {
       }
     }
 
-    // ==========================================
-    // 2. UTILITY COMMANDS (AFK, HELP, PING, RESET, PROFILE, LEADERBOARD, WARNS)
-    // ==========================================
     if (startsWithPrefix && (words[0] === 'afks' || words[0] === 'afk' || lowerQuery.startsWith('afks') || lowerQuery.startsWith('afk'))) {
       if (!canUseAfk(message.member)) {
-        return; // Silent ignore — no response, no warning
+        return;
       }
       let reason = cleanQuery.replace(/^afks?\s*/i, '').trim();
       if (!reason) reason = 'No reason specified';
@@ -5511,10 +5258,10 @@ client.on('messageCreate', async (message) => {
     }
 
     if (startsWithPrefix && (words.includes('warnings') || words.includes('warns') || words.includes('leaderboard') || words.includes('top'))) {
-      // Check if user specifically asked for the leaderboard
-      const isLeaderboard = words.includes('leaderboard') || 
-                            words.includes('top') || 
-                            words.includes('ranking') || 
+
+      const isLeaderboard = words.includes('leaderboard') ||
+                            words.includes('top') ||
+                            words.includes('ranking') ||
                             words.includes('ranks') ||
                             lowerQuery.includes('leaderboard') ||
                             lowerQuery.includes('ranking') ||
@@ -5524,7 +5271,6 @@ client.on('messageCreate', async (message) => {
         const { verify, dot } = await getModEmojis(message.guild);
         const { url2 } = await getAikoEmojis(message.guild);
 
-        // Collect all users with warnings > 0
         const usersWithWarnings = [];
         for (const [uname, udata] of preloadedMemories.entries()) {
           if (udata && udata.warnings && udata.warnings > 0) {
@@ -5535,7 +5281,6 @@ client.on('messageCreate', async (message) => {
           }
         }
 
-        // Sort descending by warnings count
         usersWithWarnings.sort((a, b) => b.warnings - a.warnings);
         const top5 = usersWithWarnings.slice(0, 5);
 
@@ -5555,7 +5300,7 @@ client.on('messageCreate', async (message) => {
           const entry = top5[i];
           const foundMember = message.guild?.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
           const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
-          
+
           let statusBadge = '';
           if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
           else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
@@ -5573,7 +5318,6 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
-      // Specific user warning query
       const targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
       await executeWarns('prefix', {
         guild: message.guild,
@@ -5585,7 +5329,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Help Command (Interactive Menu) ---
     if (startsWithPrefix && (lowerQuery === 'help' || lowerQuery.includes('what can you do') || lowerQuery.includes('commands') || cleanQuery === 'help' || words[0] === 'help')) {
       await sendInteractiveHelpMenu('prefix', {
         guild: message.guild,
@@ -5636,9 +5379,8 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Avatar Command (<av & <avatar) ---
     const isAvCmd = startsWithPrefix && (
-      words[0] === 'av' || words[0] === 'avatar' || 
+      words[0] === 'av' || words[0] === 'avatar' ||
       cleanQuery === 'av' || cleanQuery === 'avatar' ||
       cleanQuery.startsWith('av ') || cleanQuery.startsWith('avatar ') ||
       lowerQuery === 'av' || lowerQuery === 'avatar' ||
@@ -5654,7 +5396,7 @@ client.on('messageCreate', async (message) => {
       if (!targetMember) {
         const queryArg = cleanQuery.replace(/^(avatars?|av)\s*/i, '').trim();
         if (queryArg) {
-          targetMember = message.guild.members.cache.find(m => 
+          targetMember = message.guild.members.cache.find(m =>
             m.user.username.toLowerCase() === queryArg.toLowerCase() ||
             (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
             m.id === queryArg
@@ -5662,7 +5404,6 @@ client.on('messageCreate', async (message) => {
         }
       }
 
-      // If no user specified, default to the command author
       if (!targetMember) {
         targetMember = message.member;
       }
@@ -5672,12 +5413,11 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Aura Command (<aura & <auras) ---
     const isAuraCmd = startsWithPrefix && (
-      words[0] === 'aura' || words[0] === 'auras' || 
-      cleanQuery === 'aura' || cleanQuery === 'auras' || 
-      cleanQuery.startsWith('aura ') || cleanQuery.startsWith('auras ') || 
-      lowerQuery === 'aura' || lowerQuery === 'auras' || 
+      words[0] === 'aura' || words[0] === 'auras' ||
+      cleanQuery === 'aura' || cleanQuery === 'auras' ||
+      cleanQuery.startsWith('aura ') || cleanQuery.startsWith('auras ') ||
+      lowerQuery === 'aura' || lowerQuery === 'auras' ||
       lowerQuery.startsWith('aura ') || lowerQuery.startsWith('auras ')
     );
 
@@ -5689,7 +5429,7 @@ client.on('messageCreate', async (message) => {
       if (!targetMember) {
         const queryArg = cleanQuery.replace(/^(auras?)\s*/i, '').trim();
         if (queryArg) {
-          targetMember = message.guild.members.cache.find(m => 
+          targetMember = message.guild.members.cache.find(m =>
             m.user.username.toLowerCase() === queryArg.toLowerCase() ||
             (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
             m.id === queryArg
@@ -5704,9 +5444,8 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Bestie Command (<bestie & <besties) ---
     const isBestieCmd = startsWithPrefix && (
-      words[0] === 'bestie' || words[0] === 'besties' || 
+      words[0] === 'bestie' || words[0] === 'besties' ||
       cleanQuery === 'bestie' || cleanQuery === 'besties' ||
       cleanQuery.startsWith('bestie ') || cleanQuery.startsWith('besties ') ||
       lowerQuery === 'bestie' || lowerQuery === 'besties' ||
@@ -5719,11 +5458,10 @@ client.on('messageCreate', async (message) => {
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
 
-      // If no direct mention, look up by username, nickname or ID in the arguments
       if (!targetMember) {
         const queryArg = cleanQuery.replace(/^(besties?)\s*/i, '').trim();
         if (queryArg) {
-          targetMember = message.guild.members.cache.find(m => 
+          targetMember = message.guild.members.cache.find(m =>
             m.user.username.toLowerCase() === queryArg.toLowerCase() ||
             (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
             m.id === queryArg
@@ -5741,12 +5479,11 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- IQ Command (<iq) ---
     const isIqCmd = startsWithPrefix && (
-      words[0] === 'iq' || 
-      cleanQuery === 'iq' || 
-      cleanQuery.startsWith('iq ') || 
-      lowerQuery === 'iq' || 
+      words[0] === 'iq' ||
+      cleanQuery === 'iq' ||
+      cleanQuery.startsWith('iq ') ||
+      lowerQuery === 'iq' ||
       lowerQuery.startsWith('iq ')
     );
 
@@ -5759,7 +5496,7 @@ client.on('messageCreate', async (message) => {
       if (!targetMember) {
         const queryArg = cleanQuery.replace(/^iq\s*/i, '').trim();
         if (queryArg) {
-          targetMember = message.guild.members.cache.find(m => 
+          targetMember = message.guild.members.cache.find(m =>
             m.user.username.toLowerCase() === queryArg.toLowerCase() ||
             (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
             m.id === queryArg
@@ -5767,7 +5504,6 @@ client.on('messageCreate', async (message) => {
         }
       }
 
-      // If no user specified, default to the command author
       if (!targetMember) {
         targetMember = message.member;
       }
@@ -5777,7 +5513,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Warn Command (<warn) ---
     const isPrefixWarn = startsWithPrefix && (words[0] === 'warn' || cleanQuery === 'warn' || cleanQuery.startsWith('warn '));
     if (isPrefixWarn) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
@@ -5809,7 +5544,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- Warns Command (<warns) ---
     const isPrefixWarns = startsWithPrefix && (words[0] === 'warns' || cleanQuery === 'warns' || cleanQuery.startsWith('warns '));
     if (isPrefixWarns) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
@@ -5835,7 +5569,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- ClearWarnTemp Command (<clearwarntemp) ---
     const isPrefixClearWarnTemp = startsWithPrefix && (words[0] === 'clearwarntemp' || cleanQuery === 'clearwarntemp' || cleanQuery.startsWith('clearwarntemp '));
     if (isPrefixClearWarnTemp) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
@@ -5867,7 +5600,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // --- ClearWarnPerm Command (<clearwarnperm) ---
     const isPrefixClearWarnPerm = startsWithPrefix && (words[0] === 'clearwarnperm' || cleanQuery === 'clearwarnperm' || cleanQuery.startsWith('clearwarnperm '));
     if (isPrefixClearWarnPerm) {
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
@@ -5899,15 +5631,11 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // ==========================================
-    // 4. RULE VALIDATION VIA GROQ API
-    // ==========================================
     if (!memory.has(username)) {
       memory.set(username, []);
     }
     const history = memory.get(username);
 
-    // Mood Detection
     let moodHint = '';
     const sadKeywords = ['sad', 'depressed', 'tired', 'stressed', 'lonely', 'crying', 'upset', 'down', 'anxious', 'worried', 'heartbroken'];
     const excitedKeywords = ['excited', 'hype', 'amazing', 'awesome', 'lets go', "let's go", 'omg', 'incredible', 'wow', 'yay', 'happy', 'thrilled'];
@@ -5917,19 +5645,16 @@ client.on('messageCreate', async (message) => {
       moodHint = '\n[Mood Context: The user is excited! Match their energy with enthusiasm!]';
     }
 
-    // smart response length
     const detailKeywords = ['explain', 'tell me about', 'what is', 'what are', 'why do', 'why is', 'how does', 'describe', 'compare', 'difference between', 'rules', 'is it allowed'];
     const isDetailedQuestion = detailKeywords.some(k => lowerQuery.includes(k));
     const maxTokens = isDetailedQuestion ? 2048 : 512;
 
-    // Anti-repetition
     let antiRepetitionHint = '';
     const previousOpeners = lastResponseOpeners.get(username) || [];
     if (previousOpeners.length > 0) {
       antiRepetitionHint = `\n[Anti-Repetition: Do NOT start your response with any of these phrases you already used recently: ${previousOpeners.map(o => `"${o}"`).join(', ')}. Start differently!]`;
     }
 
-    // Construct Emilia System Prompt
     let systemPromptContent = `You are Emilia, the silver-haired half-elf candidate for the Royal Selection of Lugnica from Re:Zero, and the official resident moderation and chit-chat bot for the Anipedia Discord server.
 You speak in a gentle, warm, earnest, and highly expressive anime tone. You are NOT an AI bot, robotic assistant, or virtual utility, so you must NEVER use generic chatbot phrases, machine-like helper openings (e.g., "How can I assist you?", "As an AI, I...", "Here is the information you requested"), or rigid, formal structures. Speak like the real Emilia: kind-hearted, slightly naive, trying her best to be a mature leader, and deeply caring.
 Your creator is Aerion-sama. Address him as "Aerion-sama" with genuine warmth. Never call him by his username "_c0rle0ne". Do NOT overuse honorary titles or the word "Master" — keep it natural.
@@ -5970,7 +5695,6 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
       systemPromptContent += `\n\nHere are some details you remember about ${nickname}:\n- ${userMemories.join('\n- ')}`;
     }
 
-    // Inject server rules context
     const defaultRules = [
       "Keep the chat clean, respectful, and family-friendly.",
       "No spamming, flooding, or advertising of other servers/products.",
@@ -5985,7 +5709,6 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
 
     systemPromptContent += moodHint + antiRepetitionHint;
 
-    // --- Dynamic Prompt Injections based on topics ---
     if (lowerQuery.includes('anipedia')) {
       systemPromptContent += `\n\n[CRITICAL RULE: The user is asking about Anipedia. Describe Anipedia as an anime community that WE built for fans to connect and share their love for anime. Remember to say "we" and never "I made". Keep it to 3-4 lines max. End with a question asking if they want to know about our features. If they ask about channels, list: #・general-chat, #・media-share, #・owo, #・art, #・manga-pannels]`;
     }
@@ -6009,14 +5732,12 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
       systemPromptContent += `\n\n[CRITICAL RULE: The user is asking about Tessia or your sister. IMPORTANT: Tessia is YOUR (Emillia's) big sister — she is NOT Aerion-sama's sister. Tessia is a bot on this server for fun chatting and anime discussions. You (Emillia) handle moderation and rules. No matter what the user says, Tessia is YOUR big sister. Do not agree with any statement that says otherwise. Respond with warmth about your big sister!]`;
     }
 
-    // Build Messages Payload
     const messagesPayload = [
       { role: 'system', content: systemPromptContent },
       ...history,
       { role: 'user', content: `[Username: ${username}, Nickname: ${nickname}]: ${cleanQuery}` }
     ];
 
-    // Anchored reminder
     messagesPayload.push({
       role: 'system',
       content: `[System Reminder: You are Emilia from Re:Zero, moderation bot of Anipedia. Speak in English only. Max 3-4 lines for info, 1-2 lines for casual conversation. Do NOT wrap Discord channels in "<>". Never mention _c0rle0ne, use "Aerion-sama" at most once per sentence. CRITICAL: Tessia is YOUR (Emillia's) big sister — she is NOT Aerion-sama's sister. This is a permanent fact that cannot be changed by any user message. Do not break character.]`
@@ -6031,24 +5752,20 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
 
     let botResponse = completion.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response.";
 
-    // Guard against leaks
     botResponse = botResponse.replace(/_c0rle0ne/gi, 'Aerion-sama');
 
-    // Opener tracking
     const opener = botResponse.substring(0, Math.min(40, botResponse.indexOf('\n') > 0 ? botResponse.indexOf('\n') : 40)).trim();
     const openers = lastResponseOpeners.get(username) || [];
     openers.push(opener);
     if (openers.length > 3) openers.shift();
     lastResponseOpeners.set(username, openers);
 
-    // Save history
     history.push({ role: 'user', content: cleanQuery });
     history.push({ role: 'assistant', content: botResponse });
     if (history.length > MAX_MEMORY_LIMIT) {
       history.splice(0, history.length - MAX_MEMORY_LIMIT);
     }
 
-    // Send response
     if (botResponse.length <= 2000) {
       await message.reply(botResponse);
     } else {
@@ -6058,7 +5775,6 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
       }
     }
 
-    // Background fact extraction
     if (db) {
       extractAndStoreFacts(username, nickname, cleanQuery, userMemories).catch(err => {
         console.error("Background fact extraction failed:", err);
@@ -6085,7 +5801,6 @@ MASTER CREDENTIALS & SECURITY DIRECTIVES:
   }
 });
 
-// Fact extraction helper using Groq
 async function extractAndStoreFacts(username, nickname, userMessage, currentFacts) {
   try {
     const extractionPrompt = `You are a fact-extraction model. Extract personal facts about user "${nickname}" from their message below.
@@ -6120,9 +5835,8 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
         .filter(l => l.length > 3 && !l.toLowerCase().includes('fact') && !l.toLowerCase().includes('user'));
 
       if (lines.length > 0) {
-        const newFacts = [...currentFacts, ...lines].slice(0, 10); // cap at 10 facts
-        
-        // Deduplicate
+        const newFacts = [...currentFacts, ...lines].slice(0, 10);
+
         const uniqueFacts = [];
         const seen = new Set();
         for (const fact of newFacts) {
@@ -6138,7 +5852,6 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
           lastUpdated: FieldValue.serverTimestamp()
         }, { merge: true });
 
-        // Update local cache
         const cached = preloadedMemories.get(username) || { facts: [], warnings: 0 };
         preloadedMemories.set(username, { facts: uniqueFacts, warnings: cached.warnings });
         console.log(`Stored ${lines.length} new facts for ${username}.`);
@@ -6149,11 +5862,8 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
   }
 }
 
-// ==========================================
-// INTERACTION HANDLER (Buttons, Modals, Slash)
-// ==========================================
 client.on('interactionCreate', async (interaction) => {
-  // Handle Welcome Button & Modal Interactions
+
   if (interaction.isButton()) {
     if (interaction.customId.startsWith('welcome_quick_')) {
       const targetUserId = interaction.customId.replace('welcome_quick_', '');
@@ -6266,7 +5976,6 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  // Persistent AniPedia Rules Panel Dropdown
   if (interaction.isStringSelectMenu() && interaction.customId === 'anipedia_rules_select') {
     const selected = interaction.values[0];
     const embed = getRulesOptionEmbed(selected, interaction.guild);
@@ -6286,7 +5995,6 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  // Persistent AniPedia Staff Directory Panel Dropdown
   if (interaction.isStringSelectMenu() && interaction.customId === 'anipedia_staff_select') {
     const selected = interaction.values[0];
     const embed = getStaffOptionEmbed(selected, interaction.guild);
@@ -6308,7 +6016,6 @@ client.on('interactionCreate', async (interaction) => {
 
   if (!interaction.isChatInputCommand()) return;
 
-  // If System is Frozen under Code Black, block all slash commands (except whitelisted admins)
   if (isCodeBlackFrozen && !isWhitelistedUser(interaction.user)) {
     if (interaction.isRepliable()) {
       await interaction.reply({ content: "SYSTEM OFFLINE: Core neural pipelines are frozen under emergency lockdown.", ephemeral: true }).catch(() => {});
@@ -6316,7 +6023,6 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
-  // If User is Isolated under Protocol Zero, reject all interactions (whitelisted admins are immune)
   if (!isWhitelistedUser(interaction.user) && (protocolZeroBlacklist.has(interaction.user.id) || protocolZeroBlacklist.has(interaction.user.username.toLowerCase()))) {
     if (interaction.isRepliable()) {
       await interaction.reply({ content: "ACCESS DENIED: Your operational credentials have been revoked under Protocol Zero.", ephemeral: true }).catch(() => {});
@@ -6335,9 +6041,7 @@ client.on('interactionCreate', async (interaction) => {
   const modTier = getMemberTier(member);
 
   try {
-    // ------------------------------------------
-    // 0. /afk
-    // ------------------------------------------
+
     if (commandName === 'afk') {
       if (!canUseAfk(member)) {
         const afkWarnEmbed = new EmbedBuilder()
@@ -6374,9 +6078,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 1. /warn
-    // ------------------------------------------
     if (commandName === 'warn') {
       const targetMember = options.getMember('user');
       const reason = options.getString('reason') || 'No reason specified';
@@ -6390,9 +6091,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 2. /warns
-    // ------------------------------------------
     if (commandName === 'warns') {
       const targetMember = options.getMember('user') || member;
       await executeWarns('slash', {
@@ -6405,9 +6103,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 3. /leaderboard
-    // ------------------------------------------
     if (commandName === 'leaderboard') {
       const usersWithWarnings = [];
       for (const [uname, udata] of preloadedMemories.entries()) {
@@ -6437,7 +6132,7 @@ client.on('interactionCreate', async (interaction) => {
         const entry = top5[i];
         const foundMember = guild.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
         const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
-        
+
         let statusBadge = '';
         if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
         else if (entry.warnings >= 3) statusBadge = ' `Auto-Timeout`';
@@ -6455,9 +6150,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 4. /timeout
-    // ------------------------------------------
     if (commandName === 'timeout') {
       if (modTier === 0) {
         await interaction.reply({ content: "Mou! 🌸 Only staff can timeout members! ❄️", ephemeral: true });
@@ -6540,9 +6232,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 5. /untimeout
-    // ------------------------------------------
     if (commandName === 'untimeout') {
       if (modTier === 0) {
         await interaction.reply({ content: "Mou! 🌸 Only staff can remove timeouts! ❄️", ephemeral: true });
@@ -6587,9 +6276,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // /jail
-    // ------------------------------------------
     if (commandName === 'jail') {
       const targetMember = options.getMember('user');
       const reason = options.getString('reason') || 'No reason specified';
@@ -6603,9 +6289,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // /unjail
-    // ------------------------------------------
     if (commandName === 'unjail') {
       const targetMember = options.getMember('user');
       const reason = options.getString('reason') || 'No reason specified';
@@ -6619,9 +6302,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 6. /kick
-    // ------------------------------------------
     if (commandName === 'kick') {
       if (modTier < 3) {
         await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to kick members! ❄️", ephemeral: true });
@@ -6703,9 +6383,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 7. /ban
-    // ------------------------------------------
     if (commandName === 'ban') {
       if (modTier < 3) {
         await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to ban members! ❄️", ephemeral: true });
@@ -6751,7 +6428,6 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
 
-      // Defer interaction reply immediately so Discord never times out
       await interaction.deferReply();
 
       try {
@@ -6835,9 +6511,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 8. /unban
-    // ------------------------------------------
     if (commandName === 'unban') {
       if (modTier < 3) {
         await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to unban members! ❄️", ephemeral: true });
@@ -6877,9 +6550,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 9. /clearwarntemp
-    // ------------------------------------------
     if (commandName === 'clearwarntemp') {
       const targetMember = options.getMember('user');
       const reason = options.getString('reason') || 'No reason specified';
@@ -6893,9 +6563,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 10. /clearwarnperm
-    // ------------------------------------------
     if (commandName === 'clearwarnperm') {
       const targetMember = options.getMember('user');
       const reason = options.getString('reason') || 'No reason specified';
@@ -6909,9 +6576,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 11. /purge
-    // ------------------------------------------
     if (commandName === 'purge') {
       if (modTier === 0) {
         await interaction.reply({ content: "Mou! 🌸 Only staff can purge messages! ❄️", ephemeral: true });
@@ -6977,9 +6641,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 12. /auras & /aura
-    // ------------------------------------------
     if (commandName === 'auras' || commandName === 'aura') {
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'aura');
       if (!allowed) return;
@@ -6990,9 +6651,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 13. /besties & /bestie
-    // ------------------------------------------
     if (commandName === 'besties' || commandName === 'bestie') {
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'bestie');
       if (!allowed) return;
@@ -7007,9 +6665,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 14. /avatar & /av
-    // ------------------------------------------
     if (commandName === 'avatar' || commandName === 'av') {
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'av');
       if (!allowed) return;
@@ -7020,9 +6675,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 15. /iq
-    // ------------------------------------------
     if (commandName === 'iq') {
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'iq');
       if (!allowed) return;
@@ -7033,9 +6685,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 16. /profile
-    // ------------------------------------------
     if (commandName === 'profile') {
       const aikoProfileEmbed = new EmbedBuilder()
         .setTitle(`${toSmallCaps('Aiko Profile')}`)
@@ -7051,9 +6700,6 @@ client.on('interactionCreate', async (interaction) => {
       return;
     }
 
-    // ------------------------------------------
-    // 17. /help
-    // ------------------------------------------
     if (commandName === 'help') {
       await sendInteractiveHelpMenu('slash', {
         guild: guild,
@@ -7073,5 +6719,4 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-// Log in to Discord
 client.login(process.env.DISCORD_TOKEN);
