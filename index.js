@@ -4551,6 +4551,7 @@ client.on('messageCreate', async (message) => {
 
     if (isAuraCmd) {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'aura');
+      message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
@@ -4582,6 +4583,7 @@ client.on('messageCreate', async (message) => {
 
     if (isBestieCmd) {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'bestie');
+      message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
@@ -4617,6 +4619,7 @@ client.on('messageCreate', async (message) => {
 
     if (isIqCmd) {
       const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
+      message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
