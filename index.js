@@ -1,3 +1,4 @@
+const { createVerificationPanelPayload, handleVerificationButton, handleStaffApprovalButton } = require('./verification-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -2922,7 +2923,8 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
       'ban': 0x992D22,
       'unban': 0x2ECC71,
       'jail': 0xE74C3C,
-      'unjail': 0x2ECC71
+      'unjail': 0x2ECC71,
+      'verify': 0x2ECC71
     };
     const titleMap = {
       'warn': 'Moderation Log • User Warned',
@@ -2939,7 +2941,8 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
       'ban': 'Moderation Log • User Banned',
       'unban': 'Moderation Log • User Unbanned',
       'jail': 'Moderation Log • User Jailed',
-      'unjail': 'Moderation Log • User Unjailed'
+      'unjail': 'Moderation Log • User Unjailed',
+      'verify': 'Security Log • Member Verified'
     };
 
     const formattedExtra = extraFields.map(f => ({
@@ -4541,6 +4544,26 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    const isVerificationCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'verification' ||
+      cleanQuery === 'verification' ||
+      cleanQuery.startsWith('verification ')
+    );
+
+    if (isVerificationCmd) {
+      const modTier = getMemberTier(message.member);
+      if (modTier < 1 && !isWhitelistedUser(message.author)) {
+        await message.reply("Mou! 🌸 Only server staff and administrators can deploy the verification gateway! ❄️");
+        return;
+      }
+
+      await message.delete().catch(() => {});
+      const verifyPayload = createVerificationPanelPayload(message.guild);
+      await message.channel.send(verifyPayload);
+      return;
+    }
+
+
     const isAuraCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aura' || (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auras' ||
       cleanQuery === 'aura' || cleanQuery === 'auras' ||
@@ -5870,6 +5893,14 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
 client.on('interactionCreate', async (interaction) => {
 
   if (interaction.isButton()) {
+    if (interaction.customId === 'anipedia_verify_btn') {
+      await handleVerificationButton(interaction, { getModEmojis, logToEmilliaLog, dot });
+      return;
+    }
+    if (interaction.customId.startsWith('verify_staff_approve_')) {
+      await handleStaffApprovalButton(interaction, { getMemberTier, isWhitelistedUser, getModEmojis, logToEmilliaLog, dot });
+      return;
+    }
     if (interaction.customId.startsWith('welcome_quick_')) {
       const targetUserId = interaction.customId.replace('welcome_quick_', '');
       const cdKey = `${interaction.user.id}_${targetUserId}`;
