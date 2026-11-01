@@ -4754,6 +4754,16 @@ client.on('messageCreate', async (message) => {
     }
 
     // ==========================================
+    // INSTANT PING (Zero Delay & Direct Measurement)
+    // ==========================================
+    if (startsWithPrefix && (lowerQuery === 'ping' || lowerQuery.startsWith('ping '))) {
+      const latency = Math.max(1, Date.now() - message.createdTimestamp);
+      const apiPing = client.ws.ping >= 0 ? Math.round(client.ws.ping) : latency;
+      await message.reply(`🏓 Pong! Latency is **${latency}ms** (API: **${apiPing}ms**). I'm working hard! ⚡🌸`);
+      return;
+    }
+
+    // ==========================================
     // PRE-CHECK: Only respond to Command Guide keywords
     // Emillia ignores casual chit-chat — that's Tessia's job!
     // ==========================================
@@ -4793,8 +4803,8 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // Show typing animation only when Emillia will actually respond
-    await message.channel.sendTyping();
+    // Trigger typing animation in background without delaying command execution
+    message.channel.sendTyping().catch(() => {});
 
     // --- Cooldown check ---
     if (!isWhitelistedUser(message.author)) {
@@ -5587,12 +5597,6 @@ client.on('messageCreate', async (message) => {
         channel: message.channel,
         replyFn: makeReplyFn(message.channel)
       });
-      return;
-    }
-
-    if (startsWithPrefix && lowerQuery === 'ping') {
-      const latency = Date.now() - message.createdTimestamp;
-      await message.reply(`🏓 Pong! Latency is **${latency}ms**. I'm working hard! ⚡🌸`);
       return;
     }
 
