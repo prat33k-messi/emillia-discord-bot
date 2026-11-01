@@ -31,12 +31,14 @@ function createVerificationPanelPayload(guild) {
 }
 
 async function handleVerificationButton(interaction, helpers = {}) {
-  const { getModEmojis, logToEmilliaLog } = helpers;
+  const { logToEmilliaLog } = helpers;
   const guild = interaction.guild;
   const user = interaction.user;
   const member = interaction.member;
 
   if (!guild || !member) return;
+
+  await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
   let memberRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'member');
   if (!memberRole) {
@@ -45,17 +47,15 @@ async function handleVerificationButton(interaction, helpers = {}) {
   }
 
   if (!memberRole) {
-    await interaction.reply({
-      content: "Mou! 🌸 Could not find the **Member** role in this server! Please notify server administrators. ❄️",
-      ephemeral: true
+    await interaction.editReply({
+      content: "Mou! 🌸 Could not find the **Member** role in this server! Please notify server administrators. ❄️"
     }).catch(() => {});
     return;
   }
 
   if (member.roles.cache.has(memberRole.id)) {
-    await interaction.reply({
-      content: "🌸 You are already verified as a **Member** in AniPedia! Enjoy exploring the server! ✨",
-      ephemeral: true
+    await interaction.editReply({
+      content: "🌸 You are already verified as a **Member** in AniPedia! Enjoy exploring the server! ✨"
     }).catch(() => {});
     return;
   }
@@ -66,9 +66,8 @@ async function handleVerificationButton(interaction, helpers = {}) {
   const hasCustomAvatar = Boolean(user.avatar);
 
   if (isFlagged) {
-    await interaction.reply({
-      content: `⚠️ **Security Notice • Verification Flagged**\n\nMou! Your Discord account was created less than **3 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia sanctuary from unauthorized alts and raids, your account has been flagged for staff review in **#emillia-log**.\nA moderator will review and approve your account shortly! 🌸`,
-      ephemeral: true
+    await interaction.editReply({
+      content: `⚠️ **Security Notice • Verification Flagged**\n\nMou! Your Discord account was created less than **3 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia sanctuary from unauthorized alts and raids, your account has been flagged for staff review in **#emillia-log**.\nA moderator will review and approve your account shortly! 🌸`
     }).catch(() => {});
 
     try {
@@ -107,9 +106,8 @@ async function handleVerificationButton(interaction, helpers = {}) {
   try {
     await member.roles.add(memberRole, 'Passed AniPedia Verification Gateway');
 
-    await interaction.reply({
-      content: `🌸 **Verification Successful!**\n\nWelcome to **AniPedia**, <@${user.id}>! You have been granted the **Member** role and all sanctuary channels are now unlocked for you. Have fun! ⛩️✨`,
-      ephemeral: true
+    await interaction.editReply({
+      content: `🌸 **Verification Successful!**\n\nWelcome to **AniPedia**, <@${user.id}>! You have been granted the **Member** role and all sanctuary channels are now unlocked for you. Have fun! ⛩️✨`
     }).catch(() => {});
 
     if (typeof logToEmilliaLog === 'function') {
@@ -122,14 +120,12 @@ async function handleVerificationButton(interaction, helpers = {}) {
   } catch (addErr) {
     console.error("Error granting Member role in verification:", addErr);
     if (addErr.code === 50013) {
-      await interaction.reply({
-        content: "Mou! 🌸 I couldn't assign the **Member** role because my bot role ('Emillia') is placed below the 'Member' role in Discord Server Settings -> Roles! Please ask an administrator to drag my role higher up! ❄️",
-        ephemeral: true
+      await interaction.editReply({
+        content: "Mou! 🌸 I couldn't assign the **Member** role because my bot role ('Emillia') is placed below the 'Member' role in Discord Server Settings -> Roles! Please ask an administrator to drag my role higher up! ❄️"
       }).catch(() => {});
     } else {
-      await interaction.reply({
-        content: "Mou! 🌸 An error occurred while assigning the role. Please ask a moderator for help! ❄️",
-        ephemeral: true
+      await interaction.editReply({
+        content: "Mou! 🌸 An error occurred while assigning the role. Please ask a moderator for help! ❄️"
       }).catch(() => {});
     }
   }

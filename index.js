@@ -5894,11 +5894,11 @@ client.on('interactionCreate', async (interaction) => {
 
   if (interaction.isButton()) {
     if (interaction.customId === 'anipedia_verify_btn') {
-      await handleVerificationButton(interaction, { getModEmojis, logToEmilliaLog, dot });
+      await handleVerificationButton(interaction, { getModEmojis, logToEmilliaLog });
       return;
     }
     if (interaction.customId.startsWith('verify_staff_approve_')) {
-      await handleStaffApprovalButton(interaction, { getMemberTier, isWhitelistedUser, getModEmojis, logToEmilliaLog, dot });
+      await handleStaffApprovalButton(interaction, { getMemberTier, isWhitelistedUser, getModEmojis, logToEmilliaLog });
       return;
     }
     if (interaction.customId.startsWith('welcome_quick_')) {
