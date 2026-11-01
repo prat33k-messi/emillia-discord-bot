@@ -4541,6 +4541,108 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    const isAuraCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aura' || (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auras' ||
+      cleanQuery === 'aura' || cleanQuery === 'auras' ||
+      cleanQuery.startsWith('aura ') || cleanQuery.startsWith('auras ') ||
+      lowerQuery === 'aura' || lowerQuery === 'auras' ||
+      lowerQuery.startsWith('aura ') || lowerQuery.startsWith('auras ')
+    );
+
+    if (isAuraCmd) {
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'aura');
+      if (!allowed) return;
+
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^(auras?)\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+      if (!targetMember) {
+        targetMember = message.member;
+      }
+      const auraPayload = await buildAuraPayload(targetMember, message.guild);
+      await message.reply(auraPayload);
+      return;
+    }
+
+    const isBestieCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'bestie' || (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'besties' ||
+      cleanQuery === 'bestie' || cleanQuery === 'besties' ||
+      cleanQuery.startsWith('bestie ') || cleanQuery.startsWith('besties ') ||
+      lowerQuery === 'bestie' || lowerQuery === 'besties' ||
+      lowerQuery.startsWith('bestie ') || lowerQuery.startsWith('besties ')
+    );
+
+    if (isBestieCmd) {
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'bestie');
+      if (!allowed) return;
+
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
+
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^(besties?)\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+
+      if (!targetMember) {
+        await message.reply("Please use `<bestie <username>`!");
+        return;
+      }
+
+      const bestiePayload = await buildBestiePayload(message.member, targetMember, message.guild);
+      await message.reply(bestiePayload);
+      return;
+    }
+
+    const isIqCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iq' ||
+      cleanQuery === 'iq' ||
+      cleanQuery.startsWith('iq ') ||
+      lowerQuery === 'iq' ||
+      lowerQuery.startsWith('iq ')
+    );
+
+    if (isIqCmd) {
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
+      if (!allowed) return;
+
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+
+      if (!targetMember) {
+        const queryArg = cleanQuery.replace(/^iq\s*/i, '').trim();
+        if (queryArg) {
+          targetMember = message.guild.members.cache.find(m =>
+            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
+            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
+            m.id === queryArg
+          );
+        }
+      }
+
+      if (!targetMember) {
+        targetMember = message.member;
+      }
+
+      const iqPayload = await buildIqPayload(targetMember, message.guild);
+      await message.reply(iqPayload);
+      return;
+    }
+
+
+
     const preCheckWords = lowerQuery.split(/\s+/);
     const commandKeywords = [
       'afks', 'afk',
@@ -5410,106 +5512,6 @@ client.on('messageCreate', async (message) => {
 
       const avPayload = await buildAvatarPayload(targetMember);
       await message.reply(avPayload);
-      return;
-    }
-
-    const isAuraCmd = startsWithPrefix && (
-      words[0] === 'aura' || words[0] === 'auras' ||
-      cleanQuery === 'aura' || cleanQuery === 'auras' ||
-      cleanQuery.startsWith('aura ') || cleanQuery.startsWith('auras ') ||
-      lowerQuery === 'aura' || lowerQuery === 'auras' ||
-      lowerQuery.startsWith('aura ') || lowerQuery.startsWith('auras ')
-    );
-
-    if (isAuraCmd) {
-      const allowed = await handleFeatureCooldown(message, message.author.id, 'aura');
-      if (!allowed) return;
-
-      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
-      if (!targetMember) {
-        const queryArg = cleanQuery.replace(/^(auras?)\s*/i, '').trim();
-        if (queryArg) {
-          targetMember = message.guild.members.cache.find(m =>
-            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
-            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
-            m.id === queryArg
-          );
-        }
-      }
-      if (!targetMember) {
-        targetMember = message.member;
-      }
-      const auraPayload = await buildAuraPayload(targetMember, message.guild);
-      await message.reply(auraPayload);
-      return;
-    }
-
-    const isBestieCmd = startsWithPrefix && (
-      words[0] === 'bestie' || words[0] === 'besties' ||
-      cleanQuery === 'bestie' || cleanQuery === 'besties' ||
-      cleanQuery.startsWith('bestie ') || cleanQuery.startsWith('besties ') ||
-      lowerQuery === 'bestie' || lowerQuery === 'besties' ||
-      lowerQuery.startsWith('bestie ') || lowerQuery.startsWith('besties ')
-    );
-
-    if (isBestieCmd) {
-      const allowed = await handleFeatureCooldown(message, message.author.id, 'bestie');
-      if (!allowed) return;
-
-      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
-
-      if (!targetMember) {
-        const queryArg = cleanQuery.replace(/^(besties?)\s*/i, '').trim();
-        if (queryArg) {
-          targetMember = message.guild.members.cache.find(m =>
-            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
-            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
-            m.id === queryArg
-          );
-        }
-      }
-
-      if (!targetMember) {
-        await message.reply("Please use `<bestie <username>`!");
-        return;
-      }
-
-      const bestiePayload = await buildBestiePayload(message.member, targetMember, message.guild);
-      await message.reply(bestiePayload);
-      return;
-    }
-
-    const isIqCmd = startsWithPrefix && (
-      words[0] === 'iq' ||
-      cleanQuery === 'iq' ||
-      cleanQuery.startsWith('iq ') ||
-      lowerQuery === 'iq' ||
-      lowerQuery.startsWith('iq ')
-    );
-
-    if (isIqCmd) {
-      const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
-      if (!allowed) return;
-
-      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
-
-      if (!targetMember) {
-        const queryArg = cleanQuery.replace(/^iq\s*/i, '').trim();
-        if (queryArg) {
-          targetMember = message.guild.members.cache.find(m =>
-            m.user.username.toLowerCase() === queryArg.toLowerCase() ||
-            (m.displayName && m.displayName.toLowerCase() === queryArg.toLowerCase()) ||
-            m.id === queryArg
-          );
-        }
-      }
-
-      if (!targetMember) {
-        targetMember = message.member;
-      }
-
-      const iqPayload = await buildIqPayload(targetMember, message.guild);
-      await message.reply(iqPayload);
       return;
     }
 
