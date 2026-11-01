@@ -4777,9 +4777,6 @@ client.on('messageCreate', async (message) => {
       'kick', 'ban', 'unban', 'purge', 'clean',
       'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
     ];
-    if (startsWithPrefix || isMentioned) {
-      commandKeywords.push('welcome');
-    }
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
     if (!hasCommandWord) {
@@ -5636,18 +5633,6 @@ client.on('messageCreate', async (message) => {
         .setTimestamp();
 
       await sendContainer(message, aikoProfileEmbed);
-      return;
-    }
-
-    // --- Welcome Test Command (<welcome) ---
-    const isWelcomeCmd = startsWithPrefix && (
-      words[0] === 'welcome' || cleanQuery === 'welcome' || cleanQuery.startsWith('welcome ') ||
-      lowerQuery === 'welcome' || lowerQuery.startsWith('welcome ')
-    );
-
-    if (isWelcomeCmd) {
-      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first() || message.member;
-      await handleMemberWelcome(targetMember, message.channel);
       return;
     }
 
