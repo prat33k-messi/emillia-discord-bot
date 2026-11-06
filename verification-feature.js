@@ -1,4 +1,12 @@
-const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  MessageFlags
+} = require('discord.js');
 
 const CHALLENGE_ITEMS = [
   { name: 'Cherry Blossom', emoji: '🌸' },
@@ -14,15 +22,19 @@ const CHALLENGE_ITEMS = [
 ];
 
 function createVerificationPanelPayload(guild) {
-  const verifyEmbed = new EmbedBuilder()
-    .setColor(0xBF5AF2)
-    .setTitle('ANIPEDIA VERIFICATION GATEWAY')
-    .setDescription(
+  const container = new ContainerBuilder();
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(
+      `**ANIPEDIA VERIFICATION GATEWAY**\n` +
       `Welcome to **AniPedia**! ⛩️🌸\n` +
       `Click the button below to verify and unlock the channels.`
     )
-    .setFooter({ text: 'AniPedia Security Shield • Click below to verify' })
-    .setTimestamp();
+  );
+
+  container.addTextDisplayComponents(
+    new TextDisplayBuilder().setContent(`-# AniPedia Security Shield • Click below to verify`)
+  );
 
   const verifyBtn = new ButtonBuilder()
     .setCustomId('anipedia_verify_btn')
@@ -31,10 +43,11 @@ function createVerificationPanelPayload(guild) {
     .setStyle(ButtonStyle.Success);
 
   const row = new ActionRowBuilder().addComponents(verifyBtn);
+  container.addActionRowComponents(row);
 
   return {
-    embeds: [verifyEmbed],
-    components: [row]
+    components: [container],
+    flags: MessageFlags.IsComponentsV2
   };
 }
 
