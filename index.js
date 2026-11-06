@@ -1,4 +1,5 @@
 const { createVerificationPanelPayload, handleVerificationButton, handleChallengeButton, handleStaffApprovalButton } = require('./verification-feature');
+const { handleAntiSpam } = require('./antispam-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -4238,6 +4239,9 @@ client.on('messageCreate', async (message) => {
 
   if (message.author.bot) return;
   if (!message.guild) return;
+
+  const spamHandled = await handleAntiSpam(message, { getMemberTier, isWhitelistedUser });
+  if (spamHandled) return;
 
   const hasGifAttachment = message.attachments && message.attachments.some(att => {
     const ct = (att.contentType || '').toLowerCase();
