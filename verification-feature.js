@@ -1,5 +1,18 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
+const CHALLENGE_ITEMS = [
+  { name: 'Cherry Blossom', emoji: '🌸' },
+  { name: 'Rice Ball', emoji: '🍙' },
+  { name: 'Katana / Swords', emoji: '⚔️' },
+  { name: 'Torii Shrine Gate', emoji: '⛩️' },
+  { name: 'Shooting Star', emoji: '⭐' },
+  { name: 'Flame / Fire', emoji: '🔥' },
+  { name: 'Crescent Moon', emoji: '🌙' },
+  { name: 'Magic Crystal', emoji: '💎' },
+  { name: 'Four-Leaf Clover', emoji: '🍀' },
+  { name: 'Butterfly', emoji: '🦋' }
+];
+
 function createVerificationPanelPayload(guild) {
   const verifyEmbed = new EmbedBuilder()
     .setColor(0xBF5AF2)
@@ -10,6 +23,7 @@ function createVerificationPanelPayload(guild) {
       `**✦ Verification Directives:**\n` +
       `• Click the **Verify 🌸** button below.\n` +
       `• Your account will undergo an automated security & alt-risk assessment.\n` +
+      `• Complete a quick 1-click human check to prove you are not a bot.\n` +
       `• Upon passing, you will instantly receive the **Member** role and unlock all channels.\n\n` +
       `*By verifying, you confirm that you will abide by all server rules and community guidelines.*`
     )
@@ -30,8 +44,54 @@ function createVerificationPanelPayload(guild) {
   };
 }
 
+function generateChallenge(userId) {
+  const pool = [...CHALLENGE_ITEMS];
+  const targetIndex = Math.floor(Math.random() * pool.length);
+  const target = pool.splice(targetIndex, 1)[0];
+
+  const shuffledPool = pool.sort(() => Math.random() - 0.5);
+  const decoys = shuffledPool.slice(0, 3);
+
+  const choices = [
+    { item: target, isCorrect: true },
+    { item: decoys[0], isCorrect: false },
+    { item: decoys[1], isCorrect: false },
+    { item: decoys[2], isCorrect: false }
+  ].sort(() => Math.random() - 0.5);
+
+  const buttons = choices.map((c, idx) => {
+    const customId = c.isCorrect
+      ? `anipedia_challenge_${userId}_correct_${target.name.replace(/\s+/g, '')}`
+      : `anipedia_challenge_${userId}_wrong_${idx}`;
+
+    return new ButtonBuilder()
+      .setCustomId(customId)
+      .setLabel(c.item.name)
+      .setEmoji(c.item.emoji)
+      .setStyle(ButtonStyle.Secondary);
+  });
+
+  const row = new ActionRowBuilder().addComponents(buttons);
+
+  const challengeEmbed = new EmbedBuilder()
+    .setColor(0xBF5AF2)
+    .setTitle('ANIPEDIA • HUMAN VERIFICATION')
+    .setDescription(
+      `Welcome to **AniPedia**, <@${userId}>! ⛩️🌸\n\n` +
+      `To prevent automated self-bots and mass raids, please complete this quick check:\n\n` +
+      `👉 **Click the button below matching:** **${target.name}** (${target.emoji})\n\n` +
+      `*-# Select the correct option below to unlock your Member role!*`
+    )
+    .setFooter({ text: 'AniPedia Anti-Raid Defense' })
+    .setTimestamp();
+
+  return {
+    embeds: [challengeEmbed],
+    components: [row]
+  };
+}
+
 async function handleVerificationButton(interaction, helpers = {}) {
-  const { logToEmilliaLog } = helpers;
   const guild = interaction.guild;
   const user = interaction.user;
   const member = interaction.member;
@@ -103,29 +163,91 @@ async function handleVerificationButton(interaction, helpers = {}) {
     return;
   }
 
-  try {
-    await member.roles.add(memberRole, 'Passed AniPedia Verification Gateway');
+  const challengePayload = generateChallenge(user.id);
+  await interaction.editReply(challengePayload).catch(() => {});
+}
 
-    await interaction.editReply({
-      content: `🌸 **Verification Successful!**\n\nWelcome to **AniPedia**, <@${user.id}>! You have been granted the **Member** role and all sanctuary channels are now unlocked for you. Have fun! ⛩️✨`
+async function handleChallengeButton(interaction, helpers = {}) {
+  const { logToEmilliaLog } = helpers;
+  const customId = interaction.customId;
+  const parts = customId.split('_');
+  const targetUserId = parts[2];
+  const outcome = parts[3];
+
+  if (interaction.user.id !== targetUserId) {
+    await interaction.reply({
+      content: "Mou! 🌸 This verification challenge belongs to someone else! Click the **Verify 🌸** button to start your own! ❄️",
+      ephemeral: true
     }).catch(() => {});
+    return;
+  }
+
+  const guild = interaction.guild;
+  const member = interaction.member;
+
+  let memberRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'member');
+  if (!memberRole) {
+    const fetched = await guild.roles.fetch().catch(() => null);
+    memberRole = fetched?.find(r => r.name.toLowerCase() === 'member');
+  }
+
+  if (outcome !== 'correct') {
+    const failEmbed = new EmbedBuilder()
+      .setColor(0xE74C3C)
+      .setTitle('Verification Failed • Incorrect Option')
+      .setDescription(
+        `❌ Mou! You selected the wrong option.\n\n` +
+        `Our automated defense system blocked this attempt to prevent bots.\n\n` +
+        `**To try again:** Click the green **Verify 🌸** button on the verification panel to get a fresh challenge! ⛩️`
+      )
+      .setFooter({ text: 'AniPedia Anti-Raid Defense' })
+      .setTimestamp();
+
+    await interaction.update({ embeds: [failEmbed], components: [] }).catch(() => {});
+    return;
+  }
+
+  try {
+    if (memberRole) {
+      await member.roles.add(memberRole, 'Passed Human Verification Emoji Challenge');
+    }
+
+    const successEmbed = new EmbedBuilder()
+      .setColor(0x2ECC71)
+      .setTitle('🌸 Verification Successful!')
+      .setDescription(
+        `Welcome to **AniPedia**, <@${interaction.user.id}>! ⛩️✨\n\n` +
+        `You have passed the human check and received the **Member** role!\n` +
+        `All sanctuary channels are now unlocked for you. Have fun and enjoy the community!`
+      )
+      .setFooter({ text: 'AniPedia • Verified Member' })
+      .setTimestamp();
+
+    await interaction.update({ embeds: [successEmbed], components: [] }).catch(() => {});
 
     if (typeof logToEmilliaLog === 'function') {
-      const dot = helpers.dot || '•';
-      logToEmilliaLog(guild, 'verify', user.tag, user.id, 'Aiko Security System', 'Passed Verification Gateway', [
+      const dot = '•';
+      const ageMs = Date.now() - interaction.user.createdTimestamp;
+      const ageDays = ageMs / (1000 * 60 * 60 * 24);
+      logToEmilliaLog(guild, 'verify', interaction.user.tag, interaction.user.id, 'Aiko Security System', 'Passed Human Challenge Check', [
         { name: `${dot} Account Age`, value: `-# \`${ageDays.toFixed(1)} day(s)\``, inline: true },
-        { name: `${dot} Role Granted`, value: `-# \`${memberRole.name}\``, inline: true }
+        { name: `${dot} Challenge Result`, value: `-# \`Passed Human Emoji Check\``, inline: true },
+        { name: `${dot} Role Granted`, value: `-# \`${memberRole ? memberRole.name : 'Member'}\``, inline: true }
       ]);
     }
-  } catch (addErr) {
-    console.error("Error granting Member role in verification:", addErr);
-    if (addErr.code === 50013) {
-      await interaction.editReply({
-        content: "Mou! 🌸 I couldn't assign the **Member** role because my bot role ('Emillia') is placed below the 'Member' role in Discord Server Settings -> Roles! Please ask an administrator to drag my role higher up! ❄️"
+  } catch (err) {
+    console.error("Error granting role after challenge:", err);
+    if (err.code === 50013) {
+      await interaction.update({
+        content: "Mou! 🌸 I couldn't assign the **Member** role because my bot role ('Emillia') is placed below the 'Member' role in Discord Server Settings -> Roles! Please ask an administrator to drag my role higher up! ❄️",
+        embeds: [],
+        components: []
       }).catch(() => {});
     } else {
-      await interaction.editReply({
-        content: "Mou! 🌸 An error occurred while assigning the role. Please ask a moderator for help! ❄️"
+      await interaction.update({
+        content: "Mou! 🌸 An error occurred while assigning the role. Please ask a moderator for help! ❄️",
+        embeds: [],
+        components: []
       }).catch(() => {});
     }
   }
@@ -190,7 +312,7 @@ async function handleStaffApprovalButton(interaction, helpers = {}) {
     } catch (e) {}
 
     if (typeof logToEmilliaLog === 'function') {
-      const dot = helpers.dot || '•';
+      const dot = '•';
       logToEmilliaLog(guild, 'verify', targetMember.user.tag, targetMember.id, interaction.user.tag, 'Manually Approved via Staff Alert', [
         { name: `${dot} Role Granted`, value: `-# \`${memberRole.name}\``, inline: true }
       ]);
@@ -204,5 +326,6 @@ async function handleStaffApprovalButton(interaction, helpers = {}) {
 module.exports = {
   createVerificationPanelPayload,
   handleVerificationButton,
+  handleChallengeButton,
   handleStaffApprovalButton
 };

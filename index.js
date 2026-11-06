@@ -1,4 +1,4 @@
-const { createVerificationPanelPayload, handleVerificationButton, handleStaffApprovalButton } = require('./verification-feature');
+const { createVerificationPanelPayload, handleVerificationButton, handleChallengeButton, handleStaffApprovalButton } = require('./verification-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -5895,6 +5895,10 @@ client.on('interactionCreate', async (interaction) => {
   if (interaction.isButton()) {
     if (interaction.customId === 'anipedia_verify_btn') {
       await handleVerificationButton(interaction, { getModEmojis, logToEmilliaLog });
+      return;
+    }
+    if (interaction.customId.startsWith('anipedia_challenge_')) {
+      await handleChallengeButton(interaction, { getModEmojis, logToEmilliaLog });
       return;
     }
     if (interaction.customId.startsWith('verify_staff_approve_')) {
