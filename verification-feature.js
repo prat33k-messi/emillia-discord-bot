@@ -18,14 +18,8 @@ function createVerificationPanelPayload(guild) {
     .setColor(0xBF5AF2)
     .setTitle('ANIPEDIA VERIFICATION GATEWAY')
     .setDescription(
-      `Welcome to **AniPedia**! ⛩️🌸\n\n` +
-      `To safeguard our sanctuary from automated bots, alternate accounts, and malicious raids, all newcomers must verify before accessing server channels.\n\n` +
-      `**✦ Verification Directives:**\n` +
-      `• Click the **Verify 🌸** button below.\n` +
-      `• Your account will undergo an automated security & alt-risk assessment.\n` +
-      `• Complete a quick 1-click human check to prove you are not a bot.\n` +
-      `• Upon passing, you will instantly receive the **Member** role and unlock all channels.\n\n` +
-      `*By verifying, you confirm that you will abide by all server rules and community guidelines.*`
+      `Welcome to **AniPedia**! ⛩️🌸\n` +
+      `Click the button below to verify and unlock the channels.`
     )
     .setFooter({ text: 'AniPedia Security Shield • Click below to verify' })
     .setTimestamp();
