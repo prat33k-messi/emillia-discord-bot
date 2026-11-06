@@ -197,6 +197,10 @@ const slashCommandsData = [
     .setDescription('View Aiko profile and system background'),
 
   new SlashCommandBuilder()
+    .setName('anipedia')
+    .setDescription('View AniPedia community sanctuary details and guidelines'),
+
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help and available commands')
 ];
@@ -1708,6 +1712,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           `• \`/avatar [user]\` — ${toSmallCaps('View User Avatar')}`,
           `• \`/iq [user]\` — ${toSmallCaps('Test User IQ Score')}`,
           `• \`/profile\` — ${toSmallCaps('View Aiko Profile')}`,
+          `• \`/anipedia\` — ${toSmallCaps('About AniPedia Sanctuary')}`,
           `• \`/help\` — ${toSmallCaps('Show Command Guide')}`
         ] : [
           `• \`<afk [reason]\` — ${toSmallCaps('Set AFK Status')} *(Level 5+)*`,
@@ -1716,6 +1721,7 @@ async function sendInteractiveHelpMenu(source, ctx) {
           `• \`<av [@user]\` — ${toSmallCaps('View User Avatar')}`,
           `• \`<iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
           `• \`<profile\` — ${toSmallCaps('View Aiko Profile')}`,
+          `• \`<anipedia\` — ${toSmallCaps('About AniPedia Sanctuary')}`,
           `• \`<ping\` — ${toSmallCaps('Check Bot Latency')}`,
           `• \`<reset\` — ${toSmallCaps('Reset Memory')} *(Aerion-sama)*`
         ];
@@ -2069,6 +2075,33 @@ async function buildAvatarPayload(targetMember) {
     .setFooter({ text: `${toSmallCaps('AniPedia')} • ${toSmallCaps('Avatar Viewer')}` });
 
   return { embeds: [embed], files: [attachment] };
+}
+
+function buildAnipediaEmbed(guild) {
+  const embed = new EmbedBuilder()
+    .setColor(0xBF5AF2)
+    .setTitle(`${toSmallCaps('AniPedia • The Sanctuary')}`)
+    .setDescription(
+      `**AniPedia** is the premier anime-driven community — built on mutual respect, passion, and genuine family bonds. A safe haven to connect, unwind, and vibe with fellow anime lovers.\n\n` +
+      `**✦ Sanctuary Features:**\n` +
+      `• 💬 **Active Chats** — Engaging discussions, anime recommendations & late-night chats\n` +
+      `• 🎙️ **24/7 Live VCs** — Always-active voice lounges to vibe, talk & listen to music\n` +
+      `• 🎮 **Gaming & Streams** — Community watch parties, stream sessions & game nights with the homies\n\n` +
+      `**✦ Guardian & Moderation:**\n` +
+      `• 🌸 **Aiko** is the primary core intelligence engineered for AniPedia moderation, behavioral safety, and community protection.\n` +
+      `• 🛡️ **Helpful Staff Team** — Dedicated and approachable moderators keeping the sanctuary peaceful. If you ever need help or have any requests, feel free to call our staff!\n\n` +
+      `**✦ Community Directive:**\n` +
+      `Please respect the **Owner**, **Community Admins**, and **Moderators** of this server at all times. Treat every member with respect and keep the peace.\n\n` +
+      `👑 **Owner:** Roan`
+    )
+    .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+    .setTimestamp();
+
+  if (guild?.iconURL()) {
+    embed.setThumbnail(guild.iconURL({ dynamic: true, size: 256 }));
+  }
+
+  return embed;
 }
 
 async function getBestieEmojis(guild) {
@@ -4677,7 +4710,7 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -5504,6 +5537,17 @@ client.on('messageCreate', async (message) => {
         .setTimestamp();
 
       await sendContainer(message, aikoProfileEmbed);
+      return;
+    }
+
+    const isAnipediaCmd = startsWithPrefix && (
+      words[0] === 'anipedia' || cleanQuery === 'anipedia' || cleanQuery.startsWith('anipedia ') ||
+      lowerQuery === 'anipedia' || lowerQuery === 'about anipedia'
+    );
+
+    if (isAnipediaCmd) {
+      const anipediaEmbed = buildAnipediaEmbed(message.guild);
+      await sendContainer(message, anipediaEmbed);
       return;
     }
 
@@ -6737,6 +6781,12 @@ client.on('interactionCreate', async (interaction) => {
         .setTimestamp();
 
       await sendContainer(interaction, aikoProfileEmbed);
+      return;
+    }
+
+    if (commandName === 'anipedia') {
+      const anipediaEmbed = buildAnipediaEmbed(guild);
+      await sendContainer(interaction, anipediaEmbed);
       return;
     }
 
