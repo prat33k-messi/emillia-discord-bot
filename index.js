@@ -2083,17 +2083,12 @@ function buildAnipediaEmbed(guild) {
     .setColor(0xBF5AF2)
     .setTitle(`${toSmallCaps('AniPedia • The Sanctuary')}`)
     .setDescription(
-      `**AniPedia** is the premier anime-driven community — built on mutual respect, passion, and genuine family bonds. A safe haven to connect, unwind, and vibe with fellow anime lovers.\n\n` +
-      `**✦ Sanctuary Features:**\n` +
-      `• 💬 **Active Chats** — Engaging discussions, anime recommendations & late-night chats\n` +
-      `• 🎙️ **24/7 Live VCs** — Always-active voice lounges to vibe, talk & listen to music\n` +
-      `• 🎮 **Gaming & Streams** — Community watch parties, stream sessions & game nights with the homies\n\n` +
-      `**✦ Guardian & Moderation:**\n` +
-      `• 🌸 **Aiko** is the primary core intelligence engineered for AniPedia moderation, behavioral safety, and community protection.\n` +
-      `• 🛡️ **Helpful Staff Team** — Dedicated and approachable moderators keeping the sanctuary peaceful. If you ever need help or have any requests, feel free to call our staff!\n\n` +
-      `**✦ Community Directive:**\n` +
-      `Please respect the **Owner**, **Community Admins**, and **Moderators** of this server at all times. Treat every member with respect and keep the peace.\n\n` +
-      `👑 **Owner:** Roan`
+      `Anime-driven community built on respect & family bonds! ⛩️🌸\n` +
+      `Active chats, 24/7 live VCs, streams & gaming with the homies.\n\n` +
+      `• 🌸 **Aiko** • Main moderation & guardian bot\n` +
+      `• 🛡️ **Staff Team** • Helpful mods (call anytime for help!)\n` +
+      `• 👑 **Owner** • Roan\n\n` +
+      `-# Respect the Owner, Community Admins & Mods at all times.`
     )
     .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
     .setTimestamp();
