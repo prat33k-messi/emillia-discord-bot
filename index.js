@@ -1,5 +1,6 @@
 const { createVerificationPanelPayload, handleVerificationButton, handleChallengeButton, handleStaffApprovalButton } = require('./verification-feature');
 const { handleAntiSpam } = require('./antispam-feature');
+const { rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -783,6 +784,19 @@ function makeReplyFn(target) {
     }
     return await sendContainer(target, payload);
   };
+}
+
+const AIKO_COMMAND_CHANNEL_ID = '1568586444979703818';
+
+async function enforceAikoChannel(context, userId) {
+  const channelId = context.channelId || context.channel?.id;
+  if (channelId && channelId !== AIKO_COMMAND_CHANNEL_ID) {
+    const isInteraction = Boolean(context.isChatInputCommand || (context.reply && context.commandName));
+    const redirectMsg = `<@${userId}> • Please use Aiko commands in <#${AIKO_COMMAND_CHANNEL_ID}> channel. Thank you!`;
+    await sendContainer(context, redirectMsg, isInteraction ? { ephemeral: true } : {});
+    return false;
+  }
+  return true;
 }
 
 async function getModEmojis(guild) {
@@ -1960,7 +1974,47 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   return canvas.toBuffer('image/png');
 }
 
-function rollAuraPercent() {
+async function buildAuraPayload(targetMember, guild, authorId = null) {
+  let fixedScore = null;
+  const isSelf = !authorId || targetMember.id === authorId;
+
+  if (fixedAuraCache.has(targetMember.id)) {
+    fixedScore = fixedAuraCache.get(targetMember.id);
+  } else if (db) {
+    const stats = await loadUserFixedStats(db, targetMember.id);
+    if (typeof stats?.fixedAura === 'number') fixedScore = stats.fixedAura;
+  }
+
+  const { percent: auraPercent, rarity: rarityText, isFixed } = rollAuraPercent(fixedScore);
+  const tier = getAuraTheme(auraPercent);
+  const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
+  const buffer = await generateAuraCard(avatarUrl, auraPercent);
+  const attachment = new AttachmentBuilder(buffer, { name: 'aura.png' });
+
+  const { purpFlames } = await getBestieEmojis(guild || targetMember.guild);
+  const cursiveText = toCursiveDigits(auraPercent) + '%';
+
+  const embed = new EmbedBuilder()
+    .setColor(tier.embedColor)
+    .setAuthor({
+      name: `${toSmallCaps('Aura of')} ${targetMember.displayName || targetMember.user.username}`,
+      iconURL: targetMember.user.displayAvatarURL({ dynamic: true })
+    })
+    .setDescription(`${purpFlames} ${cursiveText} ${purpFlames}`)
+    .setFooter({ text: `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}` })
+    .setImage('attachment://aura.png');
+
+  const payload = { embeds: [embed], files: [attachment] };
+
+  if (isSelf) {
+    const actionRow = buildAuraActionRow(targetMember.id, auraPercent, isFixed);
+    payload.components = [actionRow];
+  }
+
+  return payload;
+}
+
+/* oldRollAuraPercent
   const tiers = [
     { min: 0, max: 20, weight: 20, rarityMin: 17, rarityMax: 23, label: 'Common' },
     { min: 21, max: 40, weight: 30, rarityMin: 27, rarityMax: 33, label: 'Rare' },
@@ -1989,7 +2043,7 @@ function rollAuraPercent() {
   return { percent: Math.floor(Math.random() * 21), rarity: `${fallbackRarity}% (Common)` };
 }
 
-async function buildAuraPayload(targetMember, guild) {
+// old buildAuraPayload
   const { percent: auraPercent, rarity: rarityText } = rollAuraPercent();
   const tier = getAuraTheme(auraPercent);
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
@@ -2009,8 +2063,17 @@ async function buildAuraPayload(targetMember, guild) {
     .setFooter({ text: `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}` })
     .setImage('attachment://aura.png');
 
-  return { embeds: [embed], files: [attachment] };
+  const payload = { embeds: [embed], files: [attachment] };
+
+  if (isSelf) {
+    const actionRow = buildIqActionRow(targetMember.id, tier.tier, score, isFixed);
+    payload.components = [actionRow];
+  }
+
+  return payload;
 }
+
+*/
 
 async function generateAvatarCard(avatarUrl) {
   const width = 600;
@@ -2074,10 +2137,21 @@ async function buildAvatarPayload(targetMember) {
     .setColor(0xBF5AF2)
     .setImage('attachment://avatar.png')
     .setFooter({ text: `${toSmallCaps('AniPedia')} • ${toSmallCaps('Avatar Viewer')}` });
-
   return { embeds: [embed], files: [attachment] };
 }
+function dummyAvatarRemove() { if (false) {
 
+  const payload = { embeds: [embed], files: [attachment] };
+
+  if (isSelf) {
+    const actionRow = buildIqActionRow(targetMember.id, tier.tier, score, isFixed);
+    payload.components = [actionRow];
+  }
+
+  return payload;
+}
+
+}
 function buildAnipediaEmbed(guild) {
   const embed = new EmbedBuilder()
     .setColor(0xBF5AF2)
@@ -2412,10 +2486,21 @@ async function buildBestiePayload(authorMember, targetMember, guild) {
     .setDescription(leftTier)
     .setFooter({ text: `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}` })
     .setImage('attachment://besties.png');
-
   return { embeds: [embed], files: [attachment] };
 }
+function dummyBestieRemove() { if (false) {
 
+  const payload = { embeds: [embed], files: [attachment] };
+
+  if (isSelf) {
+    const actionRow = buildIqActionRow(targetMember.id, tier.tier, score, isFixed);
+    payload.components = [actionRow];
+  }
+
+  return payload;
+}
+
+}
 function wrapText(ctx, text, maxWidth) {
   const words = text.split(' ');
   const lines = [];
@@ -2740,7 +2825,49 @@ const IQ_TIERS = [
   }
 ];
 
-function rollIqScore() {
+const IQ_WEIGHTS = {
+  1: 7440, 2: 7440, 3: 7440, 4: 7440, 5: 7440,
+  6: 7440, 7: 7440, 8: 7440, 9: 7440, 10: 7440,
+  11: 6000, 12: 6000, 13: 6000, 14: 6000, 15: 6000, 16: 6000,
+  17: 3550, 18: 3550,
+  19: 1500,
+  20: 1000
+};
+
+function rollIqScore(fixedData = null) {
+  if (fixedData && typeof fixedData.score === 'number') {
+    const tier = IQ_TIERS.find(t => t.tier === fixedData.tierIndex) ||
+                 IQ_TIERS.find(t => fixedData.score >= t.min && fixedData.score <= t.max) ||
+                 IQ_TIERS[0];
+    const quote = tier.quotes[0];
+    return { tier, score: fixedData.score, quote, isFixed: true };
+  }
+
+  const totalWeight = 120000;
+  let randomVal = Math.random() * totalWeight;
+
+  for (const tier of IQ_TIERS) {
+    const w = IQ_WEIGHTS[tier.tier] || tier.weight;
+    if (randomVal < w) {
+      const raw = Math.random() * (tier.max - tier.min) + tier.min;
+      const score = parseFloat(raw.toFixed(1));
+      const quote = tier.quotes[Math.floor(Math.random() * tier.quotes.length)];
+      return { tier, score, quote, isFixed: false };
+    }
+    randomVal -= w;
+  }
+
+  const fallbackTier = IQ_TIERS[0];
+  const fallbackScore = parseFloat((Math.random() * 5).toFixed(1));
+  return {
+    tier: fallbackTier,
+    score: fallbackScore,
+    quote: fallbackTier.quotes[0],
+    isFixed: false
+  };
+}
+
+/* oldRollIqScore
   const totalWeight = IQ_TIERS.reduce((acc, t) => acc + t.weight, 0);
   let randomVal = Math.random() * totalWeight;
 
@@ -2760,6 +2887,8 @@ function rollIqScore() {
     quote: fallbackTier.quotes[0]
   };
 }
+
+*/
 
 async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   const width = 700;
@@ -2865,8 +2994,20 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   return canvas.toBuffer('image/png');
 }
 
-async function buildIqPayload(targetMember, guild) {
-  const { tier, score, quote } = rollIqScore();
+async function buildIqPayload(targetMember, guild, authorId = null) {
+  let fixedData = null;
+  const isSelf = !authorId || targetMember.id === authorId;
+
+  if (fixedIqCache.has(targetMember.id)) {
+    fixedData = fixedIqCache.get(targetMember.id);
+  } else if (db) {
+    const stats = await loadUserFixedStats(db, targetMember.id);
+    if (stats?.fixedIq) fixedData = stats.fixedIq;
+  }
+
+  const { tier, score, quote, isFixed } = rollIqScore(fixedData);
+
+
   const targetAvatarUrl = targetMember?.user?.displayAvatarURL
     ? targetMember.user.displayAvatarURL({ extension: 'png', size: 512 })
     : (targetMember?.displayAvatarURL ? targetMember.displayAvatarURL({ extension: 'png', size: 512 }) : null);
@@ -2884,7 +3025,14 @@ async function buildIqPayload(targetMember, guild) {
     .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ${toSmallCaps(tier.rarity)}` })
     .setImage('attachment://iq.png');
 
-  return { embeds: [embed], files: [attachment] };
+  const payload = { embeds: [embed], files: [attachment] };
+
+  if (isSelf) {
+    const actionRow = buildIqActionRow(targetMember.id, tier.tier, score, isFixed);
+    payload.components = [actionRow];
+  }
+
+  return payload;
 }
 
 async function sendAlertToCreator(client, username, nickname, guildName, channelName, content) {
@@ -4605,6 +4753,7 @@ client.on('messageCreate', async (message) => {
     );
 
     if (isAuraCmd) {
+      if (!await enforceAikoChannel(message, message.author.id)) return;
       const allowed = await handleFeatureCooldown(message, message.author.id, 'aura');
       message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
@@ -4623,7 +4772,7 @@ client.on('messageCreate', async (message) => {
       if (!targetMember) {
         targetMember = message.member;
       }
-      const auraPayload = await buildAuraPayload(targetMember, message.guild);
+      const auraPayload = await buildAuraPayload(targetMember, message.guild, message.author.id);
       await message.reply(auraPayload);
       return;
     }
@@ -4637,6 +4786,7 @@ client.on('messageCreate', async (message) => {
     );
 
     if (isBestieCmd) {
+      if (!await enforceAikoChannel(message, message.author.id)) return;
       const allowed = await handleFeatureCooldown(message, message.author.id, 'bestie');
       message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
@@ -4673,6 +4823,7 @@ client.on('messageCreate', async (message) => {
     );
 
     if (isIqCmd) {
+      if (!await enforceAikoChannel(message, message.author.id)) return;
       const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
       message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
@@ -4694,7 +4845,7 @@ client.on('messageCreate', async (message) => {
         targetMember = message.member;
       }
 
-      const iqPayload = await buildIqPayload(targetMember, message.guild);
+      const iqPayload = await buildIqPayload(targetMember, message.guild, message.author.id);
       await message.reply(iqPayload);
       return;
     }
@@ -5944,6 +6095,10 @@ client.on('interactionCreate', async (interaction) => {
       await handleChallengeButton(interaction, { getModEmojis, logToEmilliaLog });
       return;
     }
+    if (interaction.customId.startsWith('aura_') || interaction.customId.startsWith('iq_')) {
+      const handled = await handleFixedStatsButton(interaction, db);
+      if (handled) return;
+    }
     if (interaction.customId.startsWith('verify_staff_approve_')) {
       await handleStaffApprovalButton(interaction, { getMemberTier, isWhitelistedUser, getModEmojis, logToEmilliaLog });
       return;
@@ -6725,16 +6880,18 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'auras' || commandName === 'aura') {
+      if (!await enforceAikoChannel(interaction, interaction.user.id)) return;
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'aura');
       if (!allowed) return;
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
-      const auraPayload = await buildAuraPayload(targetMember, guild);
+      const auraPayload = await buildAuraPayload(targetMember, guild, user.id);
       await interaction.editReply(auraPayload);
       return;
     }
 
     if (commandName === 'besties' || commandName === 'bestie') {
+      if (!await enforceAikoChannel(interaction, interaction.user.id)) return;
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'bestie');
       if (!allowed) return;
       const targetMember = options.getMember('user');
@@ -6759,11 +6916,12 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'iq') {
+      if (!await enforceAikoChannel(interaction, interaction.user.id)) return;
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'iq');
       if (!allowed) return;
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
-      const iqPayload = await buildIqPayload(targetMember, guild);
+      const iqPayload = await buildIqPayload(targetMember, guild, user.id);
       await interaction.editReply(iqPayload);
       return;
     }
