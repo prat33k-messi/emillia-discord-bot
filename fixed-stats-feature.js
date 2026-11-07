@@ -150,7 +150,7 @@ async function handleFixedStatsButton(interaction, db) {
 
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s aura!`;
-      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      await interaction.reply(buildContainerPayload(msg, false)).catch(() => {});
       setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
@@ -173,7 +173,7 @@ async function handleFixedStatsButton(interaction, db) {
     const targetUserId = customId.replace('aura_remove_', '');
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s aura!`;
-      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      await interaction.reply(buildContainerPayload(msg, false)).catch(() => {});
       setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
@@ -206,7 +206,7 @@ async function handleFixedStatsButton(interaction, db) {
 
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s IQ!`;
-      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      await interaction.reply(buildContainerPayload(msg, false)).catch(() => {});
       setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
@@ -230,7 +230,7 @@ async function handleFixedStatsButton(interaction, db) {
     const targetUserId = customId.replace('iq_remove_', '');
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s IQ!`;
-      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      await interaction.reply(buildContainerPayload(msg, false)).catch(() => {});
       setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
