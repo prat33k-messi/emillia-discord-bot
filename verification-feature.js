@@ -82,15 +82,11 @@ function generateChallenge(userId) {
 
   const challengeEmbed = new EmbedBuilder()
     .setColor(0xBF5AF2)
-    .setTitle('ANIPEDIA • HUMAN VERIFICATION')
+    .setTitle('ANIPEDIA • VERIFICATION')
     .setDescription(
-      `Welcome to **AniPedia**, <@${userId}>! ⛩️🌸\n\n` +
-      `To prevent automated self-bots and mass raids, please complete this quick check:\n\n` +
-      `👉 **Click the button below matching:** **${target.name}** (${target.emoji})\n\n` +
-      `*-# Select the correct option below to unlock your Member role!*`
-    )
-    .setFooter({ text: 'AniPedia Anti-Raid Defense' })
-    .setTimestamp();
+      `Welcome to AniPedia verification, <@${userId}>!\n` +
+      `Click the button matching: **${target.name}** (${target.emoji})`
+    );
 
   return {
     embeds: [challengeEmbed],
@@ -201,14 +197,8 @@ async function handleChallengeButton(interaction, helpers = {}) {
   if (outcome !== 'correct') {
     const failEmbed = new EmbedBuilder()
       .setColor(0xE74C3C)
-      .setTitle('Verification Failed • Incorrect Option')
-      .setDescription(
-        `❌ Mou! You selected the wrong option.\n\n` +
-        `Our automated defense system blocked this attempt to prevent bots.\n\n` +
-        `**To try again:** Click the green **Verify 🌸** button on the verification panel to get a fresh challenge! ⛩️`
-      )
-      .setFooter({ text: 'AniPedia Anti-Raid Defense' })
-      .setTimestamp();
+      .setTitle('Verification Failed')
+      .setDescription('Click **Verify 🌸** to try again!');
 
     await interaction.update({ embeds: [failEmbed], components: [] }).catch(() => {});
     return;
@@ -221,14 +211,10 @@ async function handleChallengeButton(interaction, helpers = {}) {
 
     const successEmbed = new EmbedBuilder()
       .setColor(0x2ECC71)
-      .setTitle('🌸 Verification Successful!')
+      .setTitle('🌸 Verified!')
       .setDescription(
-        `Welcome to **AniPedia**, <@${interaction.user.id}>! ⛩️✨\n\n` +
-        `You have passed the human check and received the **Member** role!\n` +
-        `All sanctuary channels are now unlocked for you. Have fun and enjoy the community!`
-      )
-      .setFooter({ text: 'AniPedia • Verified Member' })
-      .setTimestamp();
+        `Welcome to **AniPedia**, <@${interaction.user.id}>! You now have the **Member** role.`
+      );
 
     await interaction.update({ embeds: [successEmbed], components: [] }).catch(() => {});
 
