@@ -9,10 +9,10 @@ const {
 } = require('discord.js');
 
 const CHALLENGE_ITEMS = [
-  { name: 'Cherry Blossom', emoji: '🌸' },
+  { name: 'Coffee Cup', emoji: '☕' },
   { name: 'Rice Ball', emoji: '🍙' },
   { name: 'Katana / Swords', emoji: '⚔️' },
-  { name: 'Torii Shrine Gate', emoji: '⛩️' },
+  { name: 'Soccer Ball', emoji: '⚽' },
   { name: 'Shooting Star', emoji: '⭐' },
   { name: 'Flame / Fire', emoji: '🔥' },
   { name: 'Crescent Moon', emoji: '🌙' },
@@ -26,8 +26,8 @@ function createVerificationPanelPayload(guild) {
 
   container.addTextDisplayComponents(
     new TextDisplayBuilder().setContent(
-      `**ANIPEDIA VERIFICATION GATEWAY**\n` +
-      `Welcome to **AniPedia**! ⛩️🌸\n` +
+      `**ANIPEDIA VERIFICATION**\n` +
+      `Welcome to **AniPedia**!\n` +
       `Click the button below to verify and unlock the channels.`
     )
   );
@@ -39,7 +39,6 @@ function createVerificationPanelPayload(guild) {
   const verifyBtn = new ButtonBuilder()
     .setCustomId('anipedia_verify_btn')
     .setLabel('Verify')
-    .setEmoji('🌸')
     .setStyle(ButtonStyle.Success);
 
   const row = new ActionRowBuilder().addComponents(verifyBtn);
@@ -111,14 +110,14 @@ async function handleVerificationButton(interaction, helpers = {}) {
 
   if (!memberRole) {
     await interaction.editReply({
-      content: "Mou! 🌸 Could not find the **Member** role in this server! Please notify server administrators. ❄️"
+      content: "Could not find the **Member** role in this server! Please notify server administrators."
     }).catch(() => {});
     return;
   }
 
   if (member.roles.cache.has(memberRole.id)) {
     await interaction.editReply({
-      content: "🌸 You are already verified as a **Member** in AniPedia! Enjoy exploring the server! ✨"
+      content: "You are already verified as a **Member** in AniPedia! Enjoy exploring the server!"
     }).catch(() => {});
     return;
   }
@@ -130,7 +129,7 @@ async function handleVerificationButton(interaction, helpers = {}) {
 
   if (isFlagged) {
     await interaction.editReply({
-      content: `⚠️ **Security Notice • Verification Flagged**\n\nMou! Your Discord account was created less than **3 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia sanctuary from unauthorized alts and raids, your account has been flagged for staff review in **#emillia-log**.\nA moderator will review and approve your account shortly! 🌸`
+      content: `⚠️ **Security Notice • Verification Flagged**\n\nYour Discord account was created less than **3 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia from unauthorized alts and raids, your account has been flagged for staff review in **#emillia-log**.\nA moderator will review and approve your account shortly.`
     }).catch(() => {});
 
     try {
@@ -179,7 +178,7 @@ async function handleChallengeButton(interaction, helpers = {}) {
 
   if (interaction.user.id !== targetUserId) {
     await interaction.reply({
-      content: "Mou! 🌸 This verification challenge belongs to someone else! Click the **Verify 🌸** button to start your own! ❄️",
+      content: "This verification challenge belongs to someone else! Click the **Verify** button to start your own!",
       ephemeral: true
     }).catch(() => {});
     return;
@@ -198,7 +197,7 @@ async function handleChallengeButton(interaction, helpers = {}) {
     const failEmbed = new EmbedBuilder()
       .setColor(0xE74C3C)
       .setTitle('Verification Failed')
-      .setDescription('Click **Verify 🌸** to try again!');
+      .setDescription('Click **Verify** to try again!');
 
     await interaction.update({ embeds: [failEmbed], components: [] }).catch(() => {});
     return;
@@ -211,7 +210,7 @@ async function handleChallengeButton(interaction, helpers = {}) {
 
     const successEmbed = new EmbedBuilder()
       .setColor(0x2ECC71)
-      .setTitle('🌸 Verified!')
+      .setTitle('Verified!')
       .setDescription(
         `Welcome to **AniPedia**, <@${interaction.user.id}>! You now have the **Member** role.`
       );
@@ -232,13 +231,13 @@ async function handleChallengeButton(interaction, helpers = {}) {
     console.error("Error granting role after challenge:", err);
     if (err.code === 50013) {
       await interaction.update({
-        content: "Mou! 🌸 I couldn't assign the **Member** role because my bot role ('Emillia') is placed below the 'Member' role in Discord Server Settings -> Roles! Please ask an administrator to drag my role higher up! ❄️",
+        content: "I couldn't assign the **Member** role because my bot role ('Emillia') is placed below the 'Member' role in Discord Server Settings -> Roles! Please ask an administrator to drag my role higher up.",
         embeds: [],
         components: []
       }).catch(() => {});
     } else {
       await interaction.update({
-        content: "Mou! 🌸 An error occurred while assigning the role. Please ask a moderator for help! ❄️",
+        content: "An error occurred while assigning the role. Please ask a moderator for help.",
         embeds: [],
         components: []
       }).catch(() => {});
@@ -254,7 +253,7 @@ async function handleStaffApprovalButton(interaction, helpers = {}) {
 
   if (modTier < 1 && !isWhitelisted) {
     await interaction.reply({
-      content: "Mou! 🌸 Only server staff can approve flagged accounts! ❄️",
+      content: "Only server staff can approve flagged accounts.",
       ephemeral: true
     }).catch(() => {});
     return;
@@ -301,7 +300,7 @@ async function handleStaffApprovalButton(interaction, helpers = {}) {
     await interaction.update({ components: [disabledRow] }).catch(() => {});
 
     try {
-      await targetMember.send(`🌸 **Verification Approved!**\n\nA moderator in **${guild.name}** has approved your verification! The **Member** role has been granted and all sanctuary channels are now open! ⛩️✨`);
+      await targetMember.send(`**Verification Approved!**\n\nA moderator in **${guild.name}** has approved your verification! The **Member** role has been granted and all server channels are now open.`);
     } catch (e) {}
 
     if (typeof logToEmilliaLog === 'function') {

@@ -4585,7 +4585,7 @@ client.on('messageCreate', async (message) => {
     if (isVerificationCmd) {
       const modTier = getMemberTier(message.member);
       if (modTier < 1 && !isWhitelistedUser(message.author)) {
-        await message.reply("Mou! 🌸 Only server staff and administrators can deploy the verification gateway! ❄️");
+        await message.reply("Only server staff and administrators can deploy verification.");
         return;
       }
 
