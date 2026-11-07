@@ -33,12 +33,12 @@ const fixedIqCache = new Map();
  * Sum = 120,000 (100.000%)
  */
 const AURA_TIERS = [
-  { min: 0.0,  max: 30.0,  weight: 42000, label: 'Common',      rarityMin: 35, rarityMax: 40 },
-  { min: 30.1, max: 60.0,  weight: 50400, label: 'Awakening',   rarityMin: 41, rarityMax: 47 },
-  { min: 60.1, max: 80.0,  weight: 18000, label: 'Ascendant',   rarityMin: 65, rarityMax: 75 },
-  { min: 80.1, max: 90.0,  weight: 7100,  label: 'Supreme',     rarityMin: 81, rarityMax: 89 },
-  { min: 90.1, max: 95.0,  weight: 1500,  label: 'One Piece',   rarityMin: 91, rarityMax: 95 },
-  { min: 95.1, max: 100.0, weight: 1000,  label: 'Anirare Piece', rarityMin: 96, rarityMax: 100 }
+  { min: 0.0,  max: 30.0,  weight: 42600, label: 'Common',      rarityMin: 35, rarityMax: 40 },
+  { min: 30.1, max: 60.0,  weight: 45000, label: 'Awakening',   rarityMin: 41, rarityMax: 47 },
+  { min: 60.1, max: 80.0,  weight: 10000, label: 'Ascendant',   rarityMin: 65, rarityMax: 75 },
+  { min: 80.1, max: 90.0,  weight: 1800,  label: 'Supreme',     rarityMin: 81, rarityMax: 89 },
+  { min: 90.1, max: 95.0,  weight: 400,   label: 'One Piece',   rarityMin: 91, rarityMax: 95 },
+  { min: 95.1, max: 100.0, weight: 200,   label: 'Anirare Piece', rarityMin: 96, rarityMax: 100 }
 ];
 
 function rollAuraPercent(fixedScore = null) {
@@ -258,6 +258,27 @@ async function handleFixedStatsButton(interaction, db) {
   return false;
 }
 
+async function resetAllFixedStats(db) {
+  fixedAuraCache.clear();
+  fixedIqCache.clear();
+
+  if (db) {
+    try {
+      const snapshot = await db.collection('user_fixed_stats').get();
+      if (!snapshot.empty) {
+        const batch = db.batch();
+        snapshot.docs.forEach(doc => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+        console.log(`[FixedStats] Successfully wiped ${snapshot.size} records from Firestore.`);
+      }
+    } catch (err) {
+      console.error("[FixedStats] Error wiping user_fixed_stats in Firestore:", err);
+    }
+  }
+}
+
 module.exports = {
   AURA_TIERS,
   rollAuraPercent,
@@ -265,6 +286,7 @@ module.exports = {
   buildIqActionRow,
   loadUserFixedStats,
   handleFixedStatsButton,
+  resetAllFixedStats,
   fixedAuraCache,
   fixedIqCache
 };

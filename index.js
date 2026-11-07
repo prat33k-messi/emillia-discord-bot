@@ -1,6 +1,6 @@
 const { createVerificationPanelPayload, handleVerificationButton, handleChallengeButton, handleStaffApprovalButton } = require('./verification-feature');
 const { handleAntiSpam } = require('./antispam-feature');
-const { rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
+const { rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -201,6 +201,10 @@ const slashCommandsData = [
   new SlashCommandBuilder()
     .setName('anipedia')
     .setDescription('View AniPedia community sanctuary details and guidelines'),
+
+  new SlashCommandBuilder()
+    .setName('aurareset')
+    .setDescription('Reset all server Auras and IQs (Aerion only)'),
 
   new SlashCommandBuilder()
     .setName('help')
@@ -2873,12 +2877,12 @@ const IQ_TIERS = [
 ];
 
 const IQ_WEIGHTS = {
-  1: 7440, 2: 7440, 3: 7440, 4: 7440, 5: 7440,
-  6: 7440, 7: 7440, 8: 7440, 9: 7440, 10: 7440,
-  11: 6000, 12: 6000, 13: 6000, 14: 6000, 15: 6000, 16: 6000,
-  17: 3550, 18: 3550,
-  19: 1500,
-  20: 1000
+  1: 7100, 2: 7100, 3: 7100, 4: 7100, 5: 7100, 6: 7100,
+  7: 7500, 8: 7500, 9: 7500, 10: 7500, 11: 7500, 12: 7500,
+  13: 2500, 14: 2500, 15: 2500, 16: 2500,
+  17: 900, 18: 900,
+  19: 400,
+  20: 200
 };
 
 function rollIqScore(fixedData = null) {
@@ -2890,7 +2894,7 @@ function rollIqScore(fixedData = null) {
     return { tier, score: fixedData.score, quote, isFixed: true };
   }
 
-  const totalWeight = 120000;
+  const totalWeight = 100000;
   let randomVal = Math.random() * totalWeight;
 
   for (const tier of IQ_TIERS) {
@@ -4790,6 +4794,24 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+
+    const isAuraResetCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aurareset' ||
+      cleanQuery === 'aurareset' || cleanQuery.startsWith('aurareset ') ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqreset' ||
+      cleanQuery === 'iqreset' || cleanQuery.startsWith('iqreset ')
+    );
+
+    if (isAuraResetCmd) {
+      if (!isWhitelistedUser(message.author)) {
+        await message.reply("Mou! Only Aerion-sama can reset server Auras and IQs!");
+        return;
+      }
+
+      await resetAllFixedStats(db);
+      await sendContainer(message, `<@${message.author.id}> • All member Auras and IQs have been successfully reset across AniPedia! Everyone will now roll fresh random stats.`);
+      return;
+    }
 
     const isAuraCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aura' || (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auras' ||
@@ -6985,6 +7007,16 @@ client.on('interactionCreate', async (interaction) => {
         .setTimestamp();
 
       await sendContainer(interaction, aikoProfileEmbed);
+      return;
+    }
+
+    if (commandName === 'aurareset' || commandName === 'iqreset') {
+      if (!isWhitelistedUser(user)) {
+        await interaction.reply({ content: "Mou! Only Aerion-sama can reset server Auras and IQs!", ephemeral: true });
+        return;
+      }
+      await resetAllFixedStats(db);
+      await sendContainer(interaction, `<@${user.id}> • All member Auras and IQs have been successfully reset across AniPedia! Everyone will now roll fresh random stats.`);
       return;
     }
 
