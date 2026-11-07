@@ -788,12 +788,59 @@ function makeReplyFn(target) {
 
 const AIKO_COMMAND_CHANNEL_ID = '1568586444979703818';
 
+const AIKO_BYPASS_ROLE_IDS = new Set([
+  '1517887565431046267', // Shogun
+  '1517888043573317672', // Community Admin
+  '1542798540676276224', // Supervisor
+  '1521217765833179378'  // Senior Moderator
+]);
+
+function canBypassAikoChannel(member, user = null) {
+  if (user && isWhitelistedUser(user)) return true;
+  if (!member) return false;
+  if (isWhitelistedUser(member)) return true;
+  if (member.guild && member.guild.ownerId === member.id) return true;
+
+  if (member.roles && member.roles.cache) {
+    if (member.roles.cache.some(r => AIKO_BYPASS_ROLE_IDS.has(r.id))) return true;
+    if (member.roles.cache.some(r => {
+      const n = (r.name || '').toLowerCase().trim();
+      return n === 'shogun' ||
+             n === 'community admin' ||
+             n === 'community admins' ||
+             n === 'supervisor' ||
+             n === 'senior moderator' ||
+             n === 'sr moderator' ||
+             n === 'sr. moderator';
+    })) return true;
+  }
+  return false;
+}
+
 async function enforceAikoChannel(context, userId) {
+  const member = context.member;
+  const user = context.author || context.user;
+
+  if (canBypassAikoChannel(member, user)) {
+    return true;
+  }
+
   const channelId = context.channelId || context.channel?.id;
   if (channelId && channelId !== AIKO_COMMAND_CHANNEL_ID) {
     const isInteraction = Boolean(context.isChatInputCommand || (context.reply && context.commandName));
     const redirectMsg = `<@${userId}> • Please use Aiko commands in <#${AIKO_COMMAND_CHANNEL_ID}> channel. Thank you!`;
-    await sendContainer(context, redirectMsg, isInteraction ? { ephemeral: true } : {});
+    const sent = await sendContainer(context, redirectMsg, isInteraction ? { ephemeral: true } : {}).catch(() => {});
+
+    if (sent && typeof sent.delete === 'function') {
+      setTimeout(() => {
+        sent.delete().catch(() => {});
+      }, 5000);
+    } else if (isInteraction && typeof context.deleteReply === 'function') {
+      setTimeout(() => {
+        context.deleteReply().catch(() => {});
+      }, 5000);
+    }
+
     return false;
   }
   return true;
