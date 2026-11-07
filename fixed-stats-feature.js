@@ -6,7 +6,17 @@
  * - Fix & Remove button controls with Firestore persistence
  */
 
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle, ContainerBuilder, TextDisplayBuilder, MessageFlags } = require('discord.js');
+
+function buildContainerPayload(text, ephemeral = true) {
+  const container = new ContainerBuilder();
+  container.addTextDisplayComponents(new TextDisplayBuilder().setContent(text));
+  const flags = ephemeral ? (MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral) : MessageFlags.IsComponentsV2;
+  return {
+    components: [container],
+    flags
+  };
+}
 
 // In-memory caches for instant response without database latency
 const fixedAuraCache = new Map();
@@ -139,7 +149,9 @@ async function handleFixedStatsButton(interaction, db) {
     const score = parseFloat(parts[3]);
 
     if (userId !== targetUserId) {
-      await interaction.reply({ content: "Mou! You can only fix your own Aura card! ❄️", ephemeral: true }).catch(() => {});
+      const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s aura!`;
+      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
 
@@ -160,7 +172,9 @@ async function handleFixedStatsButton(interaction, db) {
   if (customId.startsWith('aura_remove_')) {
     const targetUserId = customId.replace('aura_remove_', '');
     if (userId !== targetUserId) {
-      await interaction.reply({ content: "Mou! You can only manage your own Aura card! ❄️", ephemeral: true }).catch(() => {});
+      const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s aura!`;
+      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
 
@@ -191,7 +205,9 @@ async function handleFixedStatsButton(interaction, db) {
     const score = parseFloat(parts[4]);
 
     if (userId !== targetUserId) {
-      await interaction.reply({ content: "Mou! You can only fix your own IQ card! ❄️", ephemeral: true }).catch(() => {});
+      const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s IQ!`;
+      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
 
@@ -213,7 +229,9 @@ async function handleFixedStatsButton(interaction, db) {
   if (customId.startsWith('iq_remove_')) {
     const targetUserId = customId.replace('iq_remove_', '');
     if (userId !== targetUserId) {
-      await interaction.reply({ content: "Mou! You can only manage your own IQ card! ❄️", ephemeral: true }).catch(() => {});
+      const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s IQ!`;
+      await interaction.reply(buildContainerPayload(msg, true)).catch(() => {});
+      setTimeout(() => interaction.deleteReply().catch(() => {}), 5000);
       return;
     }
 
