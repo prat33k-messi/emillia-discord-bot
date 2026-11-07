@@ -124,12 +124,12 @@ async function handleVerificationButton(interaction, helpers = {}) {
 
   const ageMs = Date.now() - user.createdTimestamp;
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
-  const isFlagged = ageDays < 3;
+  const isFlagged = ageDays < 10;
   const hasCustomAvatar = Boolean(user.avatar);
 
   if (isFlagged) {
     await interaction.editReply({
-      content: `⚠️ **Security Notice • Verification Flagged**\n\nYour Discord account was created less than **3 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia from unauthorized alts and raids, your account has been flagged for staff review in **#emillia-log**.\nA moderator will review and approve your account shortly.`
+      content: `⚠️ **Security Notice • Verification Flagged**\n\nYour Discord account was created less than **10 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia from unauthorized alts and raids, your account has been flagged for staff review in **#emillia-log**.\nA moderator will review and approve your account shortly.`
     }).catch(() => {});
 
     try {
@@ -141,9 +141,9 @@ async function handleVerificationButton(interaction, helpers = {}) {
           .setDescription(
             `<@${user.id}> (\`${user.tag}\` - \`${user.id}\`) attempted to verify, but was **flagged by the Alt Shield**!\n\n` +
             `• **Account Created:** <t:${Math.floor(user.createdTimestamp / 1000)}:F> (<t:${Math.floor(user.createdTimestamp / 1000)}:R>)\n` +
-            `• **Account Age:** \`${ageDays.toFixed(1)} day(s)\` *(Requirement: >= 3 days)*\n` +
+            `• **Account Age:** \`${ageDays.toFixed(1)} day(s)\` *(Requirement: >= 10 days)*\n` +
             `• **Avatar:** ${hasCustomAvatar ? 'Custom Avatar' : 'Default Discord Avatar'}\n` +
-            `• **Flag Reason:** Account age < 3 days (Potential alt or throwaway account)\n\n` +
+            `• **Flag Reason:** Account age < 10 days (Potential alt or throwaway account)\n\n` +
             `If this is a legitimate user, click the button below to manually grant them the **Member** role.`
           )
           .setFooter({ text: 'AniPedia Security Shield' })

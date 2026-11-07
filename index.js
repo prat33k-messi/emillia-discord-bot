@@ -993,7 +993,7 @@ async function handleFeatureCooldown(target, userId, featureName) {
   const now = Date.now();
   const cooldownKey = `${userId}_aiko_feature`;
   const lastUsed = featureCooldowns.get(cooldownKey) || 0;
-  const cooldownMs = 3000;
+  const cooldownMs = 4000;
 
   if (now - lastUsed < cooldownMs) {
     const remainingSecs = Math.max(1, Math.ceil((cooldownMs - (now - lastUsed)) / 1000));
@@ -1005,7 +1005,7 @@ async function handleFeatureCooldown(target, userId, featureName) {
         if (sentMsg && typeof sentMsg.delete === 'function') {
           setTimeout(() => {
             sentMsg.delete().catch(() => {});
-          }, 3000);
+          }, 4000);
         }
       } else if (target.isRepliable && target.isRepliable()) {
 
@@ -1013,7 +1013,7 @@ async function handleFeatureCooldown(target, userId, featureName) {
           await sendContainer(target, cdText, { ephemeral: true });
           setTimeout(() => {
             target.deleteReply().catch(() => {});
-          }, 3000);
+          }, 4000);
         }
       }
     } catch (err) {
