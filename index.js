@@ -2205,12 +2205,11 @@ function buildAnipediaEmbed(guild) {
     .setColor(0xBF5AF2)
     .setTitle(`${toSmallCaps('AniPedia • The Sanctuary')}`)
     .setDescription(
-      `Anime-driven community built on respect & family bonds! ⛩️🌸\n` +
+      `Anime-driven community built on respect & family bonds.\n` +
       `Active chats, 24/7 live VCs, streams & gaming with the homies.\n\n` +
-      `• 🌸 **Aiko** • Main moderation & guardian bot\n` +
-      `• 🛡️ **Staff Team** • Helpful mods (call anytime for help!)\n` +
-      `• 👑 **Owner** • Roan\n\n` +
-      `-# Respect the Owner, Community Admins & Mods at all times.`
+      `• **Aiko** • Main moderation & guardian bot\n` +
+      `• **Owner** • Roan\n\n` +
+      `-# Respect the Owner, Community Admins, Supervisors and Mod Team at all times.`
     )
     .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
     .setTimestamp();
