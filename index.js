@@ -4922,6 +4922,55 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    const isRevokeInvitesCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'revokeinvites' ||
+      cleanQuery === 'revokeinvites' || cleanQuery.startsWith('revokeinvites ') ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'deleteinvites' ||
+      cleanQuery === 'deleteinvites' || cleanQuery.startsWith('deleteinvites ')
+    );
+
+    if (isRevokeInvitesCmd) {
+      const modTier = getMemberTier(message.member);
+      if (modTier < 3 && !isWhitelistedUser(message.author)) {
+        await message.reply("Mou! 🌸 Only Shogun, Community Admins, and Supervisors can revoke invite links! ❄️");
+        return;
+      }
+
+      let targetId = null;
+      const mentioned = message.mentions.users.first();
+      if (mentioned) {
+        targetId = mentioned.id;
+      } else {
+        const queryArg = cleanQuery.replace(/^(revokeinvites|deleteinvites)\s*/i, '').trim();
+        const idMatch = queryArg.match(/\b\d{17,19}\b/);
+        if (idMatch) {
+          targetId = idMatch[0];
+        } else if (queryArg) {
+          const m = message.guild.members.cache.find(mem => mem.user.username.toLowerCase() === queryArg.toLowerCase() || (mem.displayName && mem.displayName.toLowerCase() === queryArg.toLowerCase()));
+          if (m) targetId = m.id;
+        }
+      }
+
+      if (!targetId) {
+        await message.reply("Please specify a user mention or User ID whose invite links to revoke! e.g. `<revokeinvites 1563138235482382436`");
+        return;
+      }
+
+      const res = await checkAndRevokeUserInvites(message.guild, targetId);
+      if (res.count === 0) {
+        await replyContainer(message, `<@${message.author.id}> • No active server invite links found created by <@${targetId}> \`(${targetId})\`.`);
+      } else {
+        await replyContainer(message, `<@${message.author.id}> • Successfully revoked & deleted **${res.count}** active invite link(s) created by <@${targetId}>! Codes: \`${res.revokedCodes.join(', ')}\``);
+        const logChannel = getLogChannel(message.guild);
+        if (logChannel) {
+          await logChannel.send({
+            content: `🛡️ **Security Notice • Invites Revoked**\n<@${message.author.id}> revoked **${res.count}** active invite link(s) belonging to target user \`${targetId}\`.\nCodes destroyed: \`${res.revokedCodes.join(', ')}\``
+          }).catch(() => {});
+        }
+      }
+      return;
+    }
+
     const isAuraCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aura' || (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auras' ||
       cleanQuery === 'aura' || cleanQuery === 'auras' ||
