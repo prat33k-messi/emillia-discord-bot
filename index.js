@@ -1,6 +1,7 @@
 const { createVerificationPanelPayload, handleVerificationButton, handleChallengeButton, handleStaffApprovalButton } = require('./verification-feature');
 const { handleAntiSpam } = require('./antispam-feature');
 const { rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
+const { initInviteTracker, trackMemberJoin, checkAndRevokeUserInvites, getInviteReportForUser, buildInviteReportEmbed } = require('./invite-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -112,7 +113,13 @@ const slashCommandsData = [
 
   new SlashCommandBuilder()
     .setName('leaderboard')
-    .setDescription('View the top warned members in the server'),
+    .setDescription('View the top warned members in the server')
+    .addIntegerOption(opt => opt.setName('limit').setDescription('Number of members to display (default 10, max 25)').setMinValue(5).setMaxValue(25).setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('inviteinfo')
+    .setDescription('Investigate who invited a user, active invite links, and their alt-chain')
+    .addUserOption(opt => opt.setName('user').setDescription('The user or ID to investigate').setRequired(true)),
 
   new SlashCommandBuilder()
     .setName('timeout')
@@ -204,7 +211,7 @@ const slashCommandsData = [
 
   new SlashCommandBuilder()
     .setName('aurareset')
-    .setDescription('Reset all server Auras and IQs (Aerion only)'),
+    .setDescription('Reset all server Auras and IQs (1013822181379162142 only)'),
 
   new SlashCommandBuilder()
     .setName('help')
@@ -225,6 +232,13 @@ client.once('ready', async () => {
         });
       });
       console.log(`Preloaded memories for ${preloadedMemories.size} users from Firestore.`);
+      preloadedMemories.delete('blaze.noname');
+      preloadedMemories.delete('1563138235482382436');
+      if (db) {
+        db.collection('memories').doc('blaze.noname').delete().catch(() => {});
+        db.collection('memories').doc('1563138235482382436').delete().catch(() => {});
+        db.collection('user_warn_states').doc('1563138235482382436').delete().catch(() => {});
+      }
     } catch (err) {
       console.error("Error preloading memories from Firestore:", err);
     }
@@ -319,6 +333,7 @@ client.once('ready', async () => {
     await checkExpiredWarns();
     setInterval(checkExpiredWarns, 60 * 1000);
     console.log("Tiered warn scheduler & Warned role sync initialized.");
+    await initInviteTracker(client);
   } catch (err) {
     console.error("Error initializing warn scheduler/role sync on ready:", err);
   }
@@ -407,6 +422,7 @@ client.on('guildMemberAdd', async (member) => {
 
   try {
     if (member && member.guild) {
+      await trackMemberJoin(member, db);
       await handleMemberWelcome(member);
     }
   } catch (welcomeErr) {
@@ -3129,9 +3145,55 @@ async function deleteUserRecentMessages(channel, userId, count = 15) {
   return 0;
 }
 
+function getLogChannel(guild) {
+  if (!guild || !guild.channels) return null;
+  return guild.channels.cache.find(ch => ch.name === 'aiko-log') ||
+         guild.channels.cache.find(ch => ch.name === 'emillia-log') ||
+         guild.channels.cache.find(ch => ch.name.includes('aiko-log')) ||
+         guild.channels.cache.find(ch => ch.name.includes('emillia-log')) ||
+         guild.channels.cache.find(ch => ch.name === 'mod-log');
+}
+
+async function clearBannedUserWarnings(guild, userId, targetTag = null, username = null) {
+  activeWarnStatesCache.delete(userId);
+  inMemoryWarnRecords.delete(userId);
+
+  for (const [key] of preloadedMemories.entries()) {
+    const k = key.toLowerCase();
+    if (k === userId.toLowerCase() ||
+        (username && k === username.toLowerCase()) ||
+        (targetTag && k === targetTag.toLowerCase())) {
+      preloadedMemories.delete(key);
+    }
+  }
+
+  preloadedMemories.delete('blaze.noname');
+  preloadedMemories.delete('1563138235482382436');
+
+  if (db) {
+    try {
+      await db.collection('user_warn_states').doc(userId).delete().catch(() => {});
+      await db.collection('memories').doc(userId).delete().catch(() => {});
+      if (username) await db.collection('memories').doc(username.toLowerCase()).delete().catch(() => {});
+      if (targetTag) await db.collection('memories').doc(targetTag.toLowerCase()).delete().catch(() => {});
+      if (userId === '1563138235482382436') {
+        await db.collection('memories').doc('blaze.noname').delete().catch(() => {});
+      }
+      const warnDocs = await db.collection('warn_records').where('userId', '==', userId).get().catch(() => null);
+      if (warnDocs && !warnDocs.empty) {
+        const batch = db.batch();
+        warnDocs.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit().catch(() => {});
+      }
+    } catch (e) {
+      console.error("Error clearing warnings for banned user:", e);
+    }
+  }
+}
+
 async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag, reason, extraFields = []) {
   try {
-    const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
+    const logChannel = getLogChannel(guild);
     if (!logChannel) return;
 
     const { verify, dot } = await getModEmojis(guild);
@@ -3198,7 +3260,7 @@ async function logToEmilliaLog(guild, action, targetTag, targetId, moderatorTag,
 
 async function logErrorToEmilliaLog(guild, action, targetUserOrId, errorMsg) {
   try {
-    const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
+    const logChannel = getLogChannel(guild);
     if (!logChannel) return;
     const { dot } = await getModEmojis(guild);
     let targetStr = 'N/A';
@@ -4803,13 +4865,60 @@ client.on('messageCreate', async (message) => {
     );
 
     if (isAuraResetCmd) {
-      if (!isWhitelistedUser(message.author)) {
-        await message.reply("Mou! Only Aerion-sama can reset server Auras and IQs!");
+      if (message.author.id !== '1013822181379162142') {
+        await message.reply("Mou! Only <@1013822181379162142> can reset server Auras and IQs!");
         return;
       }
 
       await resetAllFixedStats(db);
       await sendContainer(message, `<@${message.author.id}> • All member Auras and IQs have been successfully reset across AniPedia! Everyone will now roll fresh random stats.`);
+      return;
+    }
+
+    const isInviteInfoCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'inviteinfo' ||
+      cleanQuery === 'inviteinfo' || cleanQuery.startsWith('inviteinfo ') ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'checkinvites' ||
+      cleanQuery === 'checkinvites' || cleanQuery.startsWith('checkinvites ')
+    );
+
+    if (isInviteInfoCmd) {
+      const modTier = getMemberTier(message.member);
+      if (modTier < 1 && !isWhitelistedUser(message.author)) {
+        await message.reply("Mou! 🌸 Only staff can investigate member invites! ❄️");
+        return;
+      }
+
+      let targetId = null;
+      let targetTag = 'Target User';
+      const mentioned = message.mentions.users.first();
+      if (mentioned) {
+        targetId = mentioned.id;
+        targetTag = mentioned.tag;
+      } else {
+        const queryArg = cleanQuery.replace(/^(inviteinfo|checkinvites)\s*/i, '').trim();
+        const idMatch = queryArg.match(/\b\d{17,19}\b/);
+        if (idMatch) {
+          targetId = idMatch[0];
+          const fetched = await client.users.fetch(targetId).catch(() => null);
+          if (fetched) targetTag = fetched.tag;
+        } else if (queryArg) {
+          const m = message.guild.members.cache.find(mem => mem.user.username.toLowerCase() === queryArg.toLowerCase() || (mem.displayName && mem.displayName.toLowerCase() === queryArg.toLowerCase()));
+          if (m) {
+            targetId = m.id;
+            targetTag = m.user.tag;
+          }
+        }
+      }
+
+      if (!targetId) {
+        await message.reply("Please specify a user mention or User ID to investigate! e.g. `<inviteinfo 1563138235482382436`");
+        return;
+      }
+
+      const report = await getInviteReportForUser(message.guild, db, targetId);
+      const reportEmbed = buildInviteReportEmbed(report, targetTag);
+      await sendContainer(message, reportEmbed);
       return;
     }
 
@@ -5044,7 +5153,7 @@ client.on('messageCreate', async (message) => {
               }
             }
             sendAlertToCreator(client, username, nickname, guildName, channelName, `[AI-DETECTED] ${cleanQuery}`);
-            await message.reply("Mou! 🛡️ My advanced detection picked up something suspicious in that message! I only follow Aerion-sama's instructions! ❄️");
+            await message.reply("Mou! 🛡️ My advanced detection picked up something suspicious in that message! I only follow <@1013822181379162142>'s instructions! ❄️");
             return;
           }
         } catch (err) {
@@ -5595,6 +5704,14 @@ client.on('messageCreate', async (message) => {
             logFields.push({ name: `${dot} Evidence`, value: `[Screenshot](${evidenceUrl})`, inline: true });
           }
           logToEmilliaLog(message.guild, 'ban', targetTag, targetId, message.author.tag, reason, logFields);
+          await clearBannedUserWarnings(message.guild, targetId, targetTag, targetMember?.user?.username);
+          await checkAndRevokeUserInvites(message.guild, targetId);
+          const inviteReport = await getInviteReportForUser(message.guild, db, targetId);
+          const reportEmbed = buildInviteReportEmbed(inviteReport, targetTag);
+          const logChan = getLogChannel(message.guild);
+          if (logChan) {
+            await logChan.send({ embeds: [reportEmbed] }).catch(() => {});
+          }
         } catch (err) {
           console.error("Ban execution error:", err);
           if (err.code === 50013) {
@@ -5662,9 +5779,31 @@ client.on('messageCreate', async (message) => {
         }
 
         usersWithWarnings.sort((a, b) => b.warnings - a.warnings);
-        const top5 = usersWithWarnings.slice(0, 5);
+        let requestedLimit = 10;
+        const numMatch = cleanQuery.match(/\b(\d+)\b/);
+        if (numMatch) {
+          requestedLimit = Math.max(5, Math.min(25, parseInt(numMatch[1], 10)));
+        }
 
-        if (top5.length === 0) {
+        const bans = await message.guild.bans.fetch().catch(() => null);
+        const bannedSet = new Set(bans ? Array.from(bans.keys()) : []);
+        bannedSet.add('1563138235482382436');
+
+        const filteredList = [];
+        for (const entry of usersWithWarnings) {
+          if (entry.username.toLowerCase() === 'blaze.noname' || entry.username === '1563138235482382436') continue;
+          const foundMember = message.guild?.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase() || m.id === entry.username);
+          if (foundMember && bannedSet.has(foundMember.id)) continue;
+          if (bannedSet.has(entry.username)) continue;
+          filteredList.push({
+            ...entry,
+            member: foundMember
+          });
+        }
+
+        const topN = filteredList.slice(0, requestedLimit);
+
+        if (topN.length === 0) {
           const emptyLbEmbed = new EmbedBuilder()
             .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
             .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
@@ -5676,10 +5815,10 @@ client.on('messageCreate', async (message) => {
         }
 
         const lbEntries = [];
-        for (let i = 0; i < top5.length; i++) {
-          const entry = top5[i];
+        for (let i = 0; i < topN.length; i++) {
+          const entry = topN[i];
           const foundMember = message.guild?.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
-          const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
+          const userMention = entry.member ? `<@${entry.member.id}>` : `\`@${entry.username}\``;
 
           let statusBadge = '';
           if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
@@ -5750,7 +5889,7 @@ client.on('messageCreate', async (message) => {
         .setDescription(
           `Aiko is the core moderation intelligence and guardian system engineered for AniPedia.\n\n` +
           `Built with advanced moderation protocols, real-time behavioral filtering, and security enforcement directives, she is designed to protect the server, uphold community guidelines, and maintain a safe, welcoming, and peaceful sanctuary for all members.\n\n` +
-          `Creation: Aerion`
+          `Creation: <@1013822181379162142>`
         )
         .setFooter({ text: toSmallCaps('AniPedia'), iconURL: message.guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
@@ -6421,9 +6560,25 @@ client.on('interactionCreate', async (interaction) => {
         }
       }
       usersWithWarnings.sort((a, b) => b.warnings - a.warnings);
-      const top5 = usersWithWarnings.slice(0, 5);
+      const requestedLimit = options.getInteger('limit') || 10;
+      const bans = await guild.bans.fetch().catch(() => null);
+      const bannedSet = new Set(bans ? Array.from(bans.keys()) : []);
+      bannedSet.add('1563138235482382436');
 
-      if (top5.length === 0) {
+      const filteredList = [];
+      for (const entry of usersWithWarnings) {
+        if (entry.username.toLowerCase() === 'blaze.noname' || entry.username === '1563138235482382436') continue;
+        const foundMember = guild.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase() || m.id === entry.username);
+        if (foundMember && bannedSet.has(foundMember.id)) continue;
+        if (bannedSet.has(entry.username)) continue;
+        filteredList.push({
+          ...entry,
+          member: foundMember
+        });
+      }
+      const topN = filteredList.slice(0, requestedLimit);
+
+      if (topN.length === 0) {
         const emptyLbEmbed = new EmbedBuilder()
           .setTitle(`${toSmallCaps('Warning Leaderboard')}`)
           .setDescription(`**${toSmallCaps('Status')}:** \`100% Peaceful\`\nNo members have active warnings in Anipedia!`)
@@ -6435,10 +6590,10 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       const lbEntries = [];
-      for (let i = 0; i < top5.length; i++) {
-        const entry = top5[i];
+      for (let i = 0; i < topN.length; i++) {
+        const entry = topN[i];
         const foundMember = guild.members.cache.find(m => m.user.username.toLowerCase() === entry.username.toLowerCase());
-        const userMention = foundMember ? `<@${foundMember.id}>` : `\`@${entry.username}\``;
+        const userMention = entry.member ? `<@${entry.member.id}>` : `\`@${entry.username}\``;
 
         let statusBadge = '';
         if (entry.warnings >= 5) statusBadge = ' `1h Freeze`';
@@ -6807,6 +6962,14 @@ client.on('interactionCreate', async (interaction) => {
           logFields.push({ name: `${dot} ${toSmallCaps('Evidence')}`, value: `[Screenshot](${evidenceUrl})`, inline: true });
         }
         logToEmilliaLog(guild, 'ban', targetTag, targetId, user.tag, reason, logFields);
+        await clearBannedUserWarnings(guild, targetId, targetTag, targetMember?.user?.username);
+        await checkAndRevokeUserInvites(guild, targetId);
+        const inviteReport = await getInviteReportForUser(guild, db, targetId);
+        const reportEmbed = buildInviteReportEmbed(inviteReport, targetTag);
+        const logChan = getLogChannel(guild);
+        if (logChan) {
+          await logChan.send({ embeds: [reportEmbed] }).catch(() => {});
+        }
       } catch (err) {
         console.error("Ban slash command error:", err);
         if (err.code === 50013) {
@@ -6854,6 +7017,19 @@ client.on('interactionCreate', async (interaction) => {
         console.error("Unban slash command error:", err);
         await interaction.reply({ content: "Failed to unban this user ID! Make sure the ID is correct and they are banned. 😰", ephemeral: true });
       }
+      return;
+    }
+
+    if (commandName === 'inviteinfo') {
+      if (modTier < 1 && !isWhitelistedUser(user)) {
+        await interaction.reply({ content: "Mou! 🌸 Only staff can investigate member invites! ❄️", ephemeral: true });
+        return;
+      }
+      const targetUser = options.getUser('user');
+      await interaction.deferReply();
+      const report = await getInviteReportForUser(guild, db, targetUser.id);
+      const reportEmbed = buildInviteReportEmbed(report, targetUser.tag);
+      await sendContainer(interaction, reportEmbed);
       return;
     }
 
@@ -7001,7 +7177,7 @@ client.on('interactionCreate', async (interaction) => {
         .setDescription(
           `Aiko is the core moderation intelligence and guardian system engineered for AniPedia.\n\n` +
           `Built with advanced moderation protocols, real-time behavioral filtering, and security enforcement directives, she is designed to protect the server, uphold community guidelines, and maintain a safe, welcoming, and peaceful sanctuary for all members.\n\n` +
-          `Creation: Aerion`
+          `Creation: <@1013822181379162142>`
         )
         .setFooter({ text: toSmallCaps('AniPedia'), iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
         .setTimestamp();
@@ -7011,8 +7187,8 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'aurareset' || commandName === 'iqreset') {
-      if (!isWhitelistedUser(user)) {
-        await interaction.reply({ content: "Mou! Only Aerion-sama can reset server Auras and IQs!", ephemeral: true });
+      if (user.id !== '1013822181379162142') {
+        await interaction.reply({ content: "Mou! Only <@1013822181379162142> can reset server Auras and IQs!", ephemeral: true });
         return;
       }
       await resetAllFixedStats(db);

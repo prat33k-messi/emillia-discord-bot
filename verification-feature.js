@@ -129,11 +129,11 @@ async function handleVerificationButton(interaction, helpers = {}) {
 
   if (isFlagged) {
     await interaction.editReply({
-      content: `⚠️ **Security Notice • Verification Flagged**\n\nYour Discord account was created less than **10 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia from unauthorized alts and raids, your account has been flagged for staff review in **#emillia-log**.\nA moderator will review and approve your account shortly.`
+      content: `⚠️ **Security Notice • Verification Flagged**\n\nYour Discord account was created less than **10 days** ago (<t:${Math.floor(user.createdTimestamp / 1000)}:R>).\n\nTo safeguard AniPedia from unauthorized alts and raids, your account has been flagged for staff review in **#aiko-log**.\nA moderator will review and approve your account shortly.`
     }).catch(() => {});
 
     try {
-      const logChannel = guild.channels.cache.find(ch => ch.name === 'emillia-log');
+      const logChannel = guild.channels.cache.find(ch => ch.name === 'aiko-log') || guild.channels.cache.find(ch => ch.name === 'emillia-log') || guild.channels.cache.find(ch => ch.name.includes('aiko-log'));
       if (logChannel) {
         const alertEmbed = new EmbedBuilder()
           .setColor(0xE74C3C)
