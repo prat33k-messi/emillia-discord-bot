@@ -275,12 +275,15 @@ function buildInviteReportEmbed(reportData, targetTag = 'User') {
     inline: false
   });
 
+  const totalLinkUses = reportData.activeInvites.reduce((sum, inv) => sum + (inv.uses || 0), 0);
+
   // Field 3: Active Invites created by this user on the server
   let activeInvitesText = '`None currently active`';
   if (reportData.activeInvites.length > 0) {
-    activeInvitesText = reportData.activeInvites.map(inv =>
+    const lines = reportData.activeInvites.map(inv =>
       `• \`discord.gg/${inv.code}\` — **${inv.uses}** use(s) (Channel: #${inv.channelName})`
-    ).join('\n');
+    );
+    activeInvitesText = `**Total Uses Across Links:** \`${totalLinkUses} uses\`\n` + lines.join('\n');
   }
   embed.addFields({
     name: `• ${toSmallCaps('Active Server Invites Created')}`,
@@ -288,17 +291,32 @@ function buildInviteReportEmbed(reportData, targetTag = 'User') {
     inline: false
   });
 
-  // Field 4: Members who joined using this user's links
+  // Field 4: Members who joined using this user's links (Last 5 with User ID & Name)
+  const sortedInvited = [...reportData.invitedUsers].sort((a, b) => {
+    const timeA = a.joinedAt ? a.joinedAt.getTime() : 0;
+    const timeB = b.joinedAt ? b.joinedAt.getTime() : 0;
+    return timeB - timeA;
+  });
+  const last5 = sortedInvited.slice(0, 5);
+
   let invitedUsersText = '`No members joined through their links`';
   if (reportData.invitedUsers.length > 0) {
-    invitedUsersText = reportData.invitedUsers.map(u => {
+    const listStr = last5.map((u, idx) => {
       const statusBadge = u.isStillInServer ? '`In Server` 🟢' : '`Left/Banned` 🔴';
-      const timeStr = u.joinedAt ? `<t:${Math.floor(u.joinedAt.getTime() / 1000)}:R>` : 'Unknown date';
-      return `• <@${u.userId}> (\`${u.userTag}\`) — ${statusBadge} (Joined ${timeStr})`;
+      const timeStr = u.joinedAt ? `<t:${Math.floor(u.joinedAt.getTime() / 1000)}:R>` : '';
+      return `${idx + 1}. <@${u.userId}> (\`${u.userTag}\` — ID: \`${u.userId}\`) ${statusBadge} ${timeStr}`;
     }).join('\n');
+
+    invitedUsersText = `**Total Logged Joins:** \`${reportData.invitedUsers.length}\`\n` +
+      (reportData.invitedUsers.length > 5 ? `*Showing last 5 joined members:*\n` : '') +
+      listStr;
+  } else if (totalLinkUses > 0) {
+    invitedUsersText = `**Historical Link Uses:** \`${totalLinkUses} uses\` *(Discord link counter)*\n` +
+      `*No members logged yet since live tracker started. Anyone joining from now on will be recorded here with User ID and Name.*`;
   }
+
   embed.addFields({
-    name: `• ${toSmallCaps(`Members Invited (${reportData.invitedUsers.length})`)}`,
+    name: `• ${toSmallCaps(`Members Invited (${reportData.invitedUsers.length > 0 ? reportData.invitedUsers.length : totalLinkUses})`)}`,
     value: invitedUsersText.length > 1024 ? invitedUsersText.slice(0, 1020) + '...' : invitedUsersText,
     inline: false
   });
