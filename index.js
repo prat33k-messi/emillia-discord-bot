@@ -2996,11 +2996,26 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote, custo
   const charImageOverride = customOptions?.charImagePath || null;
 
   let customCharLoaded = false;
-  if (charImageOverride && fs.existsSync(charImageOverride)) {
+  if (charImageOverride) {
     try {
-      const charImg = await loadImage(charImageOverride);
-      drawCoverImage(ctx, charImg, halfW, 0, halfW, height);
-      customCharLoaded = true;
+      let imgData = null;
+      if (Buffer.isBuffer(charImageOverride)) {
+        imgData = charImageOverride;
+      } else if (typeof charImageOverride === 'string') {
+        if (fs.existsSync(charImageOverride)) {
+          imgData = fs.readFileSync(charImageOverride);
+        } else if (charImageOverride.startsWith('http') || charImageOverride.startsWith('data:')) {
+          imgData = charImageOverride;
+        }
+      }
+      if (!imgData && fs.existsSync(path.join(__dirname, 'assets', 'iq', 'lost_from_light.jpg'))) {
+        imgData = fs.readFileSync(path.join(__dirname, 'assets', 'iq', 'lost_from_light.jpg'));
+      }
+      if (imgData) {
+        const charImg = await loadImage(imgData);
+        drawCoverImage(ctx, charImg, halfW, 0, halfW, height);
+        customCharLoaded = true;
+      }
     } catch (err) {
       console.error("Failed to load custom character image for IQ card:", err);
     }
@@ -3010,7 +3025,7 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote, custo
   if (!customCharLoaded)
   try {
     if (fs.existsSync(charImgPath)) {
-      const charImg = await loadImage(charImgPath);
+      const charImg = await loadImage(fs.readFileSync(charImgPath));
       drawCoverImage(ctx, charImg, halfW, 0, halfW, height);
     }
   } catch (err) {
@@ -3173,6 +3188,21 @@ async function buildIqPayload(targetMember, guild, authorId = null) {
       }
     }
 
+    const candidatePaths = [
+      specialDestPath,
+      'C:/projects/emillia/assets/iq/lost_from_light.jpg',
+      specialSourcePath
+    ];
+    let customImgBuffer = null;
+    for (const p of candidatePaths) {
+      try {
+        if (fs.existsSync(p)) {
+          customImgBuffer = fs.readFileSync(p);
+          break;
+        }
+      } catch (e) {}
+    }
+
     const targetAvatarUrl = targetMember?.user?.displayAvatarURL
       ? targetMember.user.displayAvatarURL({ extension: 'png', size: 512 })
       : (targetMember?.displayAvatarURL ? targetMember.displayAvatarURL({ extension: 'png', size: 512 }) : null);
@@ -3183,7 +3213,7 @@ async function buildIqPayload(targetMember, guild, authorId = null) {
 
     const buffer = await generateIqCard(targetAvatarUrl, formattedName, { image: 'lost_from_light.jpg' }, 0, customQuote, {
       badgeText: 'Lost from light',
-      charImagePath: fs.existsSync(customImgPath) ? customImgPath : specialSourcePath,
+      charImagePath: customImgBuffer || (fs.existsSync(customImgPath) ? customImgPath : specialSourcePath),
       theme: 'black_neon'
     });
 
