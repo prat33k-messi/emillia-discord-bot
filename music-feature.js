@@ -131,6 +131,29 @@ function initMusic(client, sendContainerFn) {
     LAVALINK_NODES
   );
 
+  const triggerReady = () => {
+    try {
+      if (kazagumo?.shoukaku?.connector) {
+        kazagumo.shoukaku.connector.ready(LAVALINK_NODES);
+        console.log(`[Aiko Music] Dispatched ${LAVALINK_NODES.length} Lavalink nodes to Shoukaku connector.`);
+      }
+    } catch (e) {
+      console.error('[Aiko Music] Error triggering connector.ready:', e);
+    }
+  };
+
+  if (client.isReady && client.isReady()) {
+    triggerReady();
+  } else {
+    client.once('ready', triggerReady);
+  }
+
+  client.on('raw', (packet) => {
+    try {
+      kazagumo?.shoukaku?.connector?.raw(packet);
+    } catch (e) {}
+  });
+
   kazagumo.shoukaku.on('ready', (name) => {
     console.log(`[Aiko Music] Lavalink Node "${name}" is connected & ready! (320kbps Studio Audio)`);
   });
