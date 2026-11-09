@@ -192,23 +192,23 @@ function initMusic(client, sendContainerFn) {
     const playerControls = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId('music_btn_playpause').setLabel('Pause / Resume').setEmoji('⏯️').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('music_btn_skip').setLabel('Skip').setEmoji('⏭️').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('music_btn_lock').setLabel('Lock Upcoming').setEmoji('🔒').setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId('music_btn_loop').setLabel('Loop').setEmoji('🔁').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('music_btn_stop').setLabel('Stop').setEmoji('⏹️').setStyle(ButtonStyle.Danger)
     );
 
+    const actionRow2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('music_btn_like').setLabel('Like').setEmoji('💚').setStyle(ButtonStyle.Success)
+    );
+
     const desc =
-      `**[${track.title}](${track.uri})**\n\n` +
-      `**${toSmallCaps('Artist')}** • \`${track.author || 'Unknown'}\`\n` +
-      `**${toSmallCaps('Duration')}** • \`${formatDuration(track.length)}\`\n` +
-      `**${toSmallCaps('Requested By')}** • ${requesterMention}\n` +
-      `**${toSmallCaps('Studio Audio')}** • \`${bitrateDisplay} • Lossless Opus\`${lockReleasedNotice}`;
+      `• **[${track.title}](${track.uri})**\n` +
+      `• **${toSmallCaps('Duration')}**: \`${formatDuration(track.length)}\` — (${requesterMention})${lockReleasedNotice}`;
 
     await sendContainerRef(textChannel, {
       title: `🎵  ${toSmallCaps('Now Playing')}`,
       description: desc,
       thumbnail: track.thumbnail || null,
-      components: [playerControls],
+      components: [playerControls, actionRow2],
       footer: `AniPedia Music • Studio Fidelity`
     }).catch(() => {});
   });
@@ -332,26 +332,30 @@ async function handlePlayCommand(message, query) {
     player.queue.add(track);
 
     if (player.playing) {
-      // Song is added as upcoming! Provide Lock Upcoming button
+      // Song is added as upcoming! Provide Lock Upcoming and Like buttons
       const lockBtnRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`music_lock_upcoming_${message.author.id}`)
           .setLabel('Lock Upcoming')
           .setEmoji('🔒')
-          .setStyle(ButtonStyle.Primary)
+          .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+          .setCustomId('music_btn_like')
+          .setLabel('Like')
+          .setEmoji('💚')
+          .setStyle(ButtonStyle.Success)
       );
 
+      const enqueueDesc =
+        `✅ **Added [${track.title}](${track.uri}) to the queue.**\n\n` +
+        `**${toSmallCaps('Duration')}**: \`${formatDuration(track.length)}\` • **${toSmallCaps('Requestor')}**: <@${message.author.id}> • **${toSmallCaps('Position')}**: \`#${player.queue.length}\``;
+
       await sendContainerRef(message, {
-        title: `⏳  ${toSmallCaps('Added to Upcoming')}`,
-        description:
-          `**[${track.title}](${track.uri})**\n\n` +
-          `**${toSmallCaps('Position')}** • \`#${player.queue.length}\` in queue\n` +
-          `**${toSmallCaps('Duration')}** • \`${formatDuration(track.length)}\`\n` +
-          `**${toSmallCaps('Artist')}** • \`${track.author || 'Unknown'}\`\n` +
-          `**${toSmallCaps('Requested By')}** • <@${message.author.id}>\n\n` +
-          `*Click **Lock Upcoming** below to reserve this track so no one else can queue ahead of it!*`,
+        title: `🎵  ${toSmallCaps('Enqueued Track')}`,
+        description: enqueueDesc,
         thumbnail: track.thumbnail || null,
-        components: [lockBtnRow]
+        components: [lockBtnRow],
+        footer: `AniPedia Music • Studio Fidelity`
       });
     }
   }
@@ -378,6 +382,18 @@ async function handleLockUpcoming(interactionOrMessage, user, isStaff = false) {
       return await interactionOrMessage.reply({ content: msg, ephemeral: true });
     }
     return await sendContainerRef(interactionOrMessage, msg);
+  }
+
+  const requesterId = (interactionOrMessage.customId && interactionOrMessage.customId.startsWith('music_lock_upcoming_'))
+    ? interactionOrMessage.customId.replace('music_lock_upcoming_', '')
+    : null;
+  if (requesterId && requesterId !== user.id && !isStaff) {
+    if (interactionOrMessage.isButton && interactionOrMessage.isButton()) {
+      return await interactionOrMessage.reply({
+        content: "Only the member who queued this song or server staff can lock the upcoming slot! 🔒",
+        ephemeral: true
+      });
+    }
   }
 
   if (player.queue.length === 0) {
@@ -462,8 +478,8 @@ async function sendAikoMusicMenu(context, user, options = {}) {
     .setPlaceholder('Select a music category to view commands...')
     .addOptions([
       {
-        label: 'Playback Controls',
-        description: 'Play, pause, resume, skip, stop, and volume commands',
+        label: 'Playback Controls and Features',
+        description: 'Play, pause, resume, skip, stop, volume & studio audio features',
         value: 'playback',
         emoji: '🎵'
       },
@@ -478,12 +494,6 @@ async function sendAikoMusicMenu(context, user, options = {}) {
         description: 'Anime OST quick-play, 24/7 Lo-Fi radio, and lyrics',
         value: 'specials',
         emoji: '🎌'
-      },
-      {
-        label: 'Studio Audio Quality',
-        description: 'Automatic 384kbps bitrate boost and voice optimization',
-        value: 'audio',
-        emoji: '🔊'
       }
     ]);
 
@@ -515,7 +525,7 @@ async function handleAikoMusicSelect(interaction) {
   let description = '';
 
   if (selected === 'playback') {
-    title = `🎵  ${toSmallCaps('Playback Controls')}`;
+    title = `🎵  ${toSmallCaps('Playback Controls & Features')}`;
     description =
       `• **\`<play <name / link>\`** — Play track from YouTube, Spotify, or SoundCloud\n` +
       `• **\`<pause\`** — Pause the currently playing song\n` +
@@ -523,11 +533,15 @@ async function handleAikoMusicSelect(interaction) {
       `• **\`<skip\`** — Skip to the next song in the queue\n` +
       `• **\`<stop\`** — Stop playback, clear queue, and leave voice channel\n` +
       `• **\`<queue\`** — View all upcoming songs in queue\n` +
-      `• **\`<volume <1-100>\`** — Adjust audio volume (Default: 85%)`;
+      `• **\`<volume <1-100>\`** — Adjust audio volume (Default: 85%)\n` +
+      `• **\`<bitrate\`** — Check voice channel bitrate status\n\n` +
+      `**${toSmallCaps('Studio Audio Features')}**\n` +
+      `• **Bitrate Optimization:** Aiko automatically boosts your Voice Channel to **384 kbps** (or maximum server boost ceiling) when she joins!\n` +
+      `• **Engine:** Powered by Lavalink v4 with native 48kHz stereo Opus passthrough for zero lag and studio-grade sound.`;
   } else if (selected === 'lock') {
     title = `🔒  ${toSmallCaps('Lock Upcoming System')}`;
     description =
-      `• **\`<lockupcoming\`** *(or click 🔒 button)* — Locks the upcoming song so no one else can queue songs ahead of it until it starts!\n` +
+      `• **\`<lockupcoming\`** *(or click 🔒 Lock Upcoming on queued track)* — Locks the upcoming song so no one else can queue songs ahead of it until it starts!\n` +
       `• **\`<unlockupcoming\`** — Unlocks the upcoming slot early (by requester or Staff).\n\n` +
       `*Once your locked song starts playing, the lock automatically releases for everyone!*`;
   } else if (selected === 'specials') {
@@ -536,12 +550,6 @@ async function handleAikoMusicSelect(interaction) {
       `• **\`<ost <anime name>\`** — Automatically finds and plays official anime openings & endings!\n` +
       `• **\`<radio\`** — Connects to 24/7 relaxing anime lo-fi chill radio\n` +
       `• **\`<lyrics\`** — Fetches real-time song lyrics`;
-  } else if (selected === 'audio') {
-    title = `🔊  ${toSmallCaps('Studio Audio Quality')}`;
-    description =
-      `• **Bitrate Optimization:** Aiko automatically boosts your Voice Channel to **384 kbps** (or maximum server boost ceiling) when she joins!\n` +
-      `• **Engine:** Powered by Lavalink v4 with native 48kHz stereo Opus passthrough for zero lag and studio-grade sound.\n` +
-      `• **\`<bitrate\`** — Check current voice channel bitrate status.`;
   }
 
   await sendContainerRef(interaction, {
@@ -592,6 +600,10 @@ async function handleMusicButton(interaction, isStaff = false) {
     const nextMode = player.loop === 'track' ? 'none' : 'track';
     player.setLoop(nextMode);
     await interaction.reply({ content: `🔁 Loop set to **${nextMode.toUpperCase()}**!`, ephemeral: true });
+  } else if (interaction.customId === 'music_btn_like') {
+    const currentTrack = player.queue.current;
+    const trackTitle = currentTrack ? currentTrack.title : 'this track';
+    await interaction.reply({ content: `💚 Added **${trackTitle}** to your favorites!`, ephemeral: true });
   } else if (interaction.customId === 'music_btn_lock') {
     return await handleLockUpcoming(interaction, user, isStaff);
   }

@@ -654,6 +654,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
       timestamp: d.timestamp ? new Date(d.timestamp).getTime() : false,
       ephemeral: contentOrOptions.ephemeral,
       files: contentOrOptions.files,
+      components: contentOrOptions.components || legacyOptions.components || [],
       ...legacyOptions
     };
   } else if (typeof contentOrOptions === 'string') {
@@ -669,6 +670,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
       timestamp: contentOrOptions.timestamp,
       ephemeral: contentOrOptions.ephemeral,
       files: contentOrOptions.files,
+      components: contentOrOptions.components || legacyOptions.components || [],
       ...legacyOptions
     };
   } else {
@@ -731,7 +733,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     flags |= MessageFlags.Ephemeral;
   }
   const payload = {
-    components: [container],
+    components: [container, ...(Array.isArray(opts.components) ? opts.components : [])],
     flags
   };
 
@@ -743,7 +745,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
 
 async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
 
-  if (contentOrOptions && typeof contentOrOptions === 'object' && contentOrOptions.components && Array.isArray(contentOrOptions.components)) {
+  if (contentOrOptions && typeof contentOrOptions === 'object' && contentOrOptions.components && Array.isArray(contentOrOptions.components) && (contentOrOptions.components[0] instanceof ContainerBuilder || (contentOrOptions.flags && (contentOrOptions.flags & MessageFlags.IsComponentsV2)))) {
     if (typeof target === 'function') {
       return await target(contentOrOptions);
     } else if (target.reply && typeof target.reply === 'function') {
@@ -790,6 +792,7 @@ async function sendContainer(target, contentOrOptions, legacyOptions = {}) {
     if (opts.content || legacyOptions.content) sendOpts.content = opts.content || legacyOptions.content;
     if (opts.files) sendOpts.files = opts.files;
     if (opts.ephemeral) sendOpts.ephemeral = true;
+    if (opts.components && Array.isArray(opts.components) && opts.components.length > 0) sendOpts.components = opts.components;
     if (typeof target === 'function') {
       return await target(sendOpts);
     } else if (target.reply && typeof target.reply === 'function') {
