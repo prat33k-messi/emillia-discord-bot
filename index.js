@@ -3032,7 +3032,7 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote, custo
     console.error("Failed to load anime character image for IQ card:", err);
   }
 
-  const iqRx = isSpecial ? 88 : 58;
+  const iqRx = (isSpecial && badgeText.length > 5) ? 88 : 58;
   const iqRy = 46;
   const iqBg = isBlackNeon ? 'rgba(5, 5, 8, 0.94)' : 'rgba(15, 10, 25, 0.85)';
 
@@ -3092,7 +3092,7 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote, custo
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = isSpecial ? 'bold 16px "Segoe UI", Montserrat, Arial, sans-serif' : '900 28px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+  ctx.font = (isSpecial && badgeText.length > 5) ? 'bold 16px "Segoe UI", Montserrat, Arial, sans-serif' : '900 28px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
   ctx.shadowColor = '#000000';
   ctx.shadowBlur = isSpecial ? 8 : 4;
   ctx.lineWidth = isSpecial ? 3.0 : 2.5;
@@ -3212,7 +3212,7 @@ async function buildIqPayload(targetMember, guild, authorId = null) {
     const customQuote = `<@${targetMember.id}> being hated by idiots is the price you pay for not being one of them`;
 
     const buffer = await generateIqCard(targetAvatarUrl, formattedName, { image: 'lost_from_light.jpg' }, 0, customQuote, {
-      badgeText: 'Lost from light',
+      badgeText: '???',
       charImagePath: customImgBuffer || (fs.existsSync(customImgPath) ? customImgPath : specialSourcePath),
       theme: 'black_neon'
     });
@@ -3221,14 +3221,14 @@ async function buildIqPayload(targetMember, guild, authorId = null) {
     const embed = new EmbedBuilder()
       .setColor(0x0a0a0a)
       .setDescription(customQuote)
-      .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ${toSmallCaps('Lost from light')}` })
+      .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ???` })
       .setImage('attachment://iq.png');
 
     const payload = { embeds: [embed], files: [attachment] };
 
     const disabledBtn = new ButtonBuilder()
       .setCustomId(`iq_special_locked_${targetMember.id}`)
-      .setLabel('Locked (Lost from light)')
+      .setLabel('Locked (???)')
       .setEmoji('🔒')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(true);
