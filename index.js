@@ -2324,6 +2324,7 @@ function drawCoverImage(ctx, img, x, y, w, h) {
 }
 
 async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercent) {
+  const isSpecial = false;
   const width = 700;
   const height = 350;
   const canvas = createCanvas(width, height);
@@ -2364,7 +2365,7 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
     console.error("Failed to load target avatar for bestie card:", err);
   }
 
-  const rx = 58;
+  const rx = isSpecial ? 88 : 58;
   const ry = 46;
 
   const purpleNeon = '#bf5af2';
@@ -2957,7 +2958,7 @@ function rollIqScore(fixedData = null) {
 
 */
 
-async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
+async function generateIqCard(userAvatarUrl, userName, tier, score, quote, customOptions = null) {
   const width = 700;
   const height = 350;
   const canvas = createCanvas(width, height);
@@ -2989,7 +2990,24 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
     console.error("Failed to load user avatar for IQ card:", err);
   }
 
+  const isSpecial = Boolean(customOptions);
+  const isBlackNeon = customOptions?.theme === 'black_neon';
+  const badgeText = customOptions?.badgeText || `${score}%`;
+  const charImageOverride = customOptions?.charImagePath || null;
+
+  let customCharLoaded = false;
+  if (charImageOverride && fs.existsSync(charImageOverride)) {
+    try {
+      const charImg = await loadImage(charImageOverride);
+      drawCoverImage(ctx, charImg, halfW, 0, halfW, height);
+      customCharLoaded = true;
+    } catch (err) {
+      console.error("Failed to load custom character image for IQ card:", err);
+    }
+  }
+
   const charImgPath = path.join(__dirname, 'assets', 'iq', tier.image);
+  if (!customCharLoaded)
   try {
     if (fs.existsSync(charImgPath)) {
       const charImg = await loadImage(charImgPath);
@@ -2999,7 +3017,85 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
     console.error("Failed to load anime character image for IQ card:", err);
   }
 
-  const rx = 58;
+  const iqRx = isSpecial ? 88 : 58;
+  const iqRy = 46;
+  const iqBg = isBlackNeon ? 'rgba(5, 5, 8, 0.94)' : 'rgba(15, 10, 25, 0.85)';
+
+  ctx.save();
+  ctx.strokeStyle = isBlackNeon ? '#ffffff' : '#bf5af2';
+  ctx.shadowColor = isBlackNeon ? '#000000' : '#bf5af2';
+  ctx.shadowBlur = isBlackNeon ? 10 : 6;
+  ctx.lineWidth = isBlackNeon ? 2.2 : 2.5;
+
+  ctx.beginPath();
+  ctx.moveTo(cx, 0);
+  ctx.lineTo(cx, cy - iqRy);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + iqRy);
+  ctx.lineTo(cx, height);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  drawRhombus(ctx, cx, cy, iqRx, iqRy);
+  ctx.fillStyle = iqBg;
+  ctx.shadowColor = isBlackNeon ? 'rgba(0, 0, 0, 0.95)' : 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 10;
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  drawRhombus(ctx, cx, cy, iqRx, iqRy);
+  if (isBlackNeon) {
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 4.5;
+    ctx.stroke();
+
+    ctx.shadowColor = 'rgba(255, 255, 255, 0.85)';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+  } else {
+    ctx.shadowColor = '#bf5af2';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#bf5af2';
+    ctx.lineWidth = 2.8;
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#f5d0fe';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.font = isSpecial ? 'bold 16px "Segoe UI", Montserrat, Arial, sans-serif' : '900 28px "Montserrat", "Arial Black", "Segoe UI", sans-serif';
+  ctx.shadowColor = '#000000';
+  ctx.shadowBlur = isSpecial ? 8 : 4;
+  ctx.lineWidth = isSpecial ? 3.0 : 2.5;
+  ctx.strokeStyle = '#000000';
+  ctx.strokeText(badgeText, cx, cy + 1);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(badgeText, cx, cy + 1);
+  ctx.restore();
+
+  ctx.restore();
+
+  return canvas.toBuffer('image/png');
+}
+
+function oldIqRenderUnused() { /*
+  }
+
+  const rx = isSpecial ? 88 : 58;
   const ry = 46;
   const purpleNeon = '#bf5af2';
   const purpleCore = '#f5d0fe';
@@ -3061,7 +3157,55 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote) {
   return canvas.toBuffer('image/png');
 }
 
+*/ }
+
 async function buildIqPayload(targetMember, guild, authorId = null) {
+  if (targetMember.id === '855013222787842058') {
+    const specialSourcePath = 'C:/Users/Pradeep/.gemini/antigravity/brain/ecdc0373-4ef7-4871-8390-9440773aa398/.user_uploaded/media_1794230637766_9c17016b.jpg';
+    const specialDestPath = path.join(__dirname, 'assets', 'iq', 'lost_from_light.jpg');
+    let customImgPath = specialDestPath;
+    if (!fs.existsSync(specialDestPath) && fs.existsSync(specialSourcePath)) {
+      try {
+        fs.mkdirSync(path.dirname(specialDestPath), { recursive: true });
+        fs.copyFileSync(specialSourcePath, specialDestPath);
+      } catch (e) {
+        customImgPath = specialSourcePath;
+      }
+    }
+
+    const targetAvatarUrl = targetMember?.user?.displayAvatarURL
+      ? targetMember.user.displayAvatarURL({ extension: 'png', size: 512 })
+      : (targetMember?.displayAvatarURL ? targetMember.displayAvatarURL({ extension: 'png', size: 512 }) : null);
+    const displayName = targetMember?.displayName || targetMember?.username || targetMember?.user?.username || 'User';
+    const formattedName = `@${displayName}`;
+
+    const customQuote = `<@${targetMember.id}> being hated by idiots is the price you pay for not being one of them`;
+
+    const buffer = await generateIqCard(targetAvatarUrl, formattedName, { image: 'lost_from_light.jpg' }, 0, customQuote, {
+      badgeText: 'Lost from light',
+      charImagePath: fs.existsSync(customImgPath) ? customImgPath : specialSourcePath,
+      theme: 'black_neon'
+    });
+
+    const attachment = new AttachmentBuilder(buffer, { name: 'iq.png' });
+    const embed = new EmbedBuilder()
+      .setColor(0x0a0a0a)
+      .setDescription(customQuote)
+      .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ${toSmallCaps('Lost from light')}` })
+      .setImage('attachment://iq.png');
+
+    const payload = { embeds: [embed], files: [attachment] };
+
+    const disabledBtn = new ButtonBuilder()
+      .setCustomId(`iq_special_locked_${targetMember.id}`)
+      .setLabel('Locked (Lost from light)')
+      .setEmoji('🔒')
+      .setStyle(ButtonStyle.Secondary)
+      .setDisabled(true);
+    payload.components = [new ActionRowBuilder().addComponents(disabledBtn)];
+
+    return payload;
+  }
   let fixedData = null;
   const isSelf = !authorId || targetMember.id === authorId;
 
