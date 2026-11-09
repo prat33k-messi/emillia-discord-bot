@@ -5007,7 +5007,7 @@ client.on('messageCreate', async (message) => {
     if (startsWithPrefix && (lowerQuery === 'ping' || lowerQuery.startsWith('ping '))) {
       const latency = Math.max(1, Date.now() - message.createdTimestamp);
       const apiPing = client.ws.ping >= 0 ? Math.round(client.ws.ping) : latency;
-      await message.reply(`🏓 Pong! Latency is **${latency}ms** (API: **${apiPing}ms**). I'm working hard! ⚡🌸`);
+      await sendContainer(message, `<@${message.author.id}> • 🏓 Pong! Latency is **${latency}ms** (API: **${apiPing}ms**).`);
       return;
     }
 
@@ -5059,7 +5059,7 @@ client.on('messageCreate', async (message) => {
     if (isInviteInfoCmd) {
       const modTier = getMemberTier(message.member);
       if (modTier < 1 && !isWhitelistedUser(message.author)) {
-        await message.reply("Mou! 🌸 Only staff can investigate member invites! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • Only staff can investigate member invites!`);
         return;
       }
 
@@ -5086,7 +5086,7 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!targetId) {
-        await message.reply("Please specify a user mention or User ID to investigate! e.g. `<inviteinfo 1563138235482382436`");
+        await sendContainer(message, `<@${message.author.id}> • Please specify a user mention or User ID to investigate! e.g. \`<inviteinfo 1563138235482382436\``);
         return;
       }
 
@@ -5106,7 +5106,7 @@ client.on('messageCreate', async (message) => {
     if (isRevokeInvitesCmd) {
       const modTier = getMemberTier(message.member);
       if (modTier < 3 && !isWhitelistedUser(message.author)) {
-        await message.reply("Mou! 🌸 Only Shogun, Community Admins, and Supervisors can revoke invite links! ❄️");
+        await sendContainer(message, `<@${message.author.id}> • Only Shogun, Community Admins, and Supervisors can revoke invite links!`);
         return;
       }
 
@@ -5126,7 +5126,7 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!targetId) {
-        await message.reply("Please specify a user mention or User ID whose invite links to revoke! e.g. `<revokeinvites 1563138235482382436`");
+        await sendContainer(message, `<@${message.author.id}> • Please specify a user mention or User ID whose invite links to revoke! e.g. \`<revokeinvites 1563138235482382436\``);
         return;
       }
 
@@ -5516,7 +5516,7 @@ client.on('messageCreate', async (message) => {
       } else if (actionKeyword === 'purge') {
         const numMatch = cleanQuery.match(/\b([1-9]\d?|100)\b/);
         if (!numMatch) {
-          await message.reply("Please specify how many messages to purge (between 1 and 100)! e.g. `<purge 20` or `<purge @user 15`! 🌸");
+          await sendContainer(message, `<@${message.author.id}> • Please specify how many messages to purge (between 1 and 100)! e.g. \`<purge 20\` or \`<purge @user 15\``);
           return;
         }
         const purgeAmount = parseInt(numMatch[1], 10);
@@ -5582,7 +5582,7 @@ client.on('messageCreate', async (message) => {
           ]);
         } catch (err) {
           console.error("Purge error:", err);
-          await message.channel.send("M-mou! 😰 Something went wrong while trying to clean messages! (Messages older than 14 days cannot be bulk deleted).");
+          await sendContainer(message, `<@${message.author.id}> • Something went wrong while trying to clean messages! (Messages older than 14 days cannot be bulk deleted).`);
         }
         return;
 
@@ -5620,9 +5620,9 @@ client.on('messageCreate', async (message) => {
         } catch (err) {
           console.error("Untimeout execution error:", err);
           if (err.code === 50013) {
-            await message.reply("Mou! 🌸 I couldn't remove the timeout because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! ❄️");
+            await sendContainer(message, `<@${message.author.id}> • I couldn't remove the timeout because my role is placed below their role in Server Settings -> Roles.`);
           } else {
-            await message.reply("I couldn't remove the timeout from this user! 😰");
+            await sendContainer(message, `<@${message.author.id}> • I couldn't remove the timeout from this user.`);
           }
         }
         return;
@@ -5630,7 +5630,7 @@ client.on('messageCreate', async (message) => {
       } else if (actionKeyword === 'unban') {
         const idMatch = cleanQuery.match(/\b\d{17,19}\b/);
         if (!idMatch) {
-          await message.reply("To unban someone, please provide their User ID (e.g. `-unban 123456789012345678`)! 🌸");
+          await sendContainer(message, `<@${message.author.id}> • To unban someone, please provide their User ID (e.g. \`<unban 123456789012345678\`).`);
           return;
         }
         const targetId = idMatch[0];
@@ -5665,7 +5665,7 @@ client.on('messageCreate', async (message) => {
           logToEmilliaLog(message.guild, 'unban', targetId, targetId, message.author.tag, `Unbanned by ${message.author.tag}`);
         } catch (err) {
           console.error("Unban execution error:", err);
-          await message.reply("I couldn't unban this user! Make sure the ID is correct and they are actually banned! 😰");
+          await sendContainer(message, `<@${message.author.id}> • I couldn't unban this user! Make sure the ID is correct and they are actually banned.`);
         }
         return;
 
@@ -5769,9 +5769,9 @@ client.on('messageCreate', async (message) => {
         } catch (err) {
           console.error("Timeout execution error:", err);
           if (err.code === 50013) {
-            await message.reply("Mou! 🌸 I couldn't timeout this member because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! Please drag my role higher up! ❄️");
+            await sendContainer(message, `<@${message.author.id}> • I couldn't timeout this member because my role is placed below their role in Server Settings -> Roles. Please drag my role higher up!`);
           } else {
-            await message.reply("Oh no, something went wrong while trying to put them in timeout! Let me try again later. 😰");
+            await sendContainer(message, `<@${message.author.id}> • Something went wrong while trying to put them in timeout.`);
           }
         }
         return;
@@ -5837,9 +5837,9 @@ client.on('messageCreate', async (message) => {
         } catch (err) {
           console.error("Kick execution error:", err);
           if (err.code === 50013) {
-            await message.reply("Mou! 🌸 I couldn't kick this member because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! Please drag my role higher up! ❄️");
+            await sendContainer(message, `<@${message.author.id}> • I couldn't kick this member because my role is placed below their role in Server Settings -> Roles. Please drag my role higher up!`);
           } else {
-            await message.reply("I couldn't kick them! There was a problem. 😰");
+            await sendContainer(message, `<@${message.author.id}> • I couldn't kick them! There was a problem.`);
           }
         }
         return;
@@ -5938,9 +5938,9 @@ client.on('messageCreate', async (message) => {
         } catch (err) {
           console.error("Ban execution error:", err);
           if (err.code === 50013) {
-            await message.reply("Mou! 🌸 I couldn't ban this member because my role ('Emillia') is placed below their role in Discord Server Settings -> Roles! Please drag my role higher up! ❄️");
+            await sendContainer(message, `<@${message.author.id}> • I couldn't ban this member because my role is placed below their role in Server Settings -> Roles. Please drag my role higher up!`);
           } else {
-            await message.reply("I failed to ban them. Something went wrong! 😰");
+            await sendContainer(message, `<@${message.author.id}> • I failed to ban them. Something went wrong.`);
           }
         }
         return;
@@ -6837,7 +6837,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'timeout') {
       if (modTier === 0) {
-        await interaction.reply({ content: "Mou! 🌸 Only staff can timeout members! ❄️", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Only staff can timeout members!`, ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
@@ -6845,11 +6845,11 @@ client.on('interactionCreate', async (interaction) => {
       const reason = options.getString('reason') || 'No reason specified';
 
       if (!targetMember) {
-        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Could not find that member in this server!`, ephemeral: true });
         return;
       }
       if (targetMember.id === user.id) {
-        await interaction.reply({ content: "Mou! 🌸 You cannot timeout yourself! ❄️", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • You cannot timeout yourself!`, ephemeral: true });
         return;
       }
 
@@ -6919,12 +6919,12 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'untimeout') {
       if (modTier === 0) {
-        await interaction.reply({ content: "Mou! 🌸 Only staff can remove timeouts! ❄️", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Only staff can remove timeouts!`, ephemeral: true });
         return;
       }
       const targetMember = options.getMember('user');
       if (!targetMember) {
-        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Could not find that member in this server!`, ephemeral: true });
         return;
       }
 
@@ -6996,7 +6996,7 @@ client.on('interactionCreate', async (interaction) => {
       const reason = options.getString('reason') || 'No reason specified';
 
       if (!targetMember) {
-        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Could not find that member in this server!`, ephemeral: true });
         return;
       }
       if (targetMember.id === user.id) {
@@ -7081,7 +7081,7 @@ client.on('interactionCreate', async (interaction) => {
       }
 
       if (!targetUser && !targetMember) {
-        await interaction.reply({ content: "Could not find that member in this server! 🌸", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Could not find that member in this server!`, ephemeral: true });
         return;
       }
 
@@ -7206,7 +7206,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'unban') {
       if (modTier < 3) {
-        await interaction.reply({ content: "Mou! 🌸 Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to unban members! ❄️", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Only 'Shogun', 'Community Admins', and 'Supervisor' have permission to unban members!`, ephemeral: true });
         return;
       }
       const targetId = options.getString('user_id').trim();
@@ -7245,7 +7245,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'inviteinfo') {
       if (modTier < 1 && !isWhitelistedUser(user)) {
-        await interaction.reply({ content: "Mou! 🌸 Only staff can investigate member invites! ❄️", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Only staff can investigate member invites!`, ephemeral: true });
         return;
       }
       const targetUser = options.getUser('user');
@@ -7284,7 +7284,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'purge') {
       if (modTier === 0) {
-        await interaction.reply({ content: "Mou! 🌸 Only staff can purge messages! ❄️", ephemeral: true });
+        await sendContainer(interaction, { description: `<@${user.id}> • Only staff can purge messages!`, ephemeral: true });
         return;
       }
       const purgeAmount = options.getInteger('amount');
