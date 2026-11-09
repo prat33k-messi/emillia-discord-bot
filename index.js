@@ -217,7 +217,11 @@ const slashCommandsData = [
 
   new SlashCommandBuilder()
     .setName('help')
-    .setDescription('Show help and available commands')
+    .setDescription('Show help and available commands'),
+
+  new SlashCommandBuilder()
+    .setName('aikomusic')
+    .setDescription('View Aiko music commands and audio guide (Only visible to you)')
 ];
 
 client.once('ready', async () => {
@@ -7457,6 +7461,11 @@ client.on('interactionCreate', async (interaction) => {
     if (commandName === 'anipedia') {
       const anipediaEmbed = buildAnipediaEmbed(guild);
       await sendContainer(interaction, anipediaEmbed);
+      return;
+    }
+
+    if (commandName === 'aikomusic') {
+      await sendAikoMusicMenu(interaction, user, { ephemeral: true });
       return;
     }
 

@@ -16,15 +16,21 @@ const {
 // High-speed, 24/7 Public Lavalink v4 SSL Nodes (320kbps Studio Audio)
 const LAVALINK_NODES = [
   {
+    name: 'DevamOp-V4',
+    url: 'lavalink.devamop.in:443',
+    auth: 'DevamOp',
+    secure: true
+  },
+  {
     name: 'AjieBlogs-V4',
     url: 'lava-v4.ajieblogs.eu.org:443',
     auth: 'https://dsc.gg/ajidevserver',
     secure: true
   },
   {
-    name: 'DevamOp-V4',
-    url: 'lavalink.devamop.in:443',
-    auth: 'DevamOp',
+    name: 'Jirayu-V4',
+    url: 'lavalink.jirayu.net:443',
+    auth: 'youshallnotpass',
     secure: true
   },
   {
@@ -32,8 +38,22 @@ const LAVALINK_NODES = [
     url: 'lavalink.lexnet.cc:443',
     auth: 'lexnethosting',
     secure: true
+  },
+  {
+    name: 'LavaLink-Public',
+    url: 'lava.link:80',
+    auth: 'youshallnotpass',
+    secure: false
   }
 ];
+
+function isNodeReady() {
+  if (!kazagumo || !kazagumo.shoukaku) return false;
+  for (const node of kazagumo.shoukaku.nodes.values()) {
+    if (node.state === 1 || node.state === 'CONNECTED' || node.state === 2) return true;
+  }
+  return false;
+}
 
 let kazagumo = null;
 let clientRef = null;
@@ -195,6 +215,7 @@ function initMusic(client, sendContainerFn) {
  * Handle `<play` command
  */
 async function handlePlayCommand(message, query) {
+  try {
   if (!query) {
     await sendContainerRef(message, `<@${message.author.id}> • Please provide a song name, YouTube link, or Spotify track! e.g. \`<play Gurenge\` or \`<play https://open.spotify.com/track/...\``);
     return;
@@ -230,22 +251,50 @@ async function handlePlayCommand(message, query) {
   // Auto Optimize Bitrate on join
   await optimizeVoiceChannelBitrate(voiceChannel);
 
-  let player = kazagumo.players.get(message.guild.id);
-  if (!player) {
-    player = await kazagumo.createPlayer({
-      guildId: message.guild.id,
-      textId: message.channel.id,
-      voiceId: voiceChannel.id,
-      volume: 85,
-      deaf: true
-    });
-  }
+    if (!isNodeReady()) {
+      await sendContainerRef(message, `<@${message.author.id}> • ⏳ Connecting to studio audio server... Please try again in 5 seconds!`);
+      return;
+    }
 
-  const result = await kazagumo.search(query, { requester: message.author });
-  if (!result.tracks.length) {
-    await sendContainerRef(message, `<@${message.author.id}> • No results found for \`${query}\`!`);
-    return;
-  }
+    let result = null;
+    const isUrl = /^https?:\/\//i.test(query.trim());
+
+    if (isUrl) {
+      result = await kazagumo.search(query, { requester: message.author });
+    } else {
+      try {
+        result = await kazagumo.search(`ytsearch:${query}`, { requester: message.author });
+      } catch (e) {}
+
+      if (!result || !result.tracks || !result.tracks.length) {
+        try {
+          result = await kazagumo.search(`scsearch:${query}`, { requester: message.author });
+        } catch (e) {}
+      }
+
+      if (!result || !result.tracks || !result.tracks.length) {
+        try {
+          result = await kazagumo.search(`ytmsearch:${query}`, { requester: message.author });
+        } catch (e) {}
+      }
+    }
+
+    if (!result || !result.tracks || !result.tracks.length) {
+      await sendContainerRef(message, `<@${message.author.id}> • No tracks found for \`${query}\`!`);
+      return;
+    }
+
+    let player = kazagumo.players.get(message.guild.id);
+    if (!player) {
+      player = await kazagumo.createPlayer({
+        guildId: message.guild.id,
+        textId: message.channel.id,
+        voiceId: voiceChannel.id,
+        volume: 85,
+        deaf: true
+      });
+    }
+
 
   if (result.type === 'PLAYLIST') {
     for (const track of result.tracks) {
@@ -286,6 +335,10 @@ async function handlePlayCommand(message, query) {
 
   if (!player.playing && !player.paused) {
     player.play();
+  }
+  } catch (err) {
+    console.error('[Aiko Music Play Error]:', err);
+    await sendContainerRef(message, `<@${message.author.id}> • Audio connection issue: ${err.message || 'Please try again in a few seconds!'}`);
   }
 }
 
@@ -380,7 +433,7 @@ async function handleUnlockUpcoming(context, user, isStaff = false) {
 /**
  * `<aikomusic>` Command — Interactive Container Menu
  */
-async function sendAikoMusicMenu(context, user) {
+async function sendAikoMusicMenu(context, user, options = {}) {
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId('aikomusic_menu_select')
     .setPlaceholder('Select a music category to view commands...')
@@ -424,7 +477,8 @@ async function sendAikoMusicMenu(context, user) {
     title: `🎵  ${toSmallCaps('AniPedia Music Sanctuary')}`,
     description: mainDesc,
     components: [row],
-    footer: `AniPedia Music • High-Fidelity Audio`
+    footer: `AniPedia Music • High-Fidelity Audio`,
+    ephemeral: options.ephemeral || false
   });
 }
 
@@ -467,14 +521,11 @@ async function handleAikoMusicSelect(interaction) {
       `• **\`<bitrate\`** — Check current voice channel bitrate status.`;
   }
 
-  await interaction.update({
-    components: interaction.message.components
-  }).catch(() => {});
-
-  await sendContainerRef(interaction.channel, {
+  await sendContainerRef(interaction, {
     title,
     description,
-    footer: `AniPedia Music • Use <aikomusic anytime`
+    footer: `AniPedia Music • Only visible to you`,
+    ephemeral: true
   });
 }
 
