@@ -2,6 +2,7 @@ const { createVerificationPanelPayload, handleVerificationButton, handleChalleng
 const { handleAntiSpam } = require('./antispam-feature');
 const { rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
 const { initInviteTracker, trackMemberJoin, checkAndRevokeUserInvites, getInviteReportForUser, buildInviteReportEmbed } = require('./invite-feature');
+const { initMusic, handlePlayCommand, handleLockUpcoming, handleUnlockUpcoming, sendAikoMusicMenu, handleAikoMusicSelect, handleMusicButton, handleOtherMusicCommands, optimizeVoiceChannelBitrate } = require('./music-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -50,6 +51,7 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildVoiceStates,
   ],
 });
 
@@ -334,6 +336,7 @@ client.once('ready', async () => {
     setInterval(checkExpiredWarns, 60 * 1000);
     console.log("Tiered warn scheduler & Warned role sync initialized.");
     await initInviteTracker(client);
+    initMusic(client, sendContainer);
   } catch (err) {
     console.error("Error initializing warn scheduler/role sync on ready:", err);
   }
@@ -5011,6 +5014,27 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    if (startsWithPrefix) {
+      const musicFirstWord = (cleanQuery.split(/\s+/)[0] || '').toLowerCase();
+      const musicArgs = cleanQuery.split(/\s+/).slice(1);
+      const musicQuery = cleanQuery.slice(musicFirstWord.length).trim();
+
+      if (musicFirstWord === 'aikomusic' || musicFirstWord === 'musichelp' || musicFirstWord === 'music') {
+        await sendAikoMusicMenu(message, message.author);
+        return;
+      }
+
+      if (musicFirstWord === 'play' || musicFirstWord === 'p') {
+        await handlePlayCommand(message, musicQuery);
+        return;
+      }
+
+      if (['pause', 'resume', 'skip', 'stop', 'queue', 'volume', 'ost', 'radio', 'bitrate', 'lockupcoming', 'unlockupcoming'].includes(musicFirstWord)) {
+        await handleOtherMusicCommands(message, musicFirstWord, musicArgs, isModerator(message.member));
+        return;
+      }
+    }
+
     const isVerificationCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'verification' ||
       cleanQuery === 'verification' ||
@@ -6517,7 +6541,18 @@ Output only the extracted facts (one per line, starting with a dash "-"). If no 
 
 client.on('interactionCreate', async (interaction) => {
 
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === 'aikomusic_menu_select') {
+      await handleAikoMusicSelect(interaction);
+      return;
+    }
+  }
+
   if (interaction.isButton()) {
+    if (interaction.customId.startsWith('music_')) {
+      await handleMusicButton(interaction, isModerator(interaction.member));
+      return;
+    }
     if (interaction.customId === 'anipedia_verify_btn') {
       await handleVerificationButton(interaction, { getModEmojis, logToEmilliaLog });
       return;
