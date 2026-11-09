@@ -624,7 +624,7 @@ function toSmallCaps(str) {
 function createContainerMessage(contentOrOptions, legacyOptions = {}) {
 
   if (contentOrOptions && typeof contentOrOptions === 'object') {
-    if (contentOrOptions.components && Array.isArray(contentOrOptions.components)) {
+    if (contentOrOptions.components && Array.isArray(contentOrOptions.components) && (contentOrOptions.components[0] instanceof ContainerBuilder || (contentOrOptions.flags && (contentOrOptions.flags & MessageFlags.IsComponentsV2)))) {
       return contentOrOptions;
     }
   }
@@ -697,11 +697,28 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
 
   const trimmedText = textContent.trim();
 
-  if (opts.thumbnail) {
-    const section = new SectionBuilder()
-      .addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '))
-      .setThumbnailAccessory(new ThumbnailBuilder().setURL(opts.thumbnail));
-    container.addSectionComponents(section);
+  let addedThumbnailSection = false;
+  if (opts.thumbnail && typeof opts.thumbnail === 'string' && opts.thumbnail.startsWith('http')) {
+    try {
+        const section = new SectionBuilder()
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(String(trimmedText || ' ')))
+        .setThumbnailAccessory(new ThumbnailBuilder().setURL(String(opts.thumbnail)));
+      container.addSectionComponents(section);
+  
+      addedThumbnailSection = true;
+    } catch (e) {
+      console.warn("Failed to add Section with thumbnail to container:", e);
+      addedThumbnailSection = false;
+    }
+  }
+  if (!addedThumbnailSection) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
+  }
+
+      const section = new SectionBuilder()
+; /*
+*/ if (true) { /* bypass */ } else if (false) {
+
   } else {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
   }
@@ -733,7 +750,15 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     flags |= MessageFlags.Ephemeral;
   }
   const payload = {
-    components: [container, ...(Array.isArray(opts.components) ? opts.components : [])],
+    components: (() => {
+      if (opts.components && Array.isArray(opts.components) && opts.components.length > 0 && typeof container.addActionRowComponents === 'function') {
+        try {
+          for (const c of opts.components) container.addActionRowComponents(c);
+          return [container];
+        } catch (e) {}
+      }
+      return [container, ...(Array.isArray(opts.components) ? opts.components : [])];
+    })(),
     flags
   };
 
@@ -1016,7 +1041,7 @@ async function getAikoEmojis(guild) {
 
 async function handleFeatureCooldown(target, userId, featureName) {
 
-  if (false) {
+
     return true;
   }
 

@@ -83,6 +83,17 @@ function formatDuration(ms) {
   return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
 }
 
+function getTrackThumbnail(track) {
+  if (!track) return null;
+  if (track.thumbnail && typeof track.thumbnail === 'string' && track.thumbnail.startsWith('http')) {
+    return track.thumbnail;
+  }
+  if (track.identifier && typeof track.identifier === 'string') {
+    return `https://i.ytimg.com/vi/${track.identifier}/hqdefault.jpg`;
+  }
+  return null;
+}
+
 /**
  * Automatically boosts the Voice Channel bitrate to the maximum allowable server ceiling
  * Tier 3: 384 kbps
@@ -207,7 +218,7 @@ function initMusic(client, sendContainerFn) {
     await sendContainerRef(textChannel, {
       title: `🎵  ${toSmallCaps('Now Playing')}`,
       description: desc,
-      thumbnail: track.thumbnail || null,
+      thumbnail: getTrackThumbnail(track),
       components: [playerControls, actionRow2],
       footer: `AniPedia Music • Studio Fidelity`
     }).catch(() => {});
@@ -353,7 +364,7 @@ async function handlePlayCommand(message, query) {
       await sendContainerRef(message, {
         title: `🎵  ${toSmallCaps('Enqueued Track')}`,
         description: enqueueDesc,
-        thumbnail: track.thumbnail || null,
+        thumbnail: getTrackThumbnail(track),
         components: [lockBtnRow],
         footer: `AniPedia Music • Studio Fidelity`
       });
