@@ -43,8 +43,8 @@ const AURA_TIERS = [
 
 function rollAuraPercent(fixedScore = null) {
   if (typeof fixedScore === 'number' && !isNaN(fixedScore)) {
-    const fixedClamped = Math.max(0, Math.min(100, fixedScore));
-    let matchingTier = AURA_TIERS.find(t => fixedClamped >= t.min && fixedClamped <= t.max) || AURA_TIERS[0];
+    const fixedClamped = Math.round(Math.max(0, Math.min(100, fixedScore)));
+    let matchingTier = AURA_TIERS.find(t => fixedClamped >= Math.floor(t.min) && fixedClamped <= Math.ceil(t.max)) || AURA_TIERS[0];
     return {
       percent: fixedClamped,
       rarity: `${fixedClamped}% (${matchingTier.label})`,
@@ -58,22 +58,23 @@ function rollAuraPercent(fixedScore = null) {
   for (const tier of AURA_TIERS) {
     if (randomVal < tier.weight) {
       const raw = Math.random() * (tier.max - tier.min) + tier.min;
-      const percent = parseFloat(raw.toFixed(1));
+      const percent = Math.round(raw);
       const rarityText = `${percent}% (${tier.label})`;
       return { percent, rarity: rarityText, isFixed: false };
     }
     randomVal -= tier.weight;
   }
 
-  const fallback = parseFloat((Math.random() * 30).toFixed(1));
+  const fallback = Math.round(Math.random() * 30);
   return { percent: fallback, rarity: `${fallback}% (Common)`, isFixed: false };
 }
 
 function buildAuraActionRow(authorId, score, isFixed) {
+  const intScore = Math.round(score);
   if (isFixed) {
     const lockBtn = new ButtonBuilder()
       .setCustomId(`aura_status_${authorId}`)
-      .setLabel(`Locked at ${score}%`)
+      .setLabel(`Locked at ${intScore}%`)
       .setEmoji('🔒')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(true);
@@ -87,8 +88,8 @@ function buildAuraActionRow(authorId, score, isFixed) {
     return new ActionRowBuilder().addComponents(lockBtn, removeBtn);
   } else {
     const fixBtn = new ButtonBuilder()
-      .setCustomId(`aura_fix_${authorId}_${score}`)
-      .setLabel(`Fix Aura (${score}%)`)
+      .setCustomId(`aura_fix_${authorId}_${intScore}`)
+      .setLabel(`Fix Aura (${intScore}%)`)
       .setEmoji('📌')
       .setStyle(ButtonStyle.Success);
 
@@ -97,10 +98,11 @@ function buildAuraActionRow(authorId, score, isFixed) {
 }
 
 function buildIqActionRow(authorId, tierIndex, score, isFixed) {
+  const intScore = Math.round(score);
   if (isFixed) {
     const lockBtn = new ButtonBuilder()
       .setCustomId(`iq_status_${authorId}`)
-      .setLabel(`Locked at ${score}%`)
+      .setLabel(`Locked at ${intScore}%`)
       .setEmoji('🔒')
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(true);
@@ -114,8 +116,8 @@ function buildIqActionRow(authorId, tierIndex, score, isFixed) {
     return new ActionRowBuilder().addComponents(lockBtn, removeBtn);
   } else {
     const fixBtn = new ButtonBuilder()
-      .setCustomId(`iq_fix_${authorId}_${tierIndex}_${score}`)
-      .setLabel(`Fix IQ (${score}%)`)
+      .setCustomId(`iq_fix_${authorId}_${tierIndex}_${intScore}`)
+      .setLabel(`Fix IQ (${intScore}%)`)
       .setEmoji('📌')
       .setStyle(ButtonStyle.Success);
 
@@ -146,7 +148,7 @@ async function handleFixedStatsButton(interaction, db) {
   if (customId.startsWith('aura_fix_')) {
     const parts = customId.split('_');
     const targetUserId = parts[2];
-    const score = parseFloat(parts[3]);
+    const score = Math.round(parseFloat(parts[3]));
 
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s aura!`;
@@ -202,7 +204,7 @@ async function handleFixedStatsButton(interaction, db) {
     const parts = customId.split('_');
     const targetUserId = parts[2];
     const tierIndex = parseInt(parts[3], 10);
-    const score = parseFloat(parts[4]);
+    const score = Math.round(parseFloat(parts[4]));
 
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s IQ!`;

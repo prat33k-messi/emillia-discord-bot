@@ -2170,7 +2170,7 @@ async function generateAuraCard(avatarUrl, auraPercent) {
   ctx.font = 'bold 74px "Segoe UI", Inter, Roboto, Arial, sans-serif';
   const textX = width / 2;
   const textY = height - 30;
-  const textStr = `${auraPercent}%`;
+  const textStr = `${Math.round(auraPercent)}%`;
 
   if (textExtraBloom > 0) {
     ctx.shadowColor = textExtraBloomColor;
@@ -2242,7 +2242,7 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
   const attachment = new AttachmentBuilder(buffer, { name: 'aura.png' });
 
   const { purpFlames } = await getBestieEmojis(guild || targetMember.guild);
-  const cursiveText = toCursiveDigits(auraPercent) + '%';
+  const cursiveText = toCursiveDigits(Math.round(auraPercent)) + '%';
 
   const embed = new EmbedBuilder()
     .setColor(tier.embedColor)
@@ -2301,7 +2301,7 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
   const attachment = new AttachmentBuilder(buffer, { name: 'aura.png' });
 
   const { purpFlames } = await getBestieEmojis(guild || targetMember.guild);
-  const cursiveText = toCursiveDigits(auraPercent) + '%';
+  const cursiveText = toCursiveDigits(Math.round(auraPercent)) + '%';
 
   const embed = new EmbedBuilder()
     .setColor(tier.embedColor)
@@ -2600,9 +2600,9 @@ async function generateBestieCard(authorAvatarUrl, targetAvatarUrl, bestiePercen
   ctx.shadowBlur = 4;
   ctx.lineWidth = 2.5;
   ctx.strokeStyle = '#000000';
-  ctx.strokeText(`${bestiePercent}%`, cx, cy + 1);
+  ctx.strokeText(`${Math.round(bestiePercent)}%`, cx, cy + 1);
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(`${bestiePercent}%`, cx, cy + 1);
+  ctx.fillText(`${Math.round(bestiePercent)}%`, cx, cy + 1);
   ctx.restore();
 
   ctx.save();
@@ -3090,7 +3090,7 @@ function rollIqScore(fixedData = null) {
                  IQ_TIERS.find(t => fixedData.score >= t.min && fixedData.score <= t.max) ||
                  IQ_TIERS[0];
     const quote = tier.quotes[0];
-    return { tier, score: fixedData.score, quote, isFixed: true };
+    return { tier, score: Math.round(fixedData.score), quote, isFixed: true };
   }
 
   const totalWeight = 100000;
@@ -3100,7 +3100,7 @@ function rollIqScore(fixedData = null) {
     const w = IQ_WEIGHTS[tier.tier] || tier.weight;
     if (randomVal < w) {
       const raw = Math.random() * (tier.max - tier.min) + tier.min;
-      const score = parseFloat(raw.toFixed(1));
+      const score = Math.round(raw);
       const quote = tier.quotes[Math.floor(Math.random() * tier.quotes.length)];
       return { tier, score, quote, isFixed: false };
     }
@@ -3108,7 +3108,7 @@ function rollIqScore(fixedData = null) {
   }
 
   const fallbackTier = IQ_TIERS[0];
-  const fallbackScore = parseFloat((Math.random() * 5).toFixed(1));
+  const fallbackScore = Math.round(Math.random() * 5);
   return {
     tier: fallbackTier,
     score: fallbackScore,
@@ -3174,7 +3174,7 @@ async function generateIqCard(userAvatarUrl, userName, tier, score, quote, custo
 
   const isSpecial = Boolean(customOptions);
   const isBlackNeon = customOptions?.theme === 'black_neon';
-  const badgeText = customOptions?.badgeText || `${score}%`;
+  const badgeText = customOptions?.badgeText || `${Math.round(score)}%`;
   const charImageOverride = customOptions?.charImagePath || null;
 
   let customCharLoaded = false;
