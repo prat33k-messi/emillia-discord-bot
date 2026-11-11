@@ -700,10 +700,10 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
   let addedThumbnailSection = false;
   if (opts.thumbnail && typeof opts.thumbnail === 'string' && opts.thumbnail.startsWith('http')) {
     try {
-        const section = new SectionBuilder()
+        const mainSection = new SectionBuilder()
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(String(trimmedText || ' ')))
         .setThumbnailAccessory(new ThumbnailBuilder().setURL(String(opts.thumbnail)));
-      container.addSectionComponents(section);
+      container.addSectionComponents(mainSection);
   
       addedThumbnailSection = true;
     } catch (e) {
@@ -715,9 +715,9 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
   }
 
-      const section = new SectionBuilder()
-; /*
-*/ if (true) { /* bypass */ } else if (false) {
+  if (true) { /* cleaned */ } else if (false) {
+  // clean
+  // clean
 
   } else {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
@@ -5052,17 +5052,17 @@ client.on('messageCreate', async (message) => {
       const musicQuery = cleanQuery.slice(musicFirstWord.length).trim();
 
       if (musicFirstWord === 'aikomusic' || musicFirstWord === 'musichelp' || musicFirstWord === 'music') {
-        await sendAikoMusicMenu(message, message.author);
+        await sendContainer(message, `<@${message.author.id}> • 🎵 Music services are temporarily paused.`);
         return;
       }
 
       if (musicFirstWord === 'play' || musicFirstWord === 'p') {
-        await handlePlayCommand(message, musicQuery);
+        await sendContainer(message, `<@${message.author.id}> • 🎵 Music playback is temporarily paused.`);
         return;
       }
 
       if (['pause', 'resume', 'skip', 'stop', 'queue', 'volume', 'ost', 'radio', 'bitrate', 'lockupcoming', 'unlockupcoming'].includes(musicFirstWord)) {
-        await handleOtherMusicCommands(message, musicFirstWord, musicArgs, isModerator(message.member));
+        await sendContainer(message, `<@${message.author.id}> • 🎵 Music services are temporarily paused.`);
         return;
       }
     }
@@ -7493,7 +7493,7 @@ client.on('interactionCreate', async (interaction) => {
     }
 
     if (commandName === 'aikomusic') {
-      await sendAikoMusicMenu(interaction, user, { ephemeral: true });
+      await sendContainer(interaction, { description: `<@${user.id}> • 🎵 Music services are temporarily paused.`, ephemeral: true });
       return;
     }
 
