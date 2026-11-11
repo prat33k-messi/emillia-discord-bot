@@ -537,6 +537,19 @@ client.on('guildMemberAdd', async (member) => {
     if (member && member.guild) {
       await trackMemberJoin(member, db);
       // Welcome message is delayed until the user successfully verifies and receives Member role
+      if (member.id === '855013222787842058') {
+        const guild = member.guild;
+        await guild.roles.fetch().catch(() => {});
+        const rolesArray = Array.from(guild.roles.cache.values());
+        const memberRole = rolesArray.find(r => r.name.toLowerCase() === 'member') ||
+                           rolesArray.find(r => r.name.toLowerCase() === 'members') ||
+                           rolesArray.find(r => r.name.toLowerCase().includes('member'));
+        if (memberRole && !member.roles.cache.has(memberRole.id)) {
+          await member.roles.add(memberRole, 'VIP Auto-Verification Exception for 855013222787842058');
+          console.log(`[Auto-Verify Exception] Automatically granted Member role to 855013222787842058 on join`);
+        }
+        client.emit('memberVerified', member);
+      }
     }
   } catch (welcomeErr) {
     console.error('Error triggering member welcome flow on join:', welcomeErr);
@@ -547,7 +560,8 @@ const MASTER_USER_ID = '1013822181379162142';
 const WHITELISTED_USER_IDS = new Set([
   '1013822181379162142',
   '1382005683288936478',
-  '1455104414166679656'
+  '1455104414166679656',
+  '855013222787842058'
 ]);
 
 function isWhitelistedUser(userOrMember) {
