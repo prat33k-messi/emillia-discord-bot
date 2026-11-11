@@ -365,7 +365,7 @@ function initVerificationPortal(app, client, db) {
           await db.collection('banned_ips').doc(clientIp).delete().catch(() => {});
           console.log(`[Verification Portal] Auto-cleared unbanned IP ${clientIp} from banned_ips.`);
         }
-        if (false) {
+        /* legacy check bypass
         if (bannedIpDoc.exists) {
           isBannedAlt = true;
           bannedReason = `Direct match on banned IP (${clientIp})`;
@@ -386,7 +386,7 @@ function initVerificationPortal(app, client, db) {
             }
           }
         }
-      } catch (dbErr) {
+        */ } catch (dbErr) {
         console.error('[Verification Portal] Database check error:', dbErr);
       }
     }
