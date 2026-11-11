@@ -3,6 +3,7 @@ const { handleAntiSpam } = require('./antispam-feature');
 const { rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
 const { initInviteTracker, trackMemberJoin, checkAndRevokeUserInvites, getInviteReportForUser, buildInviteReportEmbed } = require('./invite-feature');
 const { initMusic, handlePlayCommand, handleLockUpcoming, handleUnlockUpcoming, sendAikoMusicMenu, handleAikoMusicSelect, handleMusicButton, handleOtherMusicCommands, optimizeVoiceChannelBitrate } = require('./music-feature');
+const { initVerificationPortal } = require('./verification-portal');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -66,6 +67,8 @@ process.on('unhandledRejection', (reason, promise) => {
 process.on('uncaughtException', (err) => {
   console.error('[Uncaught Exception] Error:', err);
 });
+
+initVerificationPortal(app, client, db);
 
 const memory = new Map();
 const MAX_MEMORY_LIMIT = 15;
@@ -5941,6 +5944,13 @@ client.on('messageCreate', async (message) => {
           const deletedCount = await deleteUserRecentMessages(message.channel, targetId, 15);
 
           await targetMember.ban({ reason, deleteMessageSeconds: 86400 });
+          if (db) {
+            db.collection('verified_users').doc(targetId).get().then(doc => {
+              if (doc.exists && doc.data()?.ip) {
+                db.collection('banned_ips').doc(doc.data().ip).set({ ip: doc.data().ip, bannedUserId: targetId, bannedAt: new Date() }, { merge: true }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
 
           if (db) {
             await db.collection('moderation_logs').add({
@@ -7208,8 +7218,22 @@ client.on('interactionCreate', async (interaction) => {
         const deletedCount = await deleteUserRecentMessages(channel, targetId, 15);
         if (targetMember) {
           await targetMember.ban({ reason, deleteMessageSeconds: 86400 });
+          if (db) {
+            db.collection('verified_users').doc(targetId).get().then(doc => {
+              if (doc.exists && doc.data()?.ip) {
+                db.collection('banned_ips').doc(doc.data().ip).set({ ip: doc.data().ip, bannedUserId: targetId, bannedAt: new Date() }, { merge: true }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
         } else {
           await guild.members.ban(targetId, { reason, deleteMessageSeconds: 86400 });
+          if (db) {
+            db.collection('verified_users').doc(targetId).get().then(doc => {
+              if (doc.exists && doc.data()?.ip) {
+                db.collection('banned_ips').doc(doc.data().ip).set({ ip: doc.data().ip, bannedUserId: targetId, bannedAt: new Date() }, { merge: true }).catch(() => {});
+              }
+            }).catch(() => {});
+          }
         }
 
         if (db) {

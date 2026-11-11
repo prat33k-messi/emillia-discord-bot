@@ -37,9 +37,10 @@ function createVerificationPanelPayload(guild) {
   );
 
   const verifyBtn = new ButtonBuilder()
-    .setCustomId('anipedia_verify_btn')
-    .setLabel('Verify')
-    .setStyle(ButtonStyle.Success);
+    .setLabel('Verify with AniPedia')
+    .setEmoji('🛡️')
+    .setStyle(ButtonStyle.Link)
+    .setURL('https://emillia-discord-bot.onrender.com/verify');
 
   const row = new ActionRowBuilder().addComponents(verifyBtn);
   container.addActionRowComponents(row);
@@ -122,7 +123,22 @@ async function handleVerificationButton(interaction, helpers = {}) {
     return;
   }
 
-  const ageMs = Date.now() - user.createdTimestamp;
+  const verifyRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setLabel('Complete Anti-VPN Verification')
+      .setEmoji('🛡️')
+      .setStyle(ButtonStyle.Link)
+      .setURL('https://emillia-discord-bot.onrender.com/verify')
+  );
+
+  await interaction.editReply({
+    content: "🛡️ **AniPedia Security Shield**\nClick the link below to verify your connection (VPNs and proxies must be turned off):",
+    components: [verifyRow]
+  }).catch(() => {});
+  return;
+}
+
+/* function oldAltShieldCheck() {
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
   const isFlagged = ageDays < 10;
   const hasCustomAvatar = Boolean(user.avatar);
@@ -169,7 +185,7 @@ async function handleVerificationButton(interaction, helpers = {}) {
   await interaction.editReply(challengePayload).catch(() => {});
 }
 
-async function handleChallengeButton(interaction, helpers = {}) {
+*/ async function handleChallengeButton(interaction, helpers = {}) {
   const { logToEmilliaLog } = helpers;
   const customId = interaction.customId;
   const parts = customId.split('_');
