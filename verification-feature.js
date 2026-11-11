@@ -222,6 +222,7 @@ async function handleVerificationButton(interaction, helpers = {}) {
   try {
     if (memberRole) {
       await member.roles.add(memberRole, 'Passed Human Verification Emoji Challenge');
+      if (interaction.client) interaction.client.emit('memberVerified', member);
     }
 
     const successEmbed = new EmbedBuilder()
@@ -303,6 +304,7 @@ async function handleStaffApprovalButton(interaction, helpers = {}) {
 
   try {
     await targetMember.roles.add(memberRole, `Manually approved by ${interaction.user.tag}`);
+    if (interaction.client) interaction.client.emit('memberVerified', targetMember);
 
     const disabledBtn = new ButtonBuilder()
       .setCustomId(`approved_done_${targetUserId}`)

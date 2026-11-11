@@ -498,7 +498,7 @@ client.on('guildMemberAdd', async (member) => {
   try {
     if (member && member.guild) {
       await trackMemberJoin(member, db);
-      await handleMemberWelcome(member);
+      // Welcome message is delayed until the user successfully verifies and receives Member role
     }
   } catch (welcomeErr) {
     console.error('Error triggering member welcome flow on join:', welcomeErr);
@@ -1350,6 +1350,16 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
     }
   }
 }
+
+client.on('memberVerified', async (member) => {
+  try {
+    if (!member) return;
+    console.log(`[Welcome] Member verified: ${member.user?.tag || member.id}. Dispatching welcome messages...`);
+    await handleMemberWelcome(member);
+  } catch (err) {
+    console.error('Error triggering member welcome after verification:', err);
+  }
+});
 
 const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
 const APPEAL_CHANNEL_ID = '1560574164144754710';
