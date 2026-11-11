@@ -1042,7 +1042,7 @@ async function getAikoEmojis(guild) {
   return { aiko1, aiko2, aiko3, url1, url2, url3 };
 }
 
-async function handleFeatureCooldown(target, userId, featureName) {
+async function handleFeatureCooldown(target, userId, featureName) { if (isWhitelistedUser(userId)) {
 
 
     return true;
