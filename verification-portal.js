@@ -317,7 +317,7 @@ function initVerificationPortal(app, client, db) {
     const userTag = `${discordUser.username}#${discordUser.discriminator || '0'}`;
 
     // 4. Find Guild & Member
-    const guild = client.guilds.cache.first();
+    const guild = client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
     if (!guild) {
       return res.status(500).send(renderHtmlPage({
         status: 'error',
@@ -420,14 +420,21 @@ function initVerificationPortal(app, client, db) {
         }));
       }
 
-      let memberRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'member');
+      await guild.roles.fetch().catch(() => {});
+      const rolesArray = Array.from(guild.roles.cache.values());
+      console.log('[Verification Portal] Server roles:', rolesArray.map(r => `"${r.name}" (${r.id})`).join(', '));
+      let memberRole = rolesArray.find(r => r.name.toLowerCase() === 'member') ||
+                       rolesArray.find(r => r.name.toLowerCase() === 'members') ||
+                       rolesArray.find(r => r.name.toLowerCase().includes('member')) ||
+                       rolesArray.find(r => r.name.toLowerCase().includes('verified')) ||
+                       rolesArray.find(r => r.name.toLowerCase().includes('nakama'));
       if (!memberRole) {
-        const fetchedRoles = await guild.roles.fetch().catch(() => null);
-        memberRole = fetchedRoles?.find(r => r.name.toLowerCase() === 'member');
+        console.error('[Verification Portal] Could not find Member role! Roles in server:', rolesArray.map(r => r.name)); return res.status(500).send(renderHtmlPage({ status: 'error', icon: '⚠️', title: 'Role Not Found', message: 'Could not find a <strong>Member</strong> or <strong>Verified</strong> role in AniPedia Discord server.', details: 'Available server roles: ' + rolesArray.map(r => r.name).join(', ') }));
+        /* legacy search */
       }
 
       if (memberRole && !member.roles.cache.has(memberRole.id)) {
-        await member.roles.add(memberRole, 'Passed AniPedia Anti-VPN Verification Portal');
+        try { await member.roles.add(memberRole, 'Passed AniPedia Anti-VPN Verification Portal'); console.log('[Verification Portal] Successfully assigned ' + memberRole.name + ' to ' + userTag); } catch (roleErr) { console.error('[Verification Portal] Role grant error:', roleErr); return res.status(500).send(renderHtmlPage({ status: 'error', icon: '⚠️', title: 'Role Permission Error', message: 'Verified your connection, but Discord prevented the bot from giving you the <strong>' + memberRole.name + '</strong> role.<br><br>👉 <strong>Server Admins:</strong> In Discord Server Settings ➔ Roles, drag the <strong>Aiko</strong> bot role <strong>ABOVE</strong> the <strong>' + memberRole.name + '</strong> role!', details: 'Discord API: ' + roleErr.message })); }
       }
 
       // Store in verified_users
@@ -461,7 +468,7 @@ function initVerificationPortal(app, client, db) {
         status: 'success',
         icon: '🌸',
         title: 'Verification Complete!',
-        message: `Welcome to <strong>AniPedia</strong>, <strong style="color: #BF5AF2;">${discordUser.username}</strong>!<br><br>Your <strong>Member</strong> role has been granted in Discord. You can now close this tab and return to the server!`,
+        message: `Welcome to <strong>AniPedia</strong>, <strong style="color: #BF5AF2;">${discordUser.username}</strong>!<br><br>Your <strong>${memberRole.name}</strong> role has been granted in Discord. You can now close this tab and return to the server!`,
         details: 'Verified with Clean Residential Connection • AniPedia Shield'
       }));
 
