@@ -135,6 +135,44 @@ client.on('guildBanAdd', async (ban) => {
   }
 });
 
+async function handleUnbanIpClean(guild, unbannedUserId) {
+  if (!db) return;
+  try {
+    const userDoc = await db.collection('verified_users').doc(unbannedUserId).get();
+    if (!userDoc.exists) return;
+    const ip = userDoc.data()?.ip;
+    if (!ip) return;
+
+    const matchingDocs = await db.collection('verified_users').where('ip', '==', ip).get();
+    const guildBans = await guild.bans.fetch().catch(() => new Map());
+    let anyStillBanned = false;
+    for (const doc of matchingDocs.docs) {
+      if (doc.data().userId !== unbannedUserId && guildBans.has(doc.data().userId)) {
+        anyStillBanned = true;
+        break;
+      }
+    }
+
+    if (!anyStillBanned) {
+      await db.collection('banned_ips').doc(ip).delete().catch(() => {});
+      console.log(`[Alt Shield] Cleaned banned IP ${ip} after unban of ${unbannedUserId}`);
+    }
+  } catch (err) {
+    console.error('[Alt Shield] Error in handleUnbanIpClean:', err);
+  }
+}
+
+client.on('guildBanRemove', async (ban) => {
+  try {
+    const guild = ban.guild;
+    const user = ban.user;
+    console.log(`[Alt Shield] Unban detected for ${user.tag || user.id}, clearing IP blacklist...`);
+    await handleUnbanIpClean(guild, user.id);
+  } catch (err) {
+    console.error('[Alt Shield] guildBanRemove handler error:', err);
+  }
+});
+
 const memory = new Map();
 const MAX_MEMORY_LIMIT = 15;
 
@@ -5771,6 +5809,7 @@ client.on('messageCreate', async (message) => {
 
         try {
           await message.guild.members.unban(targetId, `Unbanned by ${message.author.tag}`);
+          await handleUnbanIpClean(message.guild, targetId);
 
           if (db) {
             await db.collection('moderation_logs').add({
@@ -7379,6 +7418,7 @@ client.on('interactionCreate', async (interaction) => {
 
       try {
         await guild.members.unban(targetId, `Unbanned by ${user.tag}`);
+        await handleUnbanIpClean(guild, targetId);
         if (db) {
           await db.collection('moderation_logs').add({
             action: 'unban',

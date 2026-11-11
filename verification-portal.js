@@ -333,8 +333,37 @@ function initVerificationPortal(app, client, db) {
 
     if (db) {
       try {
-        // A. Check if IP is in banned_ips collection
+        // Live check active Discord bans for this IP
+        const guildBans = await guild.bans.fetch().catch(() => new Map());
+        const matchingUsers = await db.collection('verified_users').where('ip', '==', clientIp).get();
+        let activeBannedUserId = null;
+
+        if (!matchingUsers.empty) {
+          for (const doc of matchingUsers.docs) {
+            const linkedId = doc.data().userId;
+            if (guildBans.has(linkedId)) {
+              activeBannedUserId = linkedId;
+              break;
+            }
+          }
+        }
+
         const bannedIpDoc = await db.collection('banned_ips').doc(clientIp).get();
+        if (bannedIpDoc.exists) {
+          const recId = bannedIpDoc.data()?.bannedUserId;
+          if (recId && guildBans.has(recId)) {
+            activeBannedUserId = recId;
+          }
+        }
+
+        if (activeBannedUserId) {
+          isBannedAlt = true;
+          bannedReason = `Alt of actively banned member <@${activeBannedUserId}> (${activeBannedUserId}) via shared IP ${clientIp}`;
+        } else if (bannedIpDoc.exists) {
+          await db.collection('banned_ips').doc(clientIp).delete().catch(() => {});
+          console.log(`[Verification Portal] Auto-cleared unbanned IP ${clientIp} from banned_ips.`);
+        }
+        if (false) {
         if (bannedIpDoc.exists) {
           isBannedAlt = true;
           bannedReason = `Direct match on banned IP (${clientIp})`;
