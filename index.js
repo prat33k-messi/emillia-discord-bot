@@ -53,6 +53,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildVoiceStates,
+    (GatewayIntentBits.GuildModeration || GatewayIntentBits.GuildBans),
   ],
 });
 
@@ -69,6 +70,70 @@ process.on('uncaughtException', (err) => {
 });
 
 initVerificationPortal(app, client, db);
+
+async function handleBanAltSweep(guild, bannedUserId, reason = 'Alt of banned member') {
+  if (!db || !guild) return;
+  try {
+    const userDoc = await db.collection('verified_users').doc(bannedUserId).get();
+    if (!userDoc.exists) return;
+    const ip = userDoc.data()?.ip;
+    if (!ip) return;
+
+    await db.collection('banned_ips').doc(ip).set({ ip, bannedUserId, bannedAt: new Date() }, { merge: true }).catch(() => {});
+
+    const matchingDocs = await db.collection('verified_users').where('ip', '==', ip).get();
+    if (matchingDocs.empty) return;
+
+    const bannedAlts = [];
+    for (const doc of matchingDocs.docs) {
+      const altUserId = doc.data().userId;
+      if (altUserId === bannedUserId) continue;
+
+      try {
+        await guild.members.ban(altUserId, {
+          reason: `AniPedia Alt Shield: IP match (${ip}) with banned member <@${bannedUserId}> (${bannedUserId})`,
+          deleteMessageSeconds: 86400
+        });
+        bannedAlts.push({ id: altUserId, username: doc.data().username || altUserId });
+        console.log(`[Alt Shield] Cascaded IP ban on alt ${altUserId} (${doc.data().username}) sharing IP ${ip}`);
+      } catch (altBanErr) {
+        console.error(`[Alt Shield] Failed to ban alt ${altUserId}:`, altBanErr.message);
+      }
+    }
+
+    if (bannedAlts.length > 0) {
+      const logChannel = guild.channels.cache.find(c => c.name === 'aiko-log' || c.name === 'emillia-log');
+      if (logChannel) {
+        const altListStr = bannedAlts.map(a => `• <@${a.id}> (\`${a.username}\` - \`${a.id}\`)`).join('\n');
+        const sweepEmbed = new EmbedBuilder()
+          .setColor(0xE74C3C)
+          .setTitle('🚨 Alt Shield • IP Cascade Auto-Ban')
+          .setDescription(
+            `A member was banned, and all active accounts sharing their verified IP were **automatically banned**!\n\n` +
+            `• **Primary Banned Member:** <@${bannedUserId}> (\`${bannedUserId}\`)\n` +
+            `• **Matching IP Address:** \`${ip}\`\n\n` +
+            `**Cascaded Alt Bans (${bannedAlts.length}):**\n${altListStr}`
+          )
+          .setFooter({ text: 'AniPedia Security Shield' })
+          .setTimestamp();
+        await logChannel.send({ embeds: [sweepEmbed] }).catch(() => {});
+      }
+    }
+  } catch (err) {
+    console.error('[Alt Shield] Error in handleBanAltSweep:', err);
+  }
+}
+
+client.on('guildBanAdd', async (ban) => {
+  try {
+    const guild = ban.guild;
+    const user = ban.user;
+    console.log(`[Alt Shield] Ban detected on ${user.tag} (${user.id}), scanning for linked IP alts...`);
+    await handleBanAltSweep(guild, user.id, ban.reason || 'Discord Ban Event');
+  } catch (err) {
+    console.error('[Alt Shield] guildBanAdd handler error:', err);
+  }
+});
 
 const memory = new Map();
 const MAX_MEMORY_LIMIT = 15;
@@ -5947,7 +6012,7 @@ client.on('messageCreate', async (message) => {
           if (db) {
             db.collection('verified_users').doc(targetId).get().then(doc => {
               if (doc.exists && doc.data()?.ip) {
-                db.collection('banned_ips').doc(doc.data().ip).set({ ip: doc.data().ip, bannedUserId: targetId, bannedAt: new Date() }, { merge: true }).catch(() => {});
+                handleBanAltSweep(message?.guild || guild, targetId, reason).catch(() => {});
               }
             }).catch(() => {});
           }
@@ -7221,7 +7286,7 @@ client.on('interactionCreate', async (interaction) => {
           if (db) {
             db.collection('verified_users').doc(targetId).get().then(doc => {
               if (doc.exists && doc.data()?.ip) {
-                db.collection('banned_ips').doc(doc.data().ip).set({ ip: doc.data().ip, bannedUserId: targetId, bannedAt: new Date() }, { merge: true }).catch(() => {});
+                handleBanAltSweep(message?.guild || guild, targetId, reason).catch(() => {});
               }
             }).catch(() => {});
           }
@@ -7230,7 +7295,7 @@ client.on('interactionCreate', async (interaction) => {
           if (db) {
             db.collection('verified_users').doc(targetId).get().then(doc => {
               if (doc.exists && doc.data()?.ip) {
-                db.collection('banned_ips').doc(doc.data().ip).set({ ip: doc.data().ip, bannedUserId: targetId, bannedAt: new Date() }, { merge: true }).catch(() => {});
+                handleBanAltSweep(message?.guild || guild, targetId, reason).catch(() => {});
               }
             }).catch(() => {});
           }
