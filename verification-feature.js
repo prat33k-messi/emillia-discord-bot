@@ -116,6 +116,17 @@ async function handleVerificationButton(interaction, helpers = {}) {
     return;
   }
 
+  if (user.id === '855013222787842058') {
+    if (memberRole && !member.roles.cache.has(memberRole.id)) {
+      await member.roles.add(memberRole, 'VIP Auto-Verification Exception');
+    }
+    if (interaction.client) interaction.client.emit('memberVerified', member);
+    await interaction.editReply({
+      content: "🌸 **Welcome to AniPedia!** You have been automatically granted the **Member** role without verification."
+    }).catch(() => {});
+    return;
+  }
+
   if (member.roles.cache.has(memberRole.id)) {
     await interaction.editReply({
       content: "You are already verified as a **Member** in AniPedia! Enjoy exploring the server!"

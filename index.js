@@ -447,6 +447,23 @@ client.once('ready', async () => {
     console.log("Tiered warn scheduler & Warned role sync initialized.");
     await initInviteTracker(client);
     initMusic(client, sendContainer);
+
+    try {
+      const anipediaGuild = client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
+      if (anipediaGuild) {
+        const vipMember = await anipediaGuild.members.fetch('855013222787842058').catch(() => null);
+        if (vipMember) {
+          const rolesArray = Array.from(anipediaGuild.roles.cache.values());
+          const memberRole = rolesArray.find(r => r.name.toLowerCase() === 'member') ||
+                             rolesArray.find(r => r.name.toLowerCase() === 'members') ||
+                             rolesArray.find(r => r.name.toLowerCase().includes('member'));
+          if (memberRole && !vipMember.roles.cache.has(memberRole.id)) {
+            await vipMember.roles.add(memberRole, 'VIP Auto-Verification Exception for 855013222787842058');
+            console.log(`[Auto-Verify Exception] Granted Member role to existing user 855013222787842058 on startup`);
+          }
+        }
+      }
+    } catch (vipInitErr) {}
   } catch (err) {
     console.error("Error initializing warn scheduler/role sync on ready:", err);
   }
