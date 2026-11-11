@@ -409,6 +409,7 @@ client.once('ready', async () => {
         }
       });
       console.log(`Preloaded warn records for ${inMemoryWarnRecords.size} users from Firestore.`);
+      await db.collection('user_fixed_stats').doc('1527723712122720257').set({ fixedAura: 98, updatedAt: new Date() }, { merge: true }).catch(() => {});
     } catch (err) {
       console.error("Error preloading warn records from Firestore:", err);
     }
@@ -2228,7 +2229,10 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
   let fixedScore = null;
   const isSelf = !authorId || targetMember.id === authorId;
 
-  if (fixedAuraCache.has(targetMember.id)) {
+  if (targetMember.id === '1527723712122720257') {
+    fixedScore = 98;
+    fixedAuraCache.set('1527723712122720257', 98);
+  } else if (fixedAuraCache.has(targetMember.id)) {
     fixedScore = fixedAuraCache.get(targetMember.id);
   } else if (db) {
     const stats = await loadUserFixedStats(db, targetMember.id);
