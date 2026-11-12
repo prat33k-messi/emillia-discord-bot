@@ -1,6 +1,6 @@
 const { createVerificationPanelPayload, handleVerificationButton, handleChallengeButton, handleStaffApprovalButton } = require('./verification-feature');
 const { handleAntiSpam } = require('./antispam-feature');
-const { rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
+const { getMemberLevelBoost, rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
 const { initInviteTracker, trackMemberJoin, checkAndRevokeUserInvites, getInviteReportForUser, buildInviteReportEmbed } = require('./invite-feature');
 const { initMusic, handlePlayCommand, handleLockUpcoming, handleUnlockUpcoming, sendAikoMusicMenu, handleAikoMusicSelect, handleMusicButton, handleOtherMusicCommands, optimizeVoiceChannelBitrate } = require('./music-feature');
 const { initVerificationPortal } = require('./verification-portal');
@@ -2266,7 +2266,8 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
     if (typeof stats?.fixedAura === 'number') fixedScore = stats.fixedAura;
   }
 
-  const { percent: auraPercent, rarity: rarityText, isFixed } = rollAuraPercent(fixedScore);
+  const { boostPercent, levelRoleName } = getMemberLevelBoost(targetMember);
+  const { percent: auraPercent, rarity: rarityText, isFixed } = rollAuraPercent(fixedScore, boostPercent, levelRoleName);
   const tier = getAuraTheme(auraPercent);
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const buffer = await generateAuraCard(avatarUrl, auraPercent);
@@ -2275,6 +2276,11 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
   const { purpFlames } = await getBestieEmojis(guild || targetMember.guild);
   const cursiveText = toCursiveDigits(Math.round(auraPercent)) + '%';
 
+  let footerText = `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}`;
+  if (boostPercent > 0 && !isFixed) {
+    footerText += ` • ⚡ ${levelRoleName} Boost (+${boostPercent}%)`;
+  }
+
   const embed = new EmbedBuilder()
     .setColor(tier.embedColor)
     .setAuthor({
@@ -2282,7 +2288,7 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
       iconURL: targetMember.user.displayAvatarURL({ dynamic: true })
     })
     .setDescription(`${purpFlames} ${cursiveText} ${purpFlames}`)
-    .setFooter({ text: `${toSmallCaps('AniPedia Compatibility')} • ${toSmallCaps('Rarity')}: ${rarityText}` })
+    .setFooter({ text: footerText })
     .setImage('attachment://aura.png');
 
   const payload = { embeds: [embed], files: [attachment] };

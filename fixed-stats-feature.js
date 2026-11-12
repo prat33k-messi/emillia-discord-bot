@@ -43,32 +43,85 @@ const AURA_TIERS = [
   { min: 95.1, max: 100.0, weight: 200,   label: 'Anirare Piece', rarityMin: 96, rarityMax: 100 }
 ];
 
-function rollAuraPercent(fixedScore = null) {
+function getMemberLevelBoost(member) {
+  if (!member || !member.roles || !member.roles.cache) {
+    return { boostPercent: 0, levelRoleName: null };
+  }
+
+  const roleNames = Array.from(member.roles.cache.values()).map(r => (r.name || '').toLowerCase());
+
+  const levelConfigs = [
+    { regex: /level\s*60\+?/i, boost: 15, label: 'Level 60+' },
+    { regex: /level\s*50\+?/i, boost: 12, label: 'Level 50+' },
+    { regex: /level\s*40\+?/i, boost: 10, label: 'Level 40+' },
+    { regex: /level\s*30\+?/i, boost: 8,  label: 'Level 30+' },
+    { regex: /level\s*20\+?/i, boost: 6,  label: 'Level 20+' },
+    { regex: /level\s*10\+?/i, boost: 4,  label: 'Level 10+' },
+    { regex: /level\s*5\+?/i,  boost: 2,  label: 'Level 5+'  }
+  ];
+
+  for (const cfg of levelConfigs) {
+    if (roleNames.some(name => cfg.regex.test(name))) {
+      return { boostPercent: cfg.boost, levelRoleName: cfg.label };
+    }
+  }
+
+  return { boostPercent: 0, levelRoleName: null };
+}
+
+function rollAuraPercent(fixedScore = null, boostPercent = 0, boostRoleName = null) {
   if (typeof fixedScore === 'number' && !isNaN(fixedScore)) {
     const fixedClamped = Math.round(Math.max(0, Math.min(100, fixedScore)));
     let matchingTier = AURA_TIERS.find(t => fixedClamped >= Math.floor(t.min) && fixedClamped <= Math.ceil(t.max)) || AURA_TIERS[0];
     return {
       percent: fixedClamped,
       rarity: `${fixedClamped}% (${matchingTier.label})`,
-      isFixed: true
+      isFixed: true,
+      boostPercent: 0,
+      boostRoleName: null
     };
   }
 
-  const totalWeight = AURA_TIERS.reduce((acc, t) => acc + t.weight, 0);
+  const clampedBoost = Math.max(0, Math.min(15, boostPercent));
+  let tiers = AURA_TIERS;
+
+  if (clampedBoost > 0) {
+    // Option A: Shift weight away from Common and Awakening into higher tiers
+    // Even at max boost (15%), high levels still roll low aura ~72% of the time
+    const boostShift = clampedBoost * 1000;
+    const commonLoss = Math.round(boostShift * 0.52);
+    const awakeningLoss = boostShift - commonLoss;
+
+    const ascendantGain = Math.round(boostShift * 0.70);
+    const supremeGain = Math.round(boostShift * 0.20);
+    const onePieceGain = Math.round(boostShift * 0.07);
+    const anirareGain = boostShift - (ascendantGain + supremeGain + onePieceGain);
+
+    tiers = [
+      { min: 0.0,  max: 30.0,  weight: Math.max(10000, 42600 - commonLoss), label: 'Common' },
+      { min: 30.1, max: 60.0,  weight: Math.max(10000, 45000 - awakeningLoss), label: 'Awakening' },
+      { min: 60.1, max: 80.0,  weight: 10000 + ascendantGain, label: 'Ascendant' },
+      { min: 80.1, max: 90.0,  weight: 1800 + supremeGain, label: 'Supreme' },
+      { min: 90.1, max: 95.0,  weight: 400 + onePieceGain, label: 'One Piece' },
+      { min: 95.1, max: 100.0, weight: 200 + anirareGain, label: 'Anirare Piece' }
+    ];
+  }
+
+  const totalWeight = tiers.reduce((acc, t) => acc + t.weight, 0);
   let randomVal = Math.random() * totalWeight;
 
-  for (const tier of AURA_TIERS) {
+  for (const tier of tiers) {
     if (randomVal < tier.weight) {
       const raw = Math.random() * (tier.max - tier.min) + tier.min;
       const percent = Math.round(raw);
       const rarityText = `${percent}% (${tier.label})`;
-      return { percent, rarity: rarityText, isFixed: false };
+      return { percent, rarity: rarityText, isFixed: false, boostPercent: clampedBoost, boostRoleName };
     }
     randomVal -= tier.weight;
   }
 
   const fallback = Math.round(Math.random() * 30);
-  return { percent: fallback, rarity: `${fallback}% (Common)`, isFixed: false };
+  return { percent: fallback, rarity: `${fallback}% (Common)`, isFixed: false, boostPercent: clampedBoost, boostRoleName };
 }
 
 function buildAuraActionRow(authorId, score, isFixed) {
@@ -308,6 +361,7 @@ async function resetAllFixedStats(db) {
 
 module.exports = {
   AURA_TIERS,
+  getMemberLevelBoost,
   rollAuraPercent,
   buildAuraActionRow,
   buildIqActionRow,
