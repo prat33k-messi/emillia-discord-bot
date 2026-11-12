@@ -540,6 +540,8 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
   }
 });
 
+const welcomedMembersCache = new Set();
+
 client.on('guildMemberAdd', async (member) => {
   try {
     if (!member || !member.guild) return;
@@ -575,7 +577,13 @@ client.on('guildMemberAdd', async (member) => {
       if (member.roles.cache.some(r => isMemberRoleName(r.name))) {
         client.emit('memberVerified', member);
       }
-      // Welcome message is delayed until the user successfully verifies and receives Member role
+      // Immediately send welcome messages on member join (like it used to be)
+      if (!welcomedMembersCache.has(member.id)) {
+        welcomedMembersCache.add(member.id);
+        setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
+        console.log(`[Welcome] Member joined: ${member.user?.tag || member.id} in ${member.guild.name}. Triggering welcome...`);
+        handleMemberWelcome(member).catch(e => console.error("Error in handleMemberWelcome on join:", e));
+      }
       if (member.id === '855013222787842058') {
         const guild = member.guild;
         await guild.roles.fetch().catch(() => {});
@@ -1380,7 +1388,8 @@ async function sendGeneralWelcome(channel, member) {
   }
 
   try {
-    await sendContainer(channel, welcomeEmbed, { content: `Welcome <@${member.id}>` });
+    await channel.send({ content: `Welcome <@${member.id}>`, embeds: [welcomeEmbed] });
+    return;
   } catch (err) {
     console.error("Error sending general welcome container:", err);
     await channel.send({
@@ -1401,8 +1410,10 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
   const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
 
   const summonChannel =
-    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('welcome') && !c.name.toLowerCase().includes('bot'))) ||
     guild.channels.cache.get('1518191913705013278') ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('welcome') && !c.name.toLowerCase().includes('bot'))) ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('summon-circle') || c.name.toLowerCase().includes('summoncircle'))) ||
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('welcome') && !c.name.toLowerCase().includes('bot'))) ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon-circle')) ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon')) ||
     guild.channels.cache.get('1558786839744356544') ||
@@ -1443,7 +1454,7 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
   }
 }
 
-const welcomedMembersCache = new Set();
+// welcomedMembersCache already declared globally
 
 client.on('memberVerified', async (member) => {
   try {
