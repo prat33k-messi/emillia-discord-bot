@@ -47,7 +47,8 @@ async function handleAntiSpam(message, helpers = {}) {
 
   // Rule A: Big text exceeding 6 lines
   const lines = content.split(/\r\n|\r|\n/);
-  if (lines.length > 6) {
+  const nonEmptyLines = lines.filter(l => l.trim().length > 0);
+  if (nonEmptyLines.length > 8) {
     isSpam = true;
     reason = 'exceeding 6 lines';
   }
@@ -55,13 +56,23 @@ async function handleAntiSpam(message, helpers = {}) {
   // Rule B: Ping multiple people (more than 5 mentions)
   if (!isSpam && message.mentions && message.mentions.users) {
     const userMentions = message.mentions.users.filter(u => !u.bot && u.id !== message.author.id);
-    if (userMentions.size > 5) {
+    // Filter out staff/mods so pinging mods is NEVER flagged as spam
+    const nonStaffMentions = userMentions.filter(u => {
+      const member = message.guild.members.cache.get(u.id);
+      if (!member) return true;
+      if (typeof isWhitelistedUser === 'function' && isWhitelistedUser(member)) return false;
+      if (typeof getMemberTier === 'function' && getMemberTier(member) >= 1) return false;
+      return true;
+    });
+
+    if (nonStaffMentions.size > 8) {
       isSpam = true;
       reason = 'pinging more than 5 users';
     }
 
-    // Rule C: Ping multiple mods (> 1 mod, single mod is allowed)
-    if (!isSpam && userMentions.size > 1 && typeof getMemberTier === 'function') {
+    // Rule C: Pinging staff/moderators is fully allowed (no mod ping restrictions)
+    /* Rule C removed: members can freely ping mods/staff without message deletion
+    if (false) {
       let modMentionCount = 0;
       for (const [userId, user] of userMentions) {
         const member = message.guild.members.cache.get(userId);
@@ -74,7 +85,7 @@ async function handleAntiSpam(message, helpers = {}) {
           }
         }
       }
-    }
+    } */
   }
 
   // Rule D: Repeated words / duplicate messages
@@ -103,12 +114,12 @@ async function handleAntiSpam(message, helpers = {}) {
     // Check rapid duplicate messages across multiple sends (e.g. sending "hi" 3-4 times in a row)
     if (!isSpam) {
       const history = userMessageHistory.get(message.author.id) || [];
-      // Retain only messages from last 8 seconds
-      const recent = history.filter(item => (now - item.timestamp) < 8000);
+      // Retain only messages from last 5 seconds
+      const recent = history.filter(item => (now - item.timestamp) < 5000);
 
       // Count identical messages in recent window
       const duplicateCount = recent.filter(item => item.content === normalized).length;
-      if (duplicateCount >= 3) {
+      if (duplicateCount >= 4) {
         // 4th identical message within 8 seconds triggers spam
         isSpam = true;
         reason = 'rapid repeated messages';
