@@ -466,6 +466,8 @@ function initVerificationPortal(app, client, db) {
 
       if (memberRole && !member.roles.cache.has(memberRole.id)) {
         try { await member.roles.add(memberRole, 'Passed AniPedia Anti-VPN Verification Portal'); console.log('[Verification Portal] Successfully assigned ' + memberRole.name + ' to ' + userTag); client.emit('memberVerified', member); } catch (roleErr) { console.error('[Verification Portal] Role grant error:', roleErr); return res.status(500).send(renderHtmlPage({ status: 'error', icon: '⚠️', title: 'Role Permission Error', message: 'Verified your connection, but Discord prevented the bot from giving you the <strong>' + memberRole.name + '</strong> role.<br><br>👉 <strong>Server Admins:</strong> In Discord Server Settings ➔ Roles, drag the <strong>Aiko</strong> bot role <strong>ABOVE</strong> the <strong>' + memberRole.name + '</strong> role!', details: 'Discord API: ' + roleErr.message })); }
+      } else if (memberRole && member.roles.cache.has(memberRole.id)) {
+        client.emit('memberVerified', member);
       }
 
       // Store in verified_users

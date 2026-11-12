@@ -498,6 +498,20 @@ client.on('channelCreate', async (channel) => {
 });
 
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
+  try {
+    const isMemberRoleName = (n) => {
+      const l = (n || '').toLowerCase();
+      return l === 'member' || l === 'members' || l.includes('member') || l.includes('verified') || l.includes('nakama');
+    };
+    const hadMember = oldMember.roles.cache.some(r => isMemberRoleName(r.name));
+    const hasMember = newMember.roles.cache.some(r => isMemberRoleName(r.name));
+    if (!hadMember && hasMember) {
+      console.log(`[Welcome] Member role acquired by ${newMember.user.tag}. Triggering welcome...`);
+      client.emit('memberVerified', newMember);
+    }
+  } catch (mErr) {
+    console.error('Error checking member role in guildMemberUpdate:', mErr);
+  }
   if (oldMember.nickname === newMember.nickname) return;
   if (botRenamingUsers.has(newMember.id)) return;
   if (!db) return;
@@ -554,6 +568,13 @@ client.on('guildMemberAdd', async (member) => {
   try {
     if (member && member.guild) {
       await trackMemberJoin(member, db);
+      const isMemberRoleName = (n) => {
+        const l = (n || '').toLowerCase();
+        return l === 'member' || l === 'members' || l.includes('member') || l.includes('verified') || l.includes('nakama');
+      };
+      if (member.roles.cache.some(r => isMemberRoleName(r.name))) {
+        client.emit('memberVerified', member);
+      }
       // Welcome message is delayed until the user successfully verifies and receives Member role
       if (member.id === '855013222787842058') {
         const guild = member.guild;
@@ -1380,6 +1401,7 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
   const isTextChannel = (c) => c && (c.type === ChannelType.GuildText || (c.isTextBased && c.isTextBased() && c.type !== ChannelType.GuildVoice && c.type !== ChannelType.GuildStageVoice));
 
   const summonChannel =
+    guild.channels.cache.find(c => isTextChannel(c) && (c.name.toLowerCase().includes('welcome') && !c.name.toLowerCase().includes('bot'))) ||
     guild.channels.cache.get('1518191913705013278') ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon-circle')) ||
     guild.channels.cache.find(c => isTextChannel(c) && c.name.toLowerCase().includes('summon')) ||
@@ -1421,9 +1443,14 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
   }
 }
 
+const welcomedMembersCache = new Set();
+
 client.on('memberVerified', async (member) => {
   try {
     if (!member) return;
+    if (welcomedMembersCache.has(member.id)) return;
+    welcomedMembersCache.add(member.id);
+    setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
     console.log(`[Welcome] Member verified: ${member.user?.tag || member.id}. Dispatching welcome messages...`);
     await handleMemberWelcome(member);
   } catch (err) {
