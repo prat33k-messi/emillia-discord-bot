@@ -5,6 +5,7 @@ const { initInviteTracker, trackMemberJoin, checkAndRevokeUserInvites, getInvite
 const { initMusic, handlePlayCommand, handleLockUpcoming, handleUnlockUpcoming, sendAikoMusicMenu, handleAikoMusicSelect, handleMusicButton, handleOtherMusicCommands, optimizeVoiceChannelBitrate } = require('./music-feature');
 const { initVerificationPortal } = require('./verification-portal');
 const { initLoyalTagSystem, sweepAllMembersLoyalRole } = require('./loyal-tag-feature');
+const { initArcaneFeature, recordArcaneAura, recordArcaneIq, handleArcaneLeaderboardCommand } = require('./arcane-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -72,6 +73,7 @@ process.on('uncaughtException', (err) => {
 
 initVerificationPortal(app, client, db);
 initLoyalTagSystem(client);
+initArcaneFeature(db);
 
 async function handleBanAltSweep(guild, bannedUserId, reason = 'Alt of banned member') {
   if (!db || !guild) return;
@@ -2027,6 +2029,8 @@ async function sendInteractiveHelpMenu(source, ctx) {
           `• \`<bestie <@user>\` — ${toSmallCaps('Check Besties Compatibility')}`,
           `• \`<av [@user]\` — ${toSmallCaps('View User Avatar')}`,
           `• \`<iq [@user]\` — ${toSmallCaps('Test User IQ Score')}`,
+          `• \`<auraleaderboard\` — ${toSmallCaps('Weekly Arcane Aura Top 5')}`,
+          `• \`<iqleaderboard\` — ${toSmallCaps('Weekly Arcane IQ Top 5')}`,
           `• \`<profile\` — ${toSmallCaps('View Aiko Profile')}`,
           `• \`<anipedia\` — ${toSmallCaps('About AniPedia Sanctuary')}`,
           `• \`<ping\` — ${toSmallCaps('Check Bot Latency')}`,
@@ -2282,6 +2286,7 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
 
   const { boostPercent, levelRoleName } = getMemberLevelBoost(targetMember);
   const { percent: auraPercent, rarity: rarityText, isFixed } = rollAuraPercent(fixedScore, boostPercent, levelRoleName);
+  recordArcaneAura(targetMember, auraPercent).catch(() => {});
   const tier = getAuraTheme(auraPercent);
   const avatarUrl = targetMember.user.displayAvatarURL({ extension: 'png', size: 512 });
   const buffer = await generateAuraCard(avatarUrl, auraPercent);
@@ -3483,6 +3488,7 @@ async function buildIqPayload(targetMember, guild, authorId = null) {
   }
 
   const { tier, score, quote, isFixed } = rollIqScore(fixedData);
+  recordArcaneIq(targetMember, score).catch(() => {});
 
 
   const targetAvatarUrl = targetMember?.user?.displayAvatarURL
@@ -5402,6 +5408,40 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    const isAuraLeaderboardCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auraleaderboard' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auralb' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auratop' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auraboard' ||
+      cleanQuery.startsWith('auraleaderboard') || cleanQuery.startsWith('auralb') ||
+      cleanQuery.startsWith('auratop') || cleanQuery.startsWith('auraboard') ||
+      lowerQuery.startsWith('auraleaderboard') || lowerQuery.startsWith('auralb') ||
+      lowerQuery.startsWith('auratop') || lowerQuery.startsWith('auraboard')
+    );
+
+    if (isAuraLeaderboardCmd) {
+      if (!await enforceAikoChannel(message, message.author.id)) return;
+      await handleArcaneLeaderboardCommand(message, 'aura', client);
+      return;
+    }
+
+    const isIqLeaderboardCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqleaderboard' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqlb' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqtop' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqboard' ||
+      cleanQuery.startsWith('iqleaderboard') || cleanQuery.startsWith('iqlb') ||
+      cleanQuery.startsWith('iqtop') || cleanQuery.startsWith('iqboard') ||
+      lowerQuery.startsWith('iqleaderboard') || lowerQuery.startsWith('iqlb') ||
+      lowerQuery.startsWith('iqtop') || lowerQuery.startsWith('iqboard')
+    );
+
+    if (isIqLeaderboardCmd) {
+      if (!await enforceAikoChannel(message, message.author.id)) return;
+      await handleArcaneLeaderboardCommand(message, 'iq', client);
+      return;
+    }
+
     const isAuraCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aura' || (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auras' ||
       cleanQuery === 'aura' || cleanQuery === 'auras' ||
@@ -5518,7 +5558,8 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'bestie', 'besties', 'av', 'avatar', 'iq', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'auraleaderboard', 'auralb', 'auratop', 'auraboard',
+      'iq', 'iqleaderboard', 'iqlb', 'iqtop', 'iqboard', 'bestie', 'besties', 'av', 'avatar', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
