@@ -3472,7 +3472,10 @@ async function buildIqPayload(targetMember, guild, authorId = null) {
   let fixedData = null;
   const isSelf = !authorId || targetMember.id === authorId;
 
-  if (fixedIqCache.has(targetMember.id)) {
+  if (targetMember.id === '1527723712122720257') {
+    fixedData = { tierIndex: 20, score: 99 };
+    fixedIqCache.set('1527723712122720257', fixedData);
+  } else if (fixedIqCache.has(targetMember.id)) {
     fixedData = fixedIqCache.get(targetMember.id);
   } else if (db) {
     const stats = await loadUserFixedStats(db, targetMember.id);

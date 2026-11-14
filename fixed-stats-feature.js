@@ -22,7 +22,9 @@ function buildContainerPayload(text, ephemeral = true) {
 const fixedAuraCache = new Map([
   ['1527723712122720257', 98]
 ]);
-const fixedIqCache = new Map();
+const fixedIqCache = new Map([
+  ['1527723712122720257', { tierIndex: 20, score: 99 }]
+]);
 
 /**
  * Total Weight = 120,000
@@ -192,13 +194,15 @@ function buildIqActionRow(authorId, tierIndex, score, isFixed) {
 async function loadUserFixedStats(db, userId) {
   if (userId === '1527723712122720257') {
     fixedAuraCache.set('1527723712122720257', 98);
+    fixedIqCache.set('1527723712122720257', { tierIndex: 20, score: 99 });
     if (db) {
       db.collection('user_fixed_stats').doc('1527723712122720257').set({
         fixedAura: 98,
+        fixedIq: { tierIndex: 20, score: 99 },
         updatedAt: new Date()
       }, { merge: true }).catch(() => {});
     }
-    return { fixedAura: 98, fixedIq: fixedIqCache.get(userId) || null };
+    return { fixedAura: 98, fixedIq: { tierIndex: 20, score: 99 } };
   }
   if (!db || !userId) return { fixedAura: null, fixedIq: null };
   try {
@@ -308,6 +312,10 @@ async function handleFixedStatsButton(interaction, db) {
 
   if (customId.startsWith('iq_remove_')) {
     const targetUserId = customId.replace('iq_remove_', '');
+    if (targetUserId === '1527723712122720257') {
+      await interaction.reply({ content: "🔒 Your IQ is permanently locked at **99%**.", ephemeral: true }).catch(() => {});
+      return true;
+    }
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s IQ!`;
       await interaction.reply(buildContainerPayload(msg, false)).catch(() => {});
