@@ -71,6 +71,7 @@ process.on('uncaughtException', (err) => {
 });
 
 initVerificationPortal(app, client, db);
+initLoyalTagSystem(client);
 
 async function handleBanAltSweep(guild, bannedUserId, reason = 'Alt of banned member') {
   if (!db || !guild) return;
@@ -449,7 +450,6 @@ client.once('ready', async () => {
     console.log("Tiered warn scheduler & Warned role sync initialized.");
     await initInviteTracker(client);
     initMusic(client, sendContainer);
-    initLoyalTagSystem(client);
     await sweepAllMembersLoyalRole(client);
 
     try {
