@@ -29,5 +29,5 @@ npm start
 ---
 
 ### 👑 Credits
-* **Owner & Developer:** [Prateek](https://github.com/prat33k-messi)
+* **Owner & Developer:** [Aerion](https://github.com/prat33k-messi)
 * **Server:** AniPedia

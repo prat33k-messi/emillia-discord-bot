@@ -4,6 +4,7 @@ const { getMemberLevelBoost, rollAuraPercent, buildAuraActionRow, buildIqActionR
 const { initInviteTracker, trackMemberJoin, checkAndRevokeUserInvites, getInviteReportForUser, buildInviteReportEmbed } = require('./invite-feature');
 const { initMusic, handlePlayCommand, handleLockUpcoming, handleUnlockUpcoming, sendAikoMusicMenu, handleAikoMusicSelect, handleMusicButton, handleOtherMusicCommands, optimizeVoiceChannelBitrate } = require('./music-feature');
 const { initVerificationPortal } = require('./verification-portal');
+const { initLoyalTagSystem, sweepAllMembersLoyalRole } = require('./loyal-tag-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -448,6 +449,8 @@ client.once('ready', async () => {
     console.log("Tiered warn scheduler & Warned role sync initialized.");
     await initInviteTracker(client);
     initMusic(client, sendContainer);
+    initLoyalTagSystem(client);
+    await sweepAllMembersLoyalRole(client);
 
     try {
       const anipediaGuild = client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
