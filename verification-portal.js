@@ -317,7 +317,7 @@ function initVerificationPortal(app, client, db) {
     const userTag = `${discordUser.username}#${discordUser.discriminator || '0'}`;
 
     // 4. Find Guild & Member
-    const guild = client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
+    const guild = client.guilds.cache.get('1517882821673357312') || client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
     if (!guild) {
       return res.status(500).send(renderHtmlPage({
         status: 'error',
@@ -454,10 +454,12 @@ function initVerificationPortal(app, client, db) {
       await guild.roles.fetch().catch(() => {});
       const rolesArray = Array.from(guild.roles.cache.values());
       console.log('[Verification Portal] Server roles:', rolesArray.map(r => `"${r.name}" (${r.id})`).join(', '));
-      let memberRole = rolesArray.find(r => r.name.toLowerCase() === 'member') ||
+      let memberRole = guild.roles.cache.get('1572669219596804186') ||
+                       rolesArray.find(r => r.name.toLowerCase() === 'verified') ||
+                       rolesArray.find(r => r.name.toLowerCase() === 'member') ||
                        rolesArray.find(r => r.name.toLowerCase() === 'members') ||
-                       rolesArray.find(r => r.name.toLowerCase().includes('member')) ||
                        rolesArray.find(r => r.name.toLowerCase().includes('verified')) ||
+                       rolesArray.find(r => r.name.toLowerCase().includes('member')) ||
                        rolesArray.find(r => r.name.toLowerCase().includes('nakama'));
       if (!memberRole) {
         console.error('[Verification Portal] Could not find Member role! Roles in server:', rolesArray.map(r => r.name)); return res.status(500).send(renderHtmlPage({ status: 'error', icon: '⚠️', title: 'Role Not Found', message: 'Could not find a <strong>Member</strong> or <strong>Verified</strong> role in AniPedia Discord server.', details: 'Available server roles: ' + rolesArray.map(r => r.name).join(', ') }));

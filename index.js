@@ -334,6 +334,56 @@ const slashCommandsData = [
     .setDescription('View Aiko music commands and audio guide (Only visible to you)')
 ];
 
+async function sweepLevel10VerifiedRole(guild) {
+  if (!guild) return { verifiedCount: 0, totalChecked: 0 };
+  try {
+    await guild.roles.fetch().catch(() => {});
+    const verifiedRole = guild.roles.cache.get('1572669219596804186') ||
+                         guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
+    if (!verifiedRole) {
+      console.warn(`[Verified Sweep] Role 1572669219596804186 or "verified" not found in guild ${guild.name}`);
+      return { verifiedCount: 0, totalChecked: 0, error: 'Verified role not found' };
+    }
+
+    const members = await guild.members.fetch().catch(err => {
+      console.error('[Verified Sweep] Error fetching members:', err);
+      return guild.members.cache;
+    });
+
+    let verifiedCount = 0;
+    let totalChecked = 0;
+
+    for (const [memberId, member] of members) {
+      if (member.user.bot) continue;
+      totalChecked++;
+
+      if (member.roles.cache.has(verifiedRole.id)) continue;
+
+      const lvl = getMemberLevel(member);
+      const tier = getMemberTier(member);
+      const isLevel10Plus = lvl >= 10;
+      const isStaffOrVip = tier >= 1 || isWhitelistedUser(member);
+
+      if (isLevel10Plus || isStaffOrVip) {
+        try {
+          await member.roles.add(verifiedRole, `Auto-verification for active member (Level ${lvl}, Tier ${tier})`);
+          verifiedCount++;
+          console.log(`[Verified Sweep] Granted verified role to ${member.user.tag} (Level ${lvl}, Tier ${tier})`);
+          await new Promise(r => setTimeout(r, 200));
+        } catch (addErr) {
+          console.error(`[Verified Sweep] Failed to add verified role to ${member.user.tag}:`, addErr.message);
+        }
+      }
+    }
+
+    console.log(`[Verified Sweep] Complete. Awarded verified role to ${verifiedCount} / ${totalChecked} members.`);
+    return { verifiedCount, totalChecked };
+  } catch (err) {
+    console.error('[Verified Sweep] Error running sweep:', err);
+    return { verifiedCount: 0, totalChecked: 0, error: err.message };
+  }
+}
+
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
 
@@ -455,21 +505,13 @@ client.once('ready', async () => {
     await sweepAllMembersLoyalRole(client);
 
     try {
-      const anipediaGuild = client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
+      const anipediaGuild = client.guilds.cache.get('1517882821673357312') || client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
       if (anipediaGuild) {
-        const vipMember = await anipediaGuild.members.fetch('855013222787842058').catch(() => null);
-        if (vipMember) {
-          const rolesArray = Array.from(anipediaGuild.roles.cache.values());
-          const memberRole = rolesArray.find(r => r.name.toLowerCase() === 'member') ||
-                             rolesArray.find(r => r.name.toLowerCase() === 'members') ||
-                             rolesArray.find(r => r.name.toLowerCase().includes('member'));
-          if (memberRole && !vipMember.roles.cache.has(memberRole.id)) {
-            await vipMember.roles.add(memberRole, 'VIP Auto-Verification Exception for 855013222787842058');
-            console.log(`[Auto-Verify Exception] Granted Member role to existing user 855013222787842058 on startup`);
-          }
-        }
+        await sweepLevel10VerifiedRole(anipediaGuild);
       }
-    } catch (vipInitErr) {}
+    } catch (sweepInitErr) {
+      console.error('[Ready] Error during initial verified sweep:', sweepInitErr);
+    }
   } catch (err) {
     console.error("Error initializing warn scheduler/role sync on ready:", err);
   }
@@ -574,6 +616,16 @@ client.on('guildMemberAdd', async (member) => {
 
   try {
     if (member && member.guild) {
+      try {
+        const guestRole = member.guild.roles.cache.find(r => r.name.toLowerCase() === 'guest');
+        if (guestRole && !member.roles.cache.has(guestRole.id)) {
+          await member.roles.add(guestRole, 'Auto-assigned Guest role on join');
+          console.log(`[Guest Role] Assigned Guest role to newly joined member ${member.user?.tag || member.id}`);
+        }
+      } catch (gErr) {
+        console.error('[Guest Role] Error assigning Guest role on join:', gErr);
+      }
+
       await trackMemberJoin(member, db);
       const isMemberRoleName = (n) => {
         const l = (n || '').toLowerCase();
@@ -5404,6 +5456,27 @@ client.on('messageCreate', async (message) => {
             content: `🛡️ **Security Notice • Invites Revoked**\n<@${message.author.id}> revoked **${res.count}** active invite link(s) belonging to target user \`${targetId}\`.\nCodes destroyed: \`${res.revokedCodes.join(', ')}\``
           }).catch(() => {});
         }
+      }
+      return;
+    }
+
+    const isSweepVerifiedCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'sweepverified' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'verifyactive' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'autoverify'
+    );
+
+    if (isSweepVerifiedCmd) {
+      if (message.author.id !== '1013822181379162142' && message.author.id !== '750056830654480510' && !isWhitelistedUser(message.author)) {
+        await message.reply("Mou! 🛡️ Only server administrators can trigger the verified member sweep!");
+        return;
+      }
+      const progressMsg = await message.reply("🛡️ **Starting Verified Role sweep for Level 10+ and Staff members...** Please wait...");
+      const result = await sweepLevel10VerifiedRole(message.guild);
+      if (result.error) {
+        await progressMsg.edit(`❌ **Sweep failed:** ${result.error}`);
+      } else {
+        await progressMsg.edit(`✅ **Verified Sweep Complete!**\n• Granted **verified** role to **${result.verifiedCount}** eligible active members (Level 10+ / Staff).\n• Total members checked: **${result.totalChecked}**.`);
       }
       return;
     }

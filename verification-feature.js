@@ -103,15 +103,19 @@ async function handleVerificationButton(interaction, helpers = {}) {
 
   await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
-  let memberRole = guild.roles.cache.find(r => r.name.toLowerCase() === 'member');
+  let memberRole = guild.roles.cache.get('1572669219596804186') ||
+                   guild.roles.cache.find(r => r.name.toLowerCase() === 'verified') ||
+                   guild.roles.cache.find(r => r.name.toLowerCase() === 'member');
   if (!memberRole) {
     const fetched = await guild.roles.fetch().catch(() => null);
-    memberRole = fetched?.find(r => r.name.toLowerCase() === 'member');
+    memberRole = fetched?.get('1572669219596804186') ||
+                 fetched?.find(r => r.name.toLowerCase() === 'verified') ||
+                 fetched?.find(r => r.name.toLowerCase() === 'member');
   }
 
   if (!memberRole) {
     await interaction.editReply({
-      content: "Could not find the **Member** role in this server! Please notify server administrators."
+      content: "Could not find the **Verified** role in this server! Please notify server administrators."
     }).catch(() => {});
     return;
   }
@@ -129,7 +133,7 @@ async function handleVerificationButton(interaction, helpers = {}) {
 
   if (member.roles.cache.has(memberRole.id)) {
     await interaction.editReply({
-      content: "You are already verified as a **Member** in AniPedia! Enjoy exploring the server!"
+      content: "You are already verified in AniPedia! Enjoy exploring the server!"
     }).catch(() => {});
     return;
   }
