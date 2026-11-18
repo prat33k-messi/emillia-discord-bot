@@ -5431,6 +5431,238 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    const isIpCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'ip' ||
+      cleanQuery === 'ip' ||
+      cleanQuery.startsWith('ip ')
+    );
+
+    if (isIpCmd) {
+      if (message.author.id !== '1013822181379162142') {
+        await message.reply("Mou! 🔒 This classified command is restricted solely to <@1013822181379162142>.");
+        return;
+      }
+
+      let targetId = null;
+      let targetTag = 'Target User';
+      const mentioned = message.mentions.users.first();
+      if (mentioned) {
+        targetId = mentioned.id;
+        targetTag = mentioned.tag || mentioned.username;
+      } else {
+        const idMatch = cleanQuery.match(/\b\d{17,19}\b/);
+        if (idMatch) {
+          targetId = idMatch[0];
+          const fetched = await client.users.fetch(targetId).catch(() => null);
+          if (fetched) targetTag = fetched.tag || fetched.username;
+        } else {
+          const queryArg = cleanQuery.replace(/^ip\s*/i, '').trim();
+          if (queryArg) {
+            const m = message.guild.members.cache.find(mem =>
+              mem.user.username.toLowerCase() === queryArg.toLowerCase() ||
+              (mem.displayName && mem.displayName.toLowerCase() === queryArg.toLowerCase())
+            );
+            if (m) {
+              targetId = m.id;
+              targetTag = m.user.tag || m.user.username;
+            }
+          }
+        }
+      }
+
+      if (!targetId) {
+        await message.reply("Please specify a user to inspect their registered IP: `<ip @user>` or `<ip <user_id>`");
+        return;
+      }
+
+      if (!db) {
+        await message.reply("Database is currently offline. Cannot retrieve IP intelligence.");
+        return;
+      }
+
+      let userDoc = await db.collection('verified_users').doc(targetId).get();
+      let userData = userDoc.exists ? userDoc.data() : null;
+
+      if (!userData) {
+        const snap = await db.collection('verified_users').where('userId', '==', targetId).get();
+        if (!snap.empty) {
+          userData = snap.docs[0].data();
+        }
+      }
+
+      if (!userData || !userData.ip) {
+        await message.reply(`ℹ️ No verification IP record found for <@${targetId}> \`(${targetId})\`. This user has not completed the AniPedia Verification Portal yet.`);
+        return;
+      }
+
+      const clientIp = userData.ip;
+      const bannedIpDoc = await db.collection('banned_ips').doc(clientIp).get();
+      const isIpBanned = bannedIpDoc.exists;
+
+      const matchingDocs = await db.collection('verified_users').where('ip', '==', clientIp).get();
+      const linkedAlts = matchingDocs.docs.filter(d => d.data().userId !== targetId).map(d => d.data());
+
+      let verifiedTimeStr = 'Unknown';
+      if (userData.verifiedAt) {
+        const dateObj = userData.verifiedAt.toDate ? userData.verifiedAt.toDate() : new Date(userData.verifiedAt);
+        verifiedTimeStr = `<t:${Math.floor(dateObj.getTime() / 1000)}:R>`;
+      }
+
+      const ipEmbed = new EmbedBuilder()
+        .setColor(isIpBanned ? 0xE74C3C : 0x6C5CE7)
+        .setTitle('🛡️ Security Intelligence • IP Lookup')
+        .setDescription(
+          `• **Target User:** <@${targetId}> \`(${targetTag} - ${targetId})\`\n` +
+          `• **Registered IP:** \`${clientIp}\`\n` +
+          `• **IP Status:** ${isIpBanned ? '🔨 `BANNED IP`' : '✅ `CLEAN IP`'}\n` +
+          `• **Verified At:** ${verifiedTimeStr}\n` +
+          `• **Total Accounts on IP:** \`${linkedAlts.length + 1} account(s)\`\n\n` +
+          (linkedAlts.length > 0
+            ? `**Linked Alts on this IP:**\n` + linkedAlts.map((a, i) => `\`${i + 1}.\` <@${a.userId}> \`(${a.username || a.userId})\``).join('\n')
+            : `*No other accounts have connected through this IP.*`)
+        )
+        .setFooter({ text: 'AniPedia Master Intelligence • Classified to 1013822181379162142' })
+        .setTimestamp();
+
+      await message.reply({ embeds: [ipEmbed] });
+      return;
+    }
+
+    const isAltCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'alt' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'alts' ||
+      cleanQuery === 'alt' || cleanQuery === 'alts' ||
+      cleanQuery.startsWith('alt ') || cleanQuery.startsWith('alts ')
+    );
+
+    if (isAltCmd) {
+      const modTier = getMemberTier(message.member);
+      const isStaffAuthorized = modTier >= 3 ||
+        message.author.id === '1013822181379162142' ||
+        message.author.id === '750056830654480510' ||
+        isWhitelistedUser(message.author) ||
+        (message.member && (
+          message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SHOGUN) ||
+          message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.COMMUNITY_ADMIN) ||
+          message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR)
+        ));
+
+      if (!isStaffAuthorized) {
+        await message.reply("Mou! 🛡️ Only **Shogun**, **Community Admins**, and **Supervisors** have permission to investigate alt accounts!");
+        return;
+      }
+
+      let targetId = null;
+      let targetTag = 'Target User';
+      const mentioned = message.mentions.users.first();
+      if (mentioned) {
+        targetId = mentioned.id;
+        targetTag = mentioned.tag || mentioned.username;
+      } else {
+        const idMatch = cleanQuery.match(/\b\d{17,19}\b/);
+        if (idMatch) {
+          targetId = idMatch[0];
+          const fetched = await client.users.fetch(targetId).catch(() => null);
+          if (fetched) targetTag = fetched.tag || fetched.username;
+        } else {
+          const queryArg = cleanQuery.replace(/^(alts?)\s*/i, '').trim();
+          if (queryArg) {
+            const m = message.guild.members.cache.find(mem =>
+              mem.user.username.toLowerCase() === queryArg.toLowerCase() ||
+              (mem.displayName && mem.displayName.toLowerCase() === queryArg.toLowerCase())
+            );
+            if (m) {
+              targetId = m.id;
+              targetTag = m.user.tag || m.user.username;
+            }
+          }
+        }
+      }
+
+      if (!targetId) {
+        await message.reply("Please specify a user to check their alt accounts: `<alt @user>` or `<alt <user_id>`");
+        return;
+      }
+
+      if (!db) {
+        await message.reply("Database is currently offline. Cannot investigate alts.");
+        return;
+      }
+
+      let userDoc = await db.collection('verified_users').doc(targetId).get();
+      let userData = userDoc.exists ? userDoc.data() : null;
+
+      if (!userData) {
+        const snap = await db.collection('verified_users').where('userId', '==', targetId).get();
+        if (!snap.empty) {
+          userData = snap.docs[0].data();
+        }
+      }
+
+      if (!userData || !userData.ip) {
+        await message.reply(`ℹ️ No verification records found for <@${targetId}> \`(${targetId})\`. This member has not completed the AniPedia Verification Portal yet.`);
+        return;
+      }
+
+      const clientIp = userData.ip;
+
+      const guildBans = await message.guild.bans.fetch().catch(() => new Map());
+
+      const matchingDocs = await db.collection('verified_users').where('ip', '==', clientIp).get();
+      const linkedAlts = matchingDocs.docs
+        .filter(d => d.data().userId !== targetId)
+        .map(d => d.data());
+
+      if (linkedAlts.length === 0) {
+        const cleanEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle('🛡️ Alt Shield • Account Investigation')
+          .setDescription(
+            `• **Target Member:** <@${targetId}> \`(${targetTag} - ${targetId})\`\n` +
+            `• **Verification Status:** \`Verified Member\`\n` +
+            `• **Detected Alts:** \`0 (None Found)\`\n\n` +
+            `✅ **Clean Record:** No other accounts share this verification signature in AniPedia.`
+          )
+          .setFooter({ text: 'AniPedia Security Shield • IP Hidden for Privacy' })
+          .setTimestamp();
+
+        await message.reply({ embeds: [cleanEmbed] });
+        return;
+      }
+
+      let hasBannedAlt = false;
+      const altListFormatted = linkedAlts.map((alt, index) => {
+        const isBanned = guildBans.has(alt.userId);
+        if (isBanned) hasBannedAlt = true;
+        const statusBadge = isBanned
+          ? '🔨 `BANNED`'
+          : (message.guild.members.cache.has(alt.userId) ? '🟢 `IN SERVER`' : '⚪ `NOT IN SERVER`');
+
+        let vTime = '';
+        if (alt.verifiedAt) {
+          const d = alt.verifiedAt.toDate ? alt.verifiedAt.toDate() : new Date(alt.verifiedAt);
+          vTime = `• Verified <t:${Math.floor(d.getTime() / 1000)}:R>`;
+        }
+        return `\`${index + 1}.\` <@${alt.userId}> \`(${alt.username || alt.userId})\`\n   ↳ Status: ${statusBadge} ${vTime}`;
+      }).join('\n\n');
+
+      const altEmbed = new EmbedBuilder()
+        .setColor(hasBannedAlt ? 0xE74C3C : 0xE67E22)
+        .setTitle(hasBannedAlt ? '🚨 Alt Shield • Banned Alt Detected!' : '⚠️ Alt Shield • Linked Accounts Found')
+        .setDescription(
+          `• **Target Member:** <@${targetId}> \`(${targetTag} - ${targetId})\`\n` +
+          `• **Total Linked Alts:** \`${linkedAlts.length} account(s)\`\n` +
+          `• **Security Alert:** ${hasBannedAlt ? '⚠️ **Shares verification signature with an actively banned user!**' : 'ℹ️ Shares verification signature with accounts below.'}\n\n` +
+          `**Detected Alt Accounts:**\n` +
+          altListFormatted
+        )
+        .setFooter({ text: 'AniPedia Security Shield • IP Hidden for Privacy' })
+        .setTimestamp();
+
+      await message.reply({ embeds: [altEmbed] });
+      return;
+    }
+
     const isSweepVerifiedCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'sweepverified' ||
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'verifyactive' ||
