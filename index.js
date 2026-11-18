@@ -545,20 +545,6 @@ client.on('channelCreate', async (channel) => {
 });
 
 client.on('guildMemberUpdate', async (oldMember, newMember) => {
-  try {
-    const isMemberRoleName = (n) => {
-      const l = (n || '').toLowerCase();
-      return l === 'member' || l === 'members' || l.includes('member') || l.includes('verified') || l.includes('nakama');
-    };
-    const hadMember = oldMember.roles.cache.some(r => isMemberRoleName(r.name));
-    const hasMember = newMember.roles.cache.some(r => isMemberRoleName(r.name));
-    if (!hadMember && hasMember) {
-      console.log(`[Welcome] Member role acquired by ${newMember.user.tag}. Triggering welcome...`);
-      client.emit('memberVerified', newMember);
-    }
-  } catch (mErr) {
-    console.error('Error checking member role in guildMemberUpdate:', mErr);
-  }
   if (oldMember.nickname === newMember.nickname) return;
   if (botRenamingUsers.has(newMember.id)) return;
   if (!db) return;
@@ -627,13 +613,7 @@ client.on('guildMemberAdd', async (member) => {
       }
 
       await trackMemberJoin(member, db);
-      const isMemberRoleName = (n) => {
-        const l = (n || '').toLowerCase();
-        return l === 'member' || l === 'members' || l.includes('member') || l.includes('verified') || l.includes('nakama');
-      };
-      if (member.roles.cache.some(r => isMemberRoleName(r.name))) {
-        client.emit('memberVerified', member);
-      }
+
       // Immediately send welcome messages on member join (like it used to be)
       if (!welcomedMembersCache.has(member.id)) {
         welcomedMembersCache.add(member.id);
@@ -1514,16 +1494,7 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 // welcomedMembersCache already declared globally
 
 client.on('memberVerified', async (member) => {
-  try {
-    if (!member) return;
-    if (welcomedMembersCache.has(member.id)) return;
-    welcomedMembersCache.add(member.id);
-    setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
-    console.log(`[Welcome] Member verified: ${member.user?.tag || member.id}. Dispatching welcome messages...`);
-    await handleMemberWelcome(member);
-  } catch (err) {
-    console.error('Error triggering member welcome after verification:', err);
-  }
+  // Welcome messages permanently disabled on role verification to prevent spamming active chat
 });
 
 const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
