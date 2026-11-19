@@ -202,19 +202,20 @@ async function getTopArcaneMembers(type, guild = null) {
     });
   }
 
-  // Refresh display names and avatars from guild cache if available
-  const top5 = filtered.slice(0, 5);
-  for (const item of top5) {
+  // Refresh display names and avatars from guild cache if available (up to 10 players)
+  const top10 = filtered.slice(0, 10);
+  for (const item of top10) {
     if (guild) {
       const gMember = guild.members.cache.get(item.userId) || await guild.members.fetch(item.userId).catch(() => null);
       if (gMember) {
         item.displayName = gMember.displayName || gMember.user.username;
+        item.username = gMember.user.username;
         item.avatarUrl = gMember.user.displayAvatarURL({ extension: 'png', size: 256 });
       }
     }
   }
 
-  return top5;
+  return top10;
 }
 
 /**
@@ -234,6 +235,55 @@ function drawRoundRect(ctx, x, y, w, h, r) {
     ctx.lineTo(x, y + r);
     ctx.quadraticCurveTo(x, y, x + r, y);
   }
+}
+
+/**
+ * Helper to truncate text to fit inside maximum pixel width
+ */
+function fitText(ctx, text, maxWidth) {
+  if (!text) return '';
+  if (ctx.measureText(text).width <= maxWidth) return text;
+  let truncated = text;
+  while (truncated.length > 1 && ctx.measureText(truncated + '…').width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + '…';
+}
+
+/**
+ * Draws a sharp gold crown above Rank 1 avatar
+ */
+function drawCrown(ctx, cx, cy, width = 38, height = 22) {
+  ctx.save();
+  ctx.fillStyle = '#fbbf24';
+  ctx.shadowColor = '#fbbf24';
+  ctx.shadowBlur = 10;
+  const w2 = width / 2;
+  const left = cx - w2;
+  const right = cx + w2;
+  const top = cy - height / 2;
+  const bottom = cy + height / 2;
+
+  ctx.beginPath();
+  ctx.moveTo(left, bottom);
+  ctx.lineTo(left, top + height * 0.35);
+  ctx.lineTo(left + width * 0.25, top + height * 0.6);
+  ctx.lineTo(cx, top);
+  ctx.lineTo(right - width * 0.25, top + height * 0.6);
+  ctx.lineTo(right, top + height * 0.35);
+  ctx.lineTo(right, bottom);
+  ctx.closePath();
+  ctx.fill();
+
+  // Jewel dots on crown tips
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(left + 2, top + height * 0.35, 2.5, 0, Math.PI * 2);
+  ctx.arc(cx, top + 1, 2.8, 0, Math.PI * 2);
+  ctx.arc(right - 2, top + height * 0.35, 2.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
 }
 
 /**
@@ -261,250 +311,322 @@ async function drawCircularAvatar(ctx, avatarUrl, cx, cy, radius, strokeColor, l
 
   ctx.restore();
 
-  // Outer glow ring
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-  ctx.strokeStyle = strokeColor;
-  ctx.lineWidth = lineWidth;
-  ctx.shadowColor = strokeColor;
-  ctx.shadowBlur = 8;
-  ctx.stroke();
-  ctx.restore();
+  if (strokeColor && lineWidth > 0) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 /**
  * Generates the Weekly Arcane Leaderboard Graphic using Canvas
- * Inspired by podium top and sleek gaming cards bottom
+ * Inspired by F1 Grand Prix Podium (Top 3) + Clean White Panel (Ranks 4-10)
  */
 async function generateArcaneLeaderboardCard(type, topMembers) {
-  const width = 720;
-  const height = 800;
+  const width = 760;
+  const isAura = type === 'aura';
+  const labelText = isAura ? 'AURA' : 'IQ';
+
+  const bottomMembers = topMembers.slice(3, 10);
+  const rowCount = Math.max(1, bottomMembers.length);
+  const rowHeight = 48;
+  const panelH = rowCount * rowHeight + 16;
+  const panelY = 468;
+  const height = panelY + panelH + 25;
+
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  const isAura = type === 'aura';
-  const primaryThemeColor = isAura ? '#bf5af2' : '#38bdf8'; // Purple for Aura, Electric Blue for IQ
-  const secondaryThemeColor = isAura ? '#f5d0fe' : '#e0f2fe';
-  const labelText = isAura ? 'AURA' : 'IQ';
-
-  // 1. Background gradient (Deep Obsidian to Midnight Slate)
+  // 1. Overall Dark Background
   const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-  bgGrad.addColorStop(0, '#0a0d14');
-  bgGrad.addColorStop(0.45, '#101522');
-  bgGrad.addColorStop(1, '#0c0f18');
+  bgGrad.addColorStop(0, '#090c13');
+  bgGrad.addColorStop(0.5, '#0e1422');
+  bgGrad.addColorStop(1, '#090c13');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // Background glow circles
+  // Red/accent plus pattern (+ + + + +) on top left
   ctx.save();
-  const auraGlow = ctx.createRadialGradient(width / 2, 170, 20, width / 2, 170, 260);
-  auraGlow.addColorStop(0, isAura ? 'rgba(191, 90, 242, 0.22)' : 'rgba(56, 189, 248, 0.22)');
-  auraGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
-  ctx.fillStyle = auraGlow;
-  ctx.beginPath();
-  ctx.arc(width / 2, 170, 260, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.font = '12px "Segoe UI", Arial, sans-serif';
+  ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
+  for (let px = 25; px < 160; px += 16) {
+    for (let py = 18; py < 45; py += 12) {
+      ctx.fillText('+', px, py);
+    }
+  }
   ctx.restore();
 
-  // 2. Header
+  // 2. Top Right: ANIPEDIA + Flag (Austrian GP inspired)
   ctx.save();
-  ctx.textAlign = 'center';
-  ctx.font = '900 32px "Segoe UI", Montserrat, Arial, sans-serif';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 18px "Segoe UI", Montserrat, Arial, sans-serif';
   ctx.fillStyle = '#ffffff';
-  ctx.shadowColor = primaryThemeColor;
-  ctx.shadowBlur = 12;
-  ctx.fillText('WEEKLY ARCANE', width / 2, 48);
+  ctx.fillText('ANIPEDIA', width - 60, 36);
 
-  ctx.shadowBlur = 0;
-  ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
-  ctx.fillStyle = primaryThemeColor;
-  ctx.letterSpacing = '2px';
-  ctx.fillText(`${labelText} LEADERBOARD • TOP 5 CHAMPIONS`, width / 2, 74);
+  const flagX = width - 52;
+  const flagY = 28;
+  const flagW = 26;
+  const flagH = 16;
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(flagX, flagY, flagW, 5);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(flagX, flagY + 5, flagW, 6);
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(flagX, flagY + 11, flagW, 5);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(flagX, flagY, flagW, flagH);
   ctx.restore();
 
-  // 3. Top 3 Podium Section
-  // Positions: 2nd (Left), 1st (Center), 3rd (Right)
+  // 3. Top Left: Subtitle & Title
+  ctx.save();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 12px "Segoe UI", Montserrat, Arial, sans-serif';
+  ctx.fillStyle = '#94a3b8';
+  ctx.fillText('WEEKLY ARCANE', 25, 30);
+
+  ctx.font = '900 22px "Segoe UI", Montserrat, Arial, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(`${labelText} LEADERBOARD`, 25, 52);
+  ctx.restore();
+
+  // 4. Podium Cards (Top 3)
+  // 2nd Place (Left, Orange), 1st Place (Center, Teal, Elevated), 3rd Place (Right, Red)
   const p1 = topMembers[0] || null;
   const p2 = topMembers[1] || null;
   const p3 = topMembers[2] || null;
 
-  const podiumBaseY = 320;
-
-  // Podium configurations:
-  // Center (Rank 1): cx: 360, pedestal top: 220, avatar Y: 160
-  // Left   (Rank 2): cx: 180, pedestal top: 250, avatar Y: 200
-  // Right  (Rank 3): cx: 540, pedestal top: 270, avatar Y: 220
-
-  const podiumSlots = [
-    { rank: 2, data: p2, cx: 180, topY: 250, avY: 195, rad: 38, color: '#eab308', title: '2nd' },
-    { rank: 1, data: p1, cx: 360, topY: 220, avY: 155, rad: 46, color: '#10b981', title: '1st' },
-    { rank: 3, data: p3, cx: 540, topY: 270, avY: 215, rad: 36, color: '#ec4899', title: '3rd' }
+  const podiumCards = [
+    {
+      rank: 2,
+      data: p2,
+      x: 25,
+      y: 115,
+      w: 225,
+      h: 330,
+      accent: '#ff8000',
+      bgTop: '#261509',
+      bgBot: '#100a06',
+      stencilSize: 85,
+      avY: 235,
+      avRad: 52,
+      barTextColor: '#000000'
+    },
+    {
+      rank: 1,
+      data: p1,
+      x: 267,
+      y: 75,
+      w: 225,
+      h: 370,
+      accent: '#00d2be',
+      bgTop: '#082822',
+      bgBot: '#051412',
+      stencilSize: 95,
+      avY: 220,
+      avRad: 62,
+      barTextColor: '#000000'
+    },
+    {
+      rank: 3,
+      data: p3,
+      x: 510,
+      y: 135,
+      w: 225,
+      h: 310,
+      accent: '#ef4444',
+      bgTop: '#290909',
+      bgBot: '#120505',
+      stencilSize: 80,
+      avY: 250,
+      avRad: 48,
+      barTextColor: '#ffffff'
+    }
   ];
 
-  for (const slot of podiumSlots) {
-    const { cx, topY, avY, rad, color, data, rank } = slot;
-    const colW = rad * 2 + 18;
+  for (const card of podiumCards) {
+    const { rank, data, x, y, w, h, accent, bgTop, bgBot, stencilSize, avY, avRad, barTextColor } = card;
+    const cardRadius = 16;
+    const barHeight = 48;
+    const barY = y + h - barHeight;
 
-    // Draw 3D Pedestal
+    // Clip to rounded card
     ctx.save();
     ctx.beginPath();
-    drawRoundRect(ctx, cx - colW / 2, topY, colW, podiumBaseY - topY, 14);
-    const pedGrad = ctx.createLinearGradient(0, topY, 0, podiumBaseY);
-    pedGrad.addColorStop(0, '#1a2233');
-    pedGrad.addColorStop(1, '#0e1320');
-    ctx.fillStyle = pedGrad;
-    ctx.fill();
+    drawRoundRect(ctx, x, y, w, h, cardRadius);
+    ctx.clip();
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = rank === 1 ? 2.5 : 1.5;
-    ctx.shadowColor = color;
-    ctx.shadowBlur = rank === 1 ? 10 : 5;
-    ctx.stroke();
-    ctx.restore();
+    // Background gradient
+    const cardGrad = ctx.createLinearGradient(x, y, x, y + h);
+    cardGrad.addColorStop(0, bgTop);
+    cardGrad.addColorStop(0.7, bgBot);
+    cardGrad.addColorStop(1, '#05070a');
+    ctx.fillStyle = cardGrad;
+    ctx.fillRect(x, y, w, h);
 
-    // Draw Rank Number on Pedestal
+    // Subtle diagonal racing speed lines
     ctx.save();
-    ctx.textAlign = 'center';
-    ctx.font = '900 24px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = color;
-    ctx.fillText(String(rank), cx, topY + 36);
-    ctx.restore();
-
-    // Draw Avatar
-    const avUrl = data ? data.avatarUrl : null;
-    await drawCircularAvatar(ctx, avUrl, cx, avY, rad, color, rank === 1 ? 3.5 : 2.5);
-
-    // If Rank 1, draw Crown on top
-    if (rank === 1) {
-      ctx.save();
-      ctx.font = '28px "Segoe UI Emoji", Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('👑', cx, avY - rad - 6);
-      ctx.restore();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
+    ctx.lineWidth = 1;
+    for (let lx = x - 60; lx < x + w + 100; lx += 20) {
+      ctx.beginPath();
+      ctx.moveTo(lx, y);
+      ctx.lineTo(lx - 40, y + h);
+      ctx.stroke();
     }
-
-    // Name & Score under podium
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = '#ffffff';
-    const rawName = data ? (data.displayName || data.username) : 'Vacant';
-    const truncatedName = rawName.length > 12 ? rawName.slice(0, 11) + '…' : rawName;
-    ctx.fillText(truncatedName, cx, podiumBaseY + 22);
-
-    ctx.font = '900 16px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = color;
-    const scoreVal = data ? (isAura ? data.aura : data.iq) : 0;
-    ctx.fillText(data ? `${scoreVal}%` : '---', cx, podiumBaseY + 44);
-    ctx.restore();
-  }
-
-  // 4. Horizontal Separator / Banner
-  ctx.save();
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(35, 385);
-  ctx.lineTo(width - 35, 385);
-  ctx.stroke();
-  ctx.restore();
-
-  // 5. Bottom Leaderboard List (Rank 1 to 5)
-  const listStartY = 405;
-  const rowHeight = 68;
-  const rowSpacing = 10;
-
-  for (let i = 0; i < 5; i++) {
-    const member = topMembers[i] || null;
-    const rankNum = i + 1;
-    const rowY = listStartY + i * (rowHeight + rowSpacing);
-    const rowW = width - 70;
-    const rowX = 35;
-
-    // Card background
-    ctx.save();
-    ctx.beginPath();
-    drawRoundRect(ctx, rowX, rowY, rowW, rowHeight, 14);
-    ctx.fillStyle = member ? 'rgba(21, 28, 44, 0.75)' : 'rgba(15, 20, 32, 0.4)';
-    ctx.fill();
-
-    const isTop3 = rankNum <= 3;
-    let rankBadgeColor = '#64748b';
-    if (rankNum === 1) rankBadgeColor = '#10b981';
-    else if (rankNum === 2) rankBadgeColor = '#eab308';
-    else if (rankNum === 3) rankBadgeColor = '#ec4899';
-    else rankBadgeColor = primaryThemeColor;
-
-    ctx.strokeStyle = member ? (isTop3 ? rankBadgeColor : 'rgba(255, 255, 255, 0.1)') : 'rgba(255, 255, 255, 0.04)';
-    ctx.lineWidth = isTop3 ? 1.6 : 1.0;
-    if (isTop3) {
-      ctx.shadowColor = rankBadgeColor;
-      ctx.shadowBlur = 6;
-    }
-    ctx.stroke();
     ctx.restore();
 
-    // Rank Circle Badge
-    const badgeX = rowX + 32;
-    const badgeY = rowY + rowHeight / 2;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(badgeX, badgeY, 16, 0, Math.PI * 2);
-    ctx.fillStyle = rankBadgeColor;
-    ctx.fill();
-
-    ctx.font = '900 16px "Segoe UI", Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#0a0d14';
-    ctx.fillText(String(rankNum), badgeX, badgeY + 1);
-    ctx.restore();
-
-    // User Avatar in list
-    const listAvX = rowX + 82;
-    const listAvY = badgeY;
-    await drawCircularAvatar(ctx, member?.avatarUrl, listAvX, listAvY, 22, rankBadgeColor, 1.8);
-
-    // Player Nickname / Name
+    // Large Stencil Rank Number in top-left
     ctx.save();
     ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 18px "Segoe UI", Inter, Arial, sans-serif';
-    ctx.fillStyle = member ? '#ffffff' : '#64748b';
-    const memberName = member ? (member.displayName || member.username) : 'Empty Slot';
-    const truncatedMemberName = memberName.length > 20 ? memberName.slice(0, 19) + '…' : memberName;
-    ctx.fillText(truncatedMemberName, rowX + 118, badgeY - 2);
-
-    ctx.font = '13px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    const subHandle = member ? `@${member.username}` : 'Awaiting Contender';
-    ctx.fillText(subHandle, rowX + 118, badgeY + 16);
+    ctx.textBaseline = 'top';
+    ctx.font = `900 ${stencilSize}px "Segoe UI", Arial Black, Impact, sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+    ctx.fillText(String(rank), x + 16, y + 10);
     ctx.restore();
 
-    // Score on the right
+    // Circular Avatar
+    const avX = x + w / 2;
+    await drawCircularAvatar(ctx, data?.avatarUrl, avX, avY, avRad, accent, rank === 1 ? 4 : 3);
+
+    // Gold Crown for Rank 1
+    if (rank === 1) {
+      drawCrown(ctx, avX, avY - avRad - 18, 42, 24);
+    }
+
+    // Solid Bottom Bar (Driver name & score)
+    ctx.fillStyle = accent;
+    ctx.fillRect(x, barY, w, barHeight);
+
+    const rawName = data ? (data.displayName || data.username) : 'VACANT';
+    const cleanName = rawName.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim().toUpperCase();
+    const scoreVal = data ? (isAura ? data.aura : data.iq) : null;
+    const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '--%';
+
     ctx.save();
+    ctx.font = '900 18px "Segoe UI", Montserrat, Arial, sans-serif';
+    const scoreW = ctx.measureText(scoreText).width;
+
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
-    ctx.font = '900 22px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = member ? '#ffffff' : '#475569';
-    ctx.shadowColor = rankBadgeColor;
-    ctx.shadowBlur = member && isTop3 ? 8 : 0;
-    const scoreText = member ? `${isAura ? member.aura : member.iq}%` : '--%';
-    ctx.fillText(scoreText, rowX + rowW - 24, badgeY);
+    ctx.fillStyle = barTextColor;
+    ctx.fillText(scoreText, x + w - 14, barY + barHeight / 2);
+
+    ctx.textAlign = 'left';
+    ctx.font = '900 16px "Segoe UI", Montserrat, Arial, sans-serif';
+    ctx.fillStyle = barTextColor;
+    const maxNameW = w - scoreW - 32;
+    const fittedName = fitText(ctx, cleanName, maxNameW);
+    ctx.fillText(fittedName, x + 14, barY + barHeight / 2);
+    ctx.restore();
+
+    ctx.restore(); // Exit card clipping
+
+    // Outer card border stroke
+    ctx.save();
+    ctx.beginPath();
+    drawRoundRect(ctx, x, y, w, h, cardRadius);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = rank === 1 ? 2.5 : 1.8;
+    if (rank === 1) {
+      ctx.shadowColor = accent;
+      ctx.shadowBlur = 10;
+    }
+    ctx.stroke();
     ctx.restore();
   }
 
-  // Outer border glow
+  // 5. Bottom Panel: Ranks 4 to 10 (Clean Modern White Panel)
+  const panelX = 25;
+  const panelW = 710;
+
   ctx.save();
   ctx.beginPath();
-  drawRoundRect(ctx, 3, 3, width - 6, height - 6, 20);
-  ctx.strokeStyle = primaryThemeColor;
-  ctx.lineWidth = 2.0;
-  ctx.shadowColor = primaryThemeColor;
-  ctx.shadowBlur = 10;
+  drawRoundRect(ctx, panelX, panelY, panelW, panelH, 16);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
+
+  if (bottomMembers.length === 0) {
+    ctx.save();
+    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Awaiting contenders for Ranks 4 to 10...', panelX + panelW / 2, panelY + panelH / 2);
+    ctx.restore();
+  } else {
+    for (let i = 0; i < bottomMembers.length; i++) {
+      const member = bottomMembers[i];
+      const rankNum = i + 4;
+      const rowY = panelY + 8 + i * rowHeight;
+      const rowCenterY = rowY + rowHeight / 2;
+
+      // Rank Number
+      ctx.save();
+      ctx.font = '900 18px "Segoe UI", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText(String(rankNum), panelX + 32, rowCenterY);
+      ctx.restore();
+
+      // Avatar
+      const avX = panelX + 74;
+      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 16, '#cbd5e1', 1.5);
+
+      // Name & Score
+      ctx.save();
+      ctx.font = '900 15px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#0f172a';
+      const rawName = member.displayName || member.username;
+      const cleanName = rawName.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim().toUpperCase();
+
+      const scoreVal = isAura ? member.aura : member.iq;
+      const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '--%';
+
+      ctx.save();
+      ctx.font = '900 17px "Segoe UI", Montserrat, Arial, sans-serif';
+      const scoreW = ctx.measureText(scoreText).width;
+      ctx.restore();
+
+      const maxNameW = panelW - 130 - scoreW - 30;
+      const fittedName = fitText(ctx, cleanName, maxNameW);
+      ctx.fillText(fittedName, panelX + 104, rowCenterY);
+
+      // Score on right
+      ctx.font = '900 17px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#0f172a';
+      ctx.fillText(scoreText, panelX + panelW - 24, rowCenterY);
+      ctx.restore();
+
+      // Divider line between rows
+      if (i < bottomMembers.length - 1) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(panelX + 20, rowY + rowHeight);
+        ctx.lineTo(panelX + panelW - 20, rowY + rowHeight);
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
 
   return canvas.toBuffer('image/png');
 }
@@ -532,21 +654,10 @@ async function handleArcaneLeaderboardCommand(message, type, client) {
   const cardBuffer = await generateArcaneLeaderboardCard(type, topMembers);
   const attachment = new AttachmentBuilder(cardBuffer, { name: `${type}_leaderboard.png` });
 
-  let desc = `### 🏆 **Weekly Arcane • Top 5 ${label} Champions**\n`;
-  if (topMembers.length === 0) {
-    desc += `*No contenders have claimed a ${label} score yet this week!*`;
-  } else {
-    topMembers.forEach((m, idx) => {
-      const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-      const scoreVal = isAura ? m.aura : m.iq;
-      desc += `${medals[idx] || '•'} **${m.displayName || m.username}** — \`${scoreVal}%\`\n`;
-    });
-  }
-
   const embed = new EmbedBuilder()
     .setColor(isAura ? 0xBF5AF2 : 0x38BDF8)
     .setTitle(`🌟  ${toSmallCaps(`Weekly Arcane ${label} Leaderboard`)}`)
-    .setDescription(desc)
+    .setDescription(`### 🏆 **Weekly Arcane**`)
     .setImage(`attachment://${type}_leaderboard.png`)
     .setFooter({ text: `${toSmallCaps('AniPedia Weekly Arcane')} • ${guild?.name || 'Sanctuary'}`, iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
     .setTimestamp();
