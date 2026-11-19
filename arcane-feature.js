@@ -46,17 +46,6 @@ function toSmallCaps(str) {
 async function initArcaneFeature(db) {
   dbRef = db;
 
-  // Pre-seed known fixed stats
-  arcaneScoresCache.set('1527723712122720257', {
-    userId: '1527723712122720257',
-    username: 'GOOD HUMAN',
-    displayName: 'GOOD HUMAN',
-    avatarUrl: null,
-    aura: 98,
-    iq: 99,
-    updatedAt: new Date()
-  });
-
   if (!db) {
     console.log('[Weekly Arcane] Running in in-memory mode.');
     return;
@@ -333,9 +322,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 
   const bottomMembers = topMembers.slice(3, 10);
   const rowCount = Math.max(1, bottomMembers.length);
-  const rowHeight = 48;
+  const rowHeight = 58;
   const panelH = rowCount * rowHeight + 16;
-  const panelY = 468;
+  const panelY = 472;
   const height = panelY + panelH + 25;
 
   const canvas = createCanvas(width, height);
@@ -414,8 +403,8 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       bgTop: '#261509',
       bgBot: '#100a06',
       stencilSize: 85,
-      avY: 235,
-      avRad: 52,
+      avY: 244,
+      avRad: 66,
       barTextColor: '#000000'
     },
     {
@@ -429,8 +418,8 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       bgTop: '#082822',
       bgBot: '#051412',
       stencilSize: 95,
-      avY: 220,
-      avRad: 62,
+      avY: 226,
+      avRad: 74,
       barTextColor: '#000000'
     },
     {
@@ -444,8 +433,8 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       bgTop: '#290909',
       bgBot: '#120505',
       stencilSize: 80,
-      avY: 250,
-      avRad: 48,
+      avY: 252,
+      avRad: 64,
       barTextColor: '#ffffff'
     }
   ];
@@ -453,7 +442,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   for (const card of podiumCards) {
     const { rank, data, x, y, w, h, accent, bgTop, bgBot, stencilSize, avY, avRad, barTextColor } = card;
     const cardRadius = 16;
-    const barHeight = 48;
+    const barHeight = 54;
     const barY = y + h - barHeight;
 
     // Clip to rounded card
@@ -491,13 +480,13 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.fillText(String(rank), x + 16, y + 10);
     ctx.restore();
 
-    // Circular Avatar
+    // Circular Avatar (Enlarged)
     const avX = x + w / 2;
-    await drawCircularAvatar(ctx, data?.avatarUrl, avX, avY, avRad, accent, rank === 1 ? 4 : 3);
+    await drawCircularAvatar(ctx, data?.avatarUrl, avX, avY, avRad, accent, rank === 1 ? 4.5 : 4.0);
 
     // Gold Crown for Rank 1
     if (rank === 1) {
-      drawCrown(ctx, avX, avY - avRad - 18, 42, 24);
+      drawCrown(ctx, avX, avY - avRad - 22, 48, 28);
     }
 
     // Solid Bottom Bar (Driver name & score)
@@ -510,7 +499,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '--%';
 
     ctx.save();
-    ctx.font = '900 18px "Segoe UI", Montserrat, Arial, sans-serif';
+    ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
     const scoreW = ctx.measureText(scoreText).width;
 
     ctx.textAlign = 'right';
@@ -519,7 +508,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.fillText(scoreText, x + w - 14, barY + barHeight / 2);
 
     ctx.textAlign = 'left';
-    ctx.font = '900 16px "Segoe UI", Montserrat, Arial, sans-serif';
+    ctx.font = '900 18px "Segoe UI", Montserrat, Arial, sans-serif';
     ctx.fillStyle = barTextColor;
     const maxNameW = w - scoreW - 32;
     const fittedName = fitText(ctx, cleanName, maxNameW);
@@ -533,7 +522,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.beginPath();
     drawRoundRect(ctx, x, y, w, h, cardRadius);
     ctx.strokeStyle = accent;
-    ctx.lineWidth = rank === 1 ? 2.5 : 1.8;
+    ctx.lineWidth = rank === 1 ? 2.8 : 2.0;
     if (rank === 1) {
       ctx.shadowColor = accent;
       ctx.shadowBlur = 10;
@@ -574,20 +563,20 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 
       // Rank Number
       ctx.save();
-      ctx.font = '900 18px "Segoe UI", Arial, sans-serif';
+      ctx.font = '900 21px "Segoe UI", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0f172a';
       ctx.fillText(String(rankNum), panelX + 32, rowCenterY);
       ctx.restore();
 
-      // Avatar
-      const avX = panelX + 74;
-      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 16, '#cbd5e1', 1.5);
+      // Avatar (Enlarged to radius 21px)
+      const avX = panelX + 78;
+      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 21, '#cbd5e1', 2.0);
 
-      // Name & Score
+      // Name & Score (Enlarged)
       ctx.save();
-      ctx.font = '900 15px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.font = '900 17px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0f172a';
@@ -598,16 +587,16 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '--%';
 
       ctx.save();
-      ctx.font = '900 17px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
       const scoreW = ctx.measureText(scoreText).width;
       ctx.restore();
 
       const maxNameW = panelW - 130 - scoreW - 30;
       const fittedName = fitText(ctx, cleanName, maxNameW);
-      ctx.fillText(fittedName, panelX + 104, rowCenterY);
+      ctx.fillText(fittedName, panelX + 112, rowCenterY);
 
       // Score on right
-      ctx.font = '900 17px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0f172a';
@@ -665,6 +654,90 @@ async function handleArcaneLeaderboardCommand(message, type, client) {
   await message.reply({ embeds: [embed], files: [attachment] });
 }
 
+/**
+ * Resets Aura records for a specific member or all members
+ */
+async function resetArcaneAura(targetUserId = null) {
+  if (targetUserId) {
+    const existing = arcaneScoresCache.get(targetUserId);
+    if (existing) {
+      existing.aura = null;
+      if (existing.iq === null) {
+        arcaneScoresCache.delete(targetUserId);
+      }
+    }
+    if (dbRef) {
+      await dbRef.collection('weekly_arcane_scores').doc(targetUserId).set({
+        aura: null,
+        updatedAt: new Date()
+      }, { merge: true }).catch(e => console.error('[Weekly Arcane] Firestore aura reset error:', e.message));
+    }
+  } else {
+    for (const [uid, item] of arcaneScoresCache.entries()) {
+      item.aura = null;
+      if (item.iq === null) {
+        arcaneScoresCache.delete(uid);
+      }
+    }
+    if (dbRef) {
+      try {
+        const snap = await dbRef.collection('weekly_arcane_scores').get();
+        if (!snap.empty) {
+          const batch = dbRef.batch();
+          snap.forEach(doc => {
+            batch.set(doc.ref, { aura: null, updatedAt: new Date() }, { merge: true });
+          });
+          await batch.commit();
+        }
+      } catch (e) {
+        console.error('[Weekly Arcane] Firestore batch aura reset error:', e.message);
+      }
+    }
+  }
+}
+
+/**
+ * Resets IQ records for a specific member or all members
+ */
+async function resetArcaneIq(targetUserId = null) {
+  if (targetUserId) {
+    const existing = arcaneScoresCache.get(targetUserId);
+    if (existing) {
+      existing.iq = null;
+      if (existing.aura === null) {
+        arcaneScoresCache.delete(targetUserId);
+      }
+    }
+    if (dbRef) {
+      await dbRef.collection('weekly_arcane_scores').doc(targetUserId).set({
+        iq: null,
+        updatedAt: new Date()
+      }, { merge: true }).catch(e => console.error('[Weekly Arcane] Firestore iq reset error:', e.message));
+    }
+  } else {
+    for (const [uid, item] of arcaneScoresCache.entries()) {
+      item.iq = null;
+      if (item.aura === null) {
+        arcaneScoresCache.delete(uid);
+      }
+    }
+    if (dbRef) {
+      try {
+        const snap = await dbRef.collection('weekly_arcane_scores').get();
+        if (!snap.empty) {
+          const batch = dbRef.batch();
+          snap.forEach(doc => {
+            batch.set(doc.ref, { iq: null, updatedAt: new Date() }, { merge: true });
+          });
+          await batch.commit();
+        }
+      } catch (e) {
+        console.error('[Weekly Arcane] Firestore batch iq reset error:', e.message);
+      }
+    }
+  }
+}
+
 module.exports = {
   AUTHORIZED_ARCANE_IDS,
   arcaneScoresCache,
@@ -673,5 +746,7 @@ module.exports = {
   recordArcaneIq,
   getTopArcaneMembers,
   generateArcaneLeaderboardCard,
-  handleArcaneLeaderboardCommand
+  handleArcaneLeaderboardCommand,
+  resetArcaneAura,
+  resetArcaneIq
 };

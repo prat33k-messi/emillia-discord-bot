@@ -1,11 +1,11 @@
 const { createVerificationPanelPayload, handleVerificationButton, handleChallengeButton, handleStaffApprovalButton } = require('./verification-feature');
 const { handleAntiSpam } = require('./antispam-feature');
-const { getMemberLevelBoost, rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
+const { getMemberLevelBoost, rollAuraPercent, buildAuraActionRow, buildIqActionRow, loadUserFixedStats, handleFixedStatsButton, resetAllFixedStats, resetFixedAura, resetFixedIq, fixedAuraCache, fixedIqCache } = require('./fixed-stats-feature');
 const { initInviteTracker, trackMemberJoin, checkAndRevokeUserInvites, getInviteReportForUser, buildInviteReportEmbed } = require('./invite-feature');
 const { initMusic, handlePlayCommand, handleLockUpcoming, handleUnlockUpcoming, sendAikoMusicMenu, handleAikoMusicSelect, handleMusicButton, handleOtherMusicCommands, optimizeVoiceChannelBitrate } = require('./music-feature');
 const { initVerificationPortal } = require('./verification-portal');
 const { initLoyalTagSystem, sweepAllMembersLoyalRole } = require('./loyal-tag-feature');
-const { initArcaneFeature, recordArcaneAura, recordArcaneIq, handleArcaneLeaderboardCommand } = require('./arcane-feature');
+const { initArcaneFeature, recordArcaneAura, recordArcaneIq, handleArcaneLeaderboardCommand, resetArcaneAura, resetArcaneIq } = require('./arcane-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -2303,10 +2303,7 @@ async function buildAuraPayload(targetMember, guild, authorId = null) {
   let fixedScore = null;
   const isSelf = !authorId || targetMember.id === authorId;
 
-  if (targetMember.id === '1527723712122720257') {
-    fixedScore = 98;
-    fixedAuraCache.set('1527723712122720257', 98);
-  } else if (fixedAuraCache.has(targetMember.id)) {
+  if (fixedAuraCache.has(targetMember.id)) {
     fixedScore = fixedAuraCache.get(targetMember.id);
   } else if (db) {
     const stats = await loadUserFixedStats(db, targetMember.id);
@@ -3506,10 +3503,7 @@ async function buildIqPayload(targetMember, guild, authorId = null) {
   let fixedData = null;
   const isSelf = !authorId || targetMember.id === authorId;
 
-  if (targetMember.id === '1527723712122720257') {
-    fixedData = { tierIndex: 20, score: 99 };
-    fixedIqCache.set('1527723712122720257', fixedData);
-  } else if (fixedIqCache.has(targetMember.id)) {
+  if (fixedIqCache.has(targetMember.id)) {
     fixedData = fixedIqCache.get(targetMember.id);
   } else if (db) {
     const stats = await loadUserFixedStats(db, targetMember.id);
@@ -5721,6 +5715,80 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    const isAuraResetCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aurareset' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'resetaura' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auralbreset' ||
+      cleanQuery.startsWith('aurareset') || cleanQuery.startsWith('resetaura') || cleanQuery.startsWith('auralbreset') ||
+      lowerQuery.startsWith('aurareset') || lowerQuery.startsWith('resetaura') || lowerQuery.startsWith('auralbreset')
+    );
+
+    if (isAuraResetCmd) {
+      const isMaster = message.author.id === '1013822181379162142' || AUTHORIZED_ARCANE_IDS.has(message.author.id) || (message.guild && message.guild.ownerId === message.author.id);
+      if (!isMaster) {
+        await message.reply("Mou! 🌸 Only authorized guardians can reset Aura records! ❄️");
+        return;
+      }
+
+      await message.channel.sendTyping().catch(() => {});
+
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      let targetId = targetMember ? targetMember.id : null;
+      if (!targetId) {
+        const arg = cleanQuery.replace(/^(aurareset|resetaura|auralbreset)\s*/i, '').trim();
+        if (arg && /^\d{17,19}$/.test(arg)) {
+          targetId = arg;
+        }
+      }
+
+      await resetArcaneAura(targetId);
+      await resetFixedAura(db, targetId);
+
+      if (targetId) {
+        await sendContainer(message, `✨ **Aura Reset:** <@${targetId}>'s Aura leaderboard score & custom/fixed aura have been completely reset to normal!`);
+      } else {
+        await sendContainer(message, `✨ **Full Aura Reset Complete:** All Aura leaderboard scores and custom/fixed auras have been wiped! All members will now roll fresh as normal!`);
+      }
+      return;
+    }
+
+    const isIqResetCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqreset' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'resetiq' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqlbreset' ||
+      cleanQuery.startsWith('iqreset') || cleanQuery.startsWith('resetiq') || cleanQuery.startsWith('iqlbreset') ||
+      lowerQuery.startsWith('iqreset') || lowerQuery.startsWith('resetiq') || lowerQuery.startsWith('iqlbreset')
+    );
+
+    if (isIqResetCmd) {
+      const isMaster = message.author.id === '1013822181379162142' || AUTHORIZED_ARCANE_IDS.has(message.author.id) || (message.guild && message.guild.ownerId === message.author.id);
+      if (!isMaster) {
+        await message.reply("Mou! 🌸 Only authorized guardians can reset IQ records! ❄️");
+        return;
+      }
+
+      await message.channel.sendTyping().catch(() => {});
+
+      let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
+      let targetId = targetMember ? targetMember.id : null;
+      if (!targetId) {
+        const arg = cleanQuery.replace(/^(iqreset|resetiq|iqlbreset)\s*/i, '').trim();
+        if (arg && /^\d{17,19}$/.test(arg)) {
+          targetId = arg;
+        }
+      }
+
+      await resetArcaneIq(targetId);
+      await resetFixedIq(db, targetId);
+
+      if (targetId) {
+        await sendContainer(message, `🧠 **IQ Reset:** <@${targetId}>'s IQ leaderboard score & custom/fixed IQ have been completely reset to normal!`);
+      } else {
+        await sendContainer(message, `🧠 **Full IQ Reset Complete:** All IQ leaderboard scores and custom/fixed IQs have been wiped! All members will now roll fresh as normal!`);
+      }
+      return;
+    }
+
     const isAuraCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aura' || (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auras' ||
       cleanQuery === 'aura' || cleanQuery === 'auras' ||
@@ -5837,8 +5905,8 @@ client.on('messageCreate', async (message) => {
       'timeout', 'mute', 'untimeout', 'unmute',
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
-      'aura', 'auras', 'auraleaderboard', 'auralb', 'auratop', 'auraboard',
-      'iq', 'iqleaderboard', 'iqlb', 'iqtop', 'iqboard', 'bestie', 'besties', 'av', 'avatar', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands'
+      'aura', 'auras', 'auraleaderboard', 'auralb', 'auratop', 'auraboard', 'aurareset', 'resetaura', 'auralbreset',
+      'iq', 'iqleaderboard', 'iqlb', 'iqtop', 'iqboard', 'iqreset', 'resetiq', 'iqlbreset', 'bestie', 'besties', 'av', 'avatar', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 

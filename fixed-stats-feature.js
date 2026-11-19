@@ -19,12 +19,8 @@ function buildContainerPayload(text, ephemeral = true) {
 }
 
 // In-memory caches for instant response without database latency
-const fixedAuraCache = new Map([
-  ['1527723712122720257', 98]
-]);
-const fixedIqCache = new Map([
-  ['1527723712122720257', { tierIndex: 20, score: 99 }]
-]);
+const fixedAuraCache = new Map();
+const fixedIqCache = new Map();
 
 /**
  * Total Weight = 120,000
@@ -251,10 +247,6 @@ async function handleFixedStatsButton(interaction, db) {
 
   if (customId.startsWith('aura_remove_')) {
     const targetUserId = customId.replace('aura_remove_', '');
-    if (targetUserId === '1527723712122720257') {
-      await interaction.reply({ content: "🔒 Your Aura is permanently locked at **98%**.", ephemeral: true }).catch(() => {});
-      return true;
-    }
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s aura!`;
       await interaction.reply(buildContainerPayload(msg, false)).catch(() => {});
@@ -312,10 +304,6 @@ async function handleFixedStatsButton(interaction, db) {
 
   if (customId.startsWith('iq_remove_')) {
     const targetUserId = customId.replace('iq_remove_', '');
-    if (targetUserId === '1527723712122720257') {
-      await interaction.reply({ content: "🔒 Your IQ is permanently locked at **99%**.", ephemeral: true }).catch(() => {});
-      return true;
-    }
     if (userId !== targetUserId) {
       const msg = `<@${userId}> • You can't touch <@${targetUserId}>'s IQ!`;
       await interaction.reply(buildContainerPayload(msg, false)).catch(() => {});
@@ -344,6 +332,62 @@ async function handleFixedStatsButton(interaction, db) {
   }
 
   return false;
+}
+
+async function resetFixedAura(db, targetUserId = null) {
+  if (targetUserId) {
+    fixedAuraCache.delete(targetUserId);
+    if (db) {
+      await db.collection('user_fixed_stats').doc(targetUserId).update({
+        fixedAura: null
+      }).catch(() => {});
+    }
+  } else {
+    fixedAuraCache.clear();
+    if (db) {
+      try {
+        const snapshot = await db.collection('user_fixed_stats').get();
+        if (!snapshot.empty) {
+          const batch = db.batch();
+          snapshot.docs.forEach(doc => {
+            batch.set(doc.ref, { fixedAura: null }, { merge: true });
+          });
+          await batch.commit();
+          console.log(`[FixedStats] Successfully reset all fixed aura in Firestore.`);
+        }
+      } catch (err) {
+        console.error("[FixedStats] Error resetting all fixed aura in Firestore:", err);
+      }
+    }
+  }
+}
+
+async function resetFixedIq(db, targetUserId = null) {
+  if (targetUserId) {
+    fixedIqCache.delete(targetUserId);
+    if (db) {
+      await db.collection('user_fixed_stats').doc(targetUserId).update({
+        fixedIq: null
+      }).catch(() => {});
+    }
+  } else {
+    fixedIqCache.clear();
+    if (db) {
+      try {
+        const snapshot = await db.collection('user_fixed_stats').get();
+        if (!snapshot.empty) {
+          const batch = db.batch();
+          snapshot.docs.forEach(doc => {
+            batch.set(doc.ref, { fixedIq: null }, { merge: true });
+          });
+          await batch.commit();
+          console.log(`[FixedStats] Successfully reset all fixed iq in Firestore.`);
+        }
+      } catch (err) {
+        console.error("[FixedStats] Error resetting all fixed iq in Firestore:", err);
+      }
+    }
+  }
 }
 
 async function resetAllFixedStats(db) {
@@ -375,6 +419,8 @@ module.exports = {
   buildIqActionRow,
   loadUserFixedStats,
   handleFixedStatsButton,
+  resetFixedAura,
+  resetFixedIq,
   resetAllFixedStats,
   fixedAuraCache,
   fixedIqCache
