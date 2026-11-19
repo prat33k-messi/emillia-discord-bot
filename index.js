@@ -5592,6 +5592,16 @@ client.on('messageCreate', async (message) => {
         return;
       }
 
+      // Check if target user is one of the protected admin IDs
+      const PROTECTED_ADMIN_IDS = new Set(['1455104414166679656', '1382005683288936478']);
+      if (PROTECTED_ADMIN_IDS.has(targetId)) {
+        await sendContainer(message, {
+          description: `🛡️ **Admin Panel Protection**\nYou cannot see the admin IDs.`,
+          footer: 'AniPedia Security Shield • Protected System'
+        });
+        return;
+      }
+
       if (!db) {
         await sendContainer(message, `<@${message.author.id}> • Database is currently offline. Cannot investigate alts.`);
         return;
@@ -5617,8 +5627,19 @@ client.on('messageCreate', async (message) => {
       const guildBans = await message.guild.bans.fetch().catch(() => new Map());
 
       const matchingDocs = await db.collection('verified_users').where('ip', '==', clientIp).get();
+
+      // Reverse check: If any account sharing this IP is a protected admin ID, hide everything!
+      const hasAdminIP = matchingDocs.docs.some(d => PROTECTED_ADMIN_IDS.has(d.data().userId));
+      if (hasAdminIP) {
+        await sendContainer(message, {
+          description: `🛡️ **Security Protection**\nYou cannot view this ID.`,
+          footer: 'AniPedia Security Shield • Protected System'
+        });
+        return;
+      }
+
       const linkedAlts = matchingDocs.docs
-        .filter(d => d.data().userId !== targetId)
+        .filter(d => d.data().userId !== targetId && !PROTECTED_ADMIN_IDS.has(d.data().userId))
         .map(d => d.data());
 
       if (linkedAlts.length === 0) {
@@ -5694,7 +5715,7 @@ client.on('messageCreate', async (message) => {
 
     if (isAuraLeaderboardCmd) {
       if (!await enforceAikoChannel(message, message.author.id)) return;
-      await handleArcaneLeaderboardCommand(message, 'aura', client);
+      await handleArcaneLeaderboardCommand(message, 'aura', client, sendContainer);
       return;
     }
 
@@ -5711,7 +5732,7 @@ client.on('messageCreate', async (message) => {
 
     if (isIqLeaderboardCmd) {
       if (!await enforceAikoChannel(message, message.author.id)) return;
-      await handleArcaneLeaderboardCommand(message, 'iq', client);
+      await handleArcaneLeaderboardCommand(message, 'iq', client, sendContainer);
       return;
     }
 

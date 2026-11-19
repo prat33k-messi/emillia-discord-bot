@@ -312,6 +312,69 @@ async function drawCircularAvatar(ctx, avatarUrl, cx, cy, radius, strokeColor, l
 }
 
 /**
+ * Draws a square/rectangular avatar with rounded corners in cover mode
+ */
+async function drawSquareAvatar(ctx, avatarUrl, x, y, size, strokeColor, lineWidth = 3.5, cornerRadius = 16) {
+  ctx.save();
+  ctx.beginPath();
+  drawRoundRect(ctx, x, y, size, size, cornerRadius);
+  ctx.closePath();
+  ctx.clip();
+
+  // Dark placeholder fill
+  ctx.fillStyle = '#141a29';
+  ctx.fillRect(x, y, size, size);
+
+  if (avatarUrl) {
+    try {
+      const img = await loadImage(avatarUrl);
+      const imgW = img.width || size;
+      const imgH = img.height || size;
+      const minDim = Math.min(imgW, imgH);
+      const sx = (imgW - minDim) / 2;
+      const sy = (imgH - minDim) / 2;
+      ctx.drawImage(img, sx, sy, minDim, minDim, x, y, size, size);
+    } catch (e) {
+      ctx.fillStyle = '#374151';
+      ctx.fillRect(x, y, size, size);
+    }
+  }
+
+  ctx.restore();
+
+  // Glowing outer border
+  if (strokeColor && lineWidth > 0) {
+    ctx.save();
+    ctx.beginPath();
+    drawRoundRect(ctx, x, y, size, size, cornerRadius);
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = lineWidth;
+    ctx.shadowColor = strokeColor;
+    ctx.shadowBlur = 10;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/**
+ * Calculates rank delta / movement between previous and current rank
+ */
+function getRankDelta(currRank, prevRank) {
+  if (typeof prevRank !== 'number' || prevRank <= 0) {
+    return { text: '-', color: '#94a3b8', diff: 0, arrow: '' };
+  }
+  if (currRank < prevRank) {
+    const diff = prevRank - currRank;
+    return { text: `▲ +${diff}`, color: '#10b981', diff, arrow: '▲' };
+  }
+  if (currRank > prevRank) {
+    const diff = currRank - prevRank;
+    return { text: `▼ -${diff}`, color: '#ef4444', diff: -diff, arrow: '▼' };
+  }
+  return { text: '-', color: '#94a3b8', diff: 0, arrow: '' };
+}
+
+/**
  * Generates the Weekly Arcane Leaderboard Graphic using Canvas
  * Inspired by F1 Grand Prix Podium (Top 3) + Clean White Panel (Ranks 4-10)
  */
@@ -322,7 +385,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 
   const bottomMembers = topMembers.slice(3, 10);
   const rowCount = Math.max(1, bottomMembers.length);
-  const rowHeight = 58;
+  const rowHeight = 60;
   const panelH = rowCount * rowHeight + 16;
   const panelY = 472;
   const height = panelY + panelH + 25;
@@ -403,8 +466,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       bgTop: '#261509',
       bgBot: '#100a06',
       stencilSize: 85,
-      avY: 244,
-      avRad: 66,
+      boxX: 43.5,
+      boxY: 175,
+      boxSize: 188,
       barTextColor: '#000000'
     },
     {
@@ -418,8 +482,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       bgTop: '#082822',
       bgBot: '#051412',
       stencilSize: 95,
-      avY: 226,
-      avRad: 74,
+      boxX: 282,
+      boxY: 158,
+      boxSize: 195,
       barTextColor: '#000000'
     },
     {
@@ -433,16 +498,17 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       bgTop: '#290909',
       bgBot: '#120505',
       stencilSize: 80,
-      avY: 252,
-      avRad: 64,
+      boxX: 530.5,
+      boxY: 185,
+      boxSize: 184,
       barTextColor: '#ffffff'
     }
   ];
 
   for (const card of podiumCards) {
-    const { rank, data, x, y, w, h, accent, bgTop, bgBot, stencilSize, avY, avRad, barTextColor } = card;
+    const { rank, data, x, y, w, h, accent, bgTop, bgBot, stencilSize, boxX, boxY, boxSize, barTextColor } = card;
     const cardRadius = 16;
-    const barHeight = 54;
+    const barHeight = 56;
     const barY = y + h - barHeight;
 
     // Clip to rounded card
@@ -480,16 +546,15 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.fillText(String(rank), x + 16, y + 10);
     ctx.restore();
 
-    // Circular Avatar (Enlarged)
-    const avX = x + w / 2;
-    await drawCircularAvatar(ctx, data?.avatarUrl, avX, avY, avRad, accent, rank === 1 ? 4.5 : 4.0);
+    // Prominent Square Photo Box covering middle of card
+    await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, accent, rank === 1 ? 4.5 : 3.5, 16);
 
-    // Gold Crown for Rank 1
+    // Gold Crown for Rank 1 above the photo box
     if (rank === 1) {
-      drawCrown(ctx, avX, avY - avRad - 22, 48, 28);
+      drawCrown(ctx, x + w / 2, boxY - 24, 48, 28);
     }
 
-    // Solid Bottom Bar (Driver name & score)
+    // Solid Bottom Bar (Driver name & score + rank movement)
     ctx.fillStyle = accent;
     ctx.fillRect(x, barY, w, barHeight);
 
@@ -498,21 +563,36 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     const scoreVal = data ? (isAura ? data.aura : data.iq) : null;
     const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '--%';
 
+    // Movement delta calculation
+    const prevRank = isAura ? data?.previousAuraRank : data?.previousIqRank;
+    const delta = getRankDelta(rank, prevRank);
+
     ctx.save();
     ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
     const scoreW = ctx.measureText(scoreText).width;
 
+    // Draw Score on right
     ctx.textAlign = 'right';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = barTextColor;
-    ctx.fillText(scoreText, x + w - 14, barY + barHeight / 2);
+    ctx.fillText(scoreText, x + w - 12, barY + barHeight / 2);
 
+    // Draw Movement Delta next to score if available
+    let deltaW = 0;
+    if (delta.diff !== 0) {
+      ctx.font = '900 13px "Segoe UI", Arial, sans-serif';
+      deltaW = ctx.measureText(delta.text).width + 6;
+      ctx.fillStyle = delta.diff > 0 ? '#052e16' : '#450a0a';
+      ctx.fillText(delta.text, x + w - 12 - scoreW - 6, barY + barHeight / 2);
+    }
+
+    // Draw Driver / Player Name on left (Large bold font)
     ctx.textAlign = 'left';
     ctx.font = '900 18px "Segoe UI", Montserrat, Arial, sans-serif';
     ctx.fillStyle = barTextColor;
-    const maxNameW = w - scoreW - 32;
+    const maxNameW = w - scoreW - deltaW - 24;
     const fittedName = fitText(ctx, cleanName, maxNameW);
-    ctx.fillText(fittedName, x + 14, barY + barHeight / 2);
+    ctx.fillText(fittedName, x + 12, barY + barHeight / 2);
     ctx.restore();
 
     ctx.restore(); // Exit card clipping
@@ -561,20 +641,32 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       const rowY = panelY + 8 + i * rowHeight;
       const rowCenterY = rowY + rowHeight / 2;
 
-      // Rank Number
+      // 1. Rank Number
       ctx.save();
       ctx.font = '900 21px "Segoe UI", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0f172a';
-      ctx.fillText(String(rankNum), panelX + 32, rowCenterY);
+      ctx.fillText(String(rankNum), panelX + 26, rowCenterY);
       ctx.restore();
 
-      // Avatar (Enlarged to radius 21px)
-      const avX = panelX + 78;
+      // 2. Rank Movement Delta (e.g. ▲ +5 / ▼ -2 / -)
+      const prevRank = isAura ? member.previousAuraRank : member.previousIqRank;
+      const delta = getRankDelta(rankNum, prevRank);
+
+      ctx.save();
+      ctx.font = '900 13px "Segoe UI", Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = delta.color;
+      ctx.fillText(delta.text, panelX + 56, rowCenterY);
+      ctx.restore();
+
+      // 3. Avatar (Enlarged to radius 21px)
+      const avX = panelX + 96;
       await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 21, '#cbd5e1', 2.0);
 
-      // Name & Score (Enlarged)
+      // 4. Name & Score (Enlarged)
       ctx.save();
       ctx.font = '900 17px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.textAlign = 'left';
@@ -591,11 +683,11 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       const scoreW = ctx.measureText(scoreText).width;
       ctx.restore();
 
-      const maxNameW = panelW - 130 - scoreW - 30;
+      const maxNameW = panelW - 145 - scoreW - 30;
       const fittedName = fitText(ctx, cleanName, maxNameW);
-      ctx.fillText(fittedName, panelX + 112, rowCenterY);
+      ctx.fillText(fittedName, panelX + 130, rowCenterY);
 
-      // Score on right
+      // 5. Score on right
       ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
@@ -621,9 +713,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 }
 
 /**
- * Handles <auraleaderboard and <iqleaderboard execution
+ * Handles <auraleaderboard and <iqleaderboard execution with Container V2 styling
  */
-async function handleArcaneLeaderboardCommand(message, type, client) {
+async function handleArcaneLeaderboardCommand(message, type, client, sendContainer = null) {
   const authorId = message.author.id;
   const isMaster = message.author.id === '1013822181379162142' || AUTHORIZED_ARCANE_IDS.has(authorId);
 
@@ -643,41 +735,64 @@ async function handleArcaneLeaderboardCommand(message, type, client) {
   const cardBuffer = await generateArcaneLeaderboardCard(type, topMembers);
   const attachment = new AttachmentBuilder(cardBuffer, { name: `${type}_leaderboard.png` });
 
-  const embed = new EmbedBuilder()
-    .setColor(isAura ? 0xBF5AF2 : 0x38BDF8)
-    .setTitle(`🌟  ${toSmallCaps(`Weekly Arcane ${label} Leaderboard`)}`)
-    .setDescription(`### 🏆 **Weekly Arcane**`)
-    .setImage(`attachment://${type}_leaderboard.png`)
-    .setFooter({ text: `${toSmallCaps('AniPedia Weekly Arcane')} • ${guild?.name || 'Sanctuary'}`, iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
-    .setTimestamp();
+  if (typeof sendContainer === 'function') {
+    await sendContainer(message, {
+      title: `🌟  ${toSmallCaps(`Weekly Arcane ${label} Leaderboard`)}`,
+      description: `### 🏆 **Weekly Arcane**`,
+      image: `attachment://${type}_leaderboard.png`,
+      footer: `${toSmallCaps('AniPedia Weekly Arcane')} • ${guild?.name || 'Sanctuary'}`,
+      timestamp: Date.now(),
+      files: [attachment]
+    });
+  } else {
+    const embed = new EmbedBuilder()
+      .setColor(isAura ? 0xBF5AF2 : 0x38BDF8)
+      .setTitle(`🌟  ${toSmallCaps(`Weekly Arcane ${label} Leaderboard`)}`)
+      .setDescription(`### 🏆 **Weekly Arcane**`)
+      .setImage(`attachment://${type}_leaderboard.png`)
+      .setFooter({ text: `${toSmallCaps('AniPedia Weekly Arcane')} • ${guild?.name || 'Sanctuary'}`, iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
+      .setTimestamp();
 
-  await message.reply({ embeds: [embed], files: [attachment] });
+    await message.reply({ embeds: [embed], files: [attachment] });
+  }
 }
 
 /**
  * Resets Aura records for a specific member or all members
+ * Snapshots previous ranks before wiping scores so rank movement indicators work!
  */
 async function resetArcaneAura(targetUserId = null) {
+  const currentTop = await getTopArcaneMembers('aura');
+  const rankMap = new Map();
+  currentTop.forEach((m, idx) => {
+    rankMap.set(m.userId, idx + 1);
+  });
+
   if (targetUserId) {
     const existing = arcaneScoresCache.get(targetUserId);
     if (existing) {
+      if (rankMap.has(targetUserId)) {
+        existing.previousAuraRank = rankMap.get(targetUserId);
+      }
       existing.aura = null;
-      if (existing.iq === null) {
+      if (existing.iq === null && !existing.previousAuraRank && !existing.previousIqRank) {
         arcaneScoresCache.delete(targetUserId);
       }
     }
     if (dbRef) {
+      const prevRank = rankMap.get(targetUserId) || null;
       await dbRef.collection('weekly_arcane_scores').doc(targetUserId).set({
         aura: null,
+        ...(prevRank ? { previousAuraRank: prevRank } : {}),
         updatedAt: new Date()
       }, { merge: true }).catch(e => console.error('[Weekly Arcane] Firestore aura reset error:', e.message));
     }
   } else {
     for (const [uid, item] of arcaneScoresCache.entries()) {
-      item.aura = null;
-      if (item.iq === null) {
-        arcaneScoresCache.delete(uid);
+      if (rankMap.has(uid)) {
+        item.previousAuraRank = rankMap.get(uid);
       }
+      item.aura = null;
     }
     if (dbRef) {
       try {
@@ -685,7 +800,12 @@ async function resetArcaneAura(targetUserId = null) {
         if (!snap.empty) {
           const batch = dbRef.batch();
           snap.forEach(doc => {
-            batch.set(doc.ref, { aura: null, updatedAt: new Date() }, { merge: true });
+            const prevRank = rankMap.get(doc.id) || null;
+            batch.set(doc.ref, {
+              aura: null,
+              ...(prevRank ? { previousAuraRank: prevRank } : {}),
+              updatedAt: new Date()
+            }, { merge: true });
           });
           await batch.commit();
         }
@@ -698,28 +818,40 @@ async function resetArcaneAura(targetUserId = null) {
 
 /**
  * Resets IQ records for a specific member or all members
+ * Snapshots previous ranks before wiping scores so rank movement indicators work!
  */
 async function resetArcaneIq(targetUserId = null) {
+  const currentTop = await getTopArcaneMembers('iq');
+  const rankMap = new Map();
+  currentTop.forEach((m, idx) => {
+    rankMap.set(m.userId, idx + 1);
+  });
+
   if (targetUserId) {
     const existing = arcaneScoresCache.get(targetUserId);
     if (existing) {
+      if (rankMap.has(targetUserId)) {
+        existing.previousIqRank = rankMap.get(targetUserId);
+      }
       existing.iq = null;
-      if (existing.aura === null) {
+      if (existing.aura === null && !existing.previousAuraRank && !existing.previousIqRank) {
         arcaneScoresCache.delete(targetUserId);
       }
     }
     if (dbRef) {
+      const prevRank = rankMap.get(targetUserId) || null;
       await dbRef.collection('weekly_arcane_scores').doc(targetUserId).set({
         iq: null,
+        ...(prevRank ? { previousIqRank: prevRank } : {}),
         updatedAt: new Date()
       }, { merge: true }).catch(e => console.error('[Weekly Arcane] Firestore iq reset error:', e.message));
     }
   } else {
     for (const [uid, item] of arcaneScoresCache.entries()) {
-      item.iq = null;
-      if (item.aura === null) {
-        arcaneScoresCache.delete(uid);
+      if (rankMap.has(uid)) {
+        item.previousIqRank = rankMap.get(uid);
       }
+      item.iq = null;
     }
     if (dbRef) {
       try {
@@ -727,7 +859,12 @@ async function resetArcaneIq(targetUserId = null) {
         if (!snap.empty) {
           const batch = dbRef.batch();
           snap.forEach(doc => {
-            batch.set(doc.ref, { iq: null, updatedAt: new Date() }, { merge: true });
+            const prevRank = rankMap.get(doc.id) || null;
+            batch.set(doc.ref, {
+              iq: null,
+              ...(prevRank ? { previousIqRank: prevRank } : {}),
+              updatedAt: new Date()
+            }, { merge: true });
           });
           await batch.commit();
         }
