@@ -451,10 +451,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       accent: '#ff8000',
       bgTop: '#261509',
       bgBot: '#100a06',
-      stencilSize: 85,
-      boxX: 43.5,
-      boxY: 175,
-      boxSize: 188,
+      stencilSize: 64,
+      boxX: 50,
+      boxY: 198,
+      boxSize: 175,
       barTextColor: '#000000'
     },
     {
@@ -467,10 +467,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       accent: '#00d2be',
       bgTop: '#082822',
       bgBot: '#051412',
-      stencilSize: 95,
-      boxX: 282,
-      boxY: 158,
-      boxSize: 195,
+      stencilSize: 78,
+      boxX: 287,
+      boxY: 188,
+      boxSize: 185,
       barTextColor: '#000000'
     },
     {
@@ -483,10 +483,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       accent: '#ef4444',
       bgTop: '#290909',
       bgBot: '#120505',
-      stencilSize: 80,
-      boxX: 530.5,
-      boxY: 185,
-      boxSize: 184,
+      stencilSize: 56,
+      boxX: 537.5,
+      boxY: 204,
+      boxSize: 170,
       barTextColor: '#ffffff'
     }
   ];
@@ -523,22 +523,24 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     }
     ctx.restore();
 
-    // Large Stencil Rank Number in top-left
-    ctx.save();
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.font = `900 ${stencilSize}px "Segoe UI", Arial Black, Impact, sans-serif`;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
-    ctx.fillText(String(rank), x + 16, y + 10);
-    ctx.restore();
-
-    // Prominent Square Photo Box covering middle of card
+    // Prominent Square Photo Box covering middle of card (drawn first)
     await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, accent, rank === 1 ? 4.5 : 3.5, 16);
 
     // Gold Crown for Rank 1 above the photo box
     if (rank === 1) {
-      drawCrown(ctx, x + w / 2, boxY - 24, 48, 28);
+      drawCrown(ctx, x + w / 2, boxY - 20, 48, 28);
     }
+
+    // Large Stencil Rank Number in top-left (drawn ON TOP with shadow so it is NEVER hidden)
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.font = `900 ${stencilSize}px "Segoe UI", Arial Black, Impact, sans-serif`;
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 8;
+    ctx.fillText(String(rank), x + 16, y + 8);
+    ctx.restore();
 
     // Solid Bottom Bar (Driver name & score + rank movement)
     ctx.fillStyle = accent;
