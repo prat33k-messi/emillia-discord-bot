@@ -5537,18 +5537,23 @@ client.on('messageCreate', async (message) => {
 
     if (isAltCmd) {
       const modTier = getMemberTier(message.member);
-      const isStaffAuthorized = modTier >= 3 ||
+      const isStaffAuthorized = modTier >= 2 ||
         message.author.id === '1013822181379162142' ||
         message.author.id === '750056830654480510' ||
         isWhitelistedUser(message.author) ||
         (message.member && (
           message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SHOGUN) ||
           message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.COMMUNITY_ADMIN) ||
-          message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR)
+          message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR) ||
+          (OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR && message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR)) ||
+          message.member.roles.cache.some(r => {
+            const n = r.name.toLowerCase().trim();
+            return n === 'senior moderator' || n === 'sr moderator' || n === 'sr. moderator' || n === 'senior mod';
+          })
         ));
 
       if (!isStaffAuthorized) {
-        await message.reply("Mou! 🛡️ Only **Shogun**, **Community Admins**, and **Supervisors** have permission to investigate alt accounts!");
+        await message.reply("Mou! 🛡️ Only **Senior Moderators**, **Supervisors**, **Community Admins**, and **Shogun** have permission to investigate alt accounts!");
         return;
       }
 
