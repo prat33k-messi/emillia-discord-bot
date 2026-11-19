@@ -412,27 +412,13 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   }
   ctx.restore();
 
-  // 2. Top Right: ANIPEDIA + Flag (Austrian GP inspired)
+  // 2. Top Right: ANIPEDIA Header
   ctx.save();
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  ctx.font = '900 18px "Segoe UI", Montserrat, Arial, sans-serif';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText('ANIPEDIA', width - 60, 36);
-
-  const flagX = width - 52;
-  const flagY = 28;
-  const flagW = 26;
-  const flagH = 16;
-  ctx.fillStyle = '#ef4444';
-  ctx.fillRect(flagX, flagY, flagW, 5);
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(flagX, flagY + 5, flagW, 6);
-  ctx.fillStyle = '#ef4444';
-  ctx.fillRect(flagX, flagY + 11, flagW, 5);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(flagX, flagY, flagW, flagH);
+  ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.fillText('ANIPEDIA', width - 25, 36);
   ctx.restore();
 
   // 3. Top Left: Subtitle & Title
@@ -739,7 +725,6 @@ async function handleArcaneLeaderboardCommand(message, type, client, sendContain
     await sendContainer(message, {
       title: `🌟  ${toSmallCaps(`Weekly Arcane ${label} Leaderboard`)}`,
       description: `### 🏆 **Weekly Arcane**`,
-      image: `attachment://${type}_leaderboard.png`,
       footer: `${toSmallCaps('AniPedia Weekly Arcane')} • ${guild?.name || 'Sanctuary'}`,
       timestamp: Date.now(),
       files: [attachment]

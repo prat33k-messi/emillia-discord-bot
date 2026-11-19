@@ -916,15 +916,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
   }
 
-  if (true) { /* cleaned */ } else if (false) {
-  // clean
-  // clean
-
-  } else {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
-  }
-
-  if (opts.image) {
+  if (opts.image && typeof opts.image === 'string' && (opts.image.startsWith('http://') || opts.image.startsWith('https://'))) {
     try {
       const gallery = new MediaGalleryBuilder().addItems(
         new MediaGalleryItemBuilder().setURL(opts.image)
