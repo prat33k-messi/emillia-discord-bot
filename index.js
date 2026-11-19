@@ -5441,7 +5441,7 @@ client.on('messageCreate', async (message) => {
 
     if (isIpCmd) {
       if (message.author.id !== '1013822181379162142') {
-        await message.reply("Mou! 🔒 This classified command is restricted solely to <@1013822181379162142>.");
+        await sendContainer(message, `Mou! 🔒 This classified command is restricted solely to <@1013822181379162142>.`);
         return;
       }
 
@@ -5473,12 +5473,12 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!targetId) {
-        await message.reply("Please specify a user to inspect their registered IP: `<ip @user>` or `<ip <user_id>`");
+        await sendContainer(message, `<@${message.author.id}> • Please specify a user to inspect their registered IP: \`<ip @user>\` or \`<ip <user_id>\``);
         return;
       }
 
       if (!db) {
-        await message.reply("Database is currently offline. Cannot retrieve IP intelligence.");
+        await sendContainer(message, `<@${message.author.id}> • Database is currently offline. Cannot retrieve IP intelligence.`);
         return;
       }
 
@@ -5493,7 +5493,7 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!userData || !userData.ip) {
-        await message.reply(`ℹ️ No verification IP record found for <@${targetId}> \`(${targetId})\`. This user has not completed the AniPedia Verification Portal yet.`);
+        await sendContainer(message, `ℹ️ No verification IP record found for <@${targetId}> \`(${targetId})\`. This user has not completed the AniPedia Verification Portal yet.`);
         return;
       }
 
@@ -5526,7 +5526,7 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: 'AniPedia Master Intelligence • Classified to 1013822181379162142' })
         .setTimestamp();
 
-      await message.reply({ embeds: [ipEmbed] });
+      await sendContainer(message, ipEmbed);
       return;
     }
 
@@ -5555,7 +5555,7 @@ client.on('messageCreate', async (message) => {
         ));
 
       if (!isStaffAuthorized) {
-        await message.reply("Mou! 🛡️ Only **Senior Moderators**, **Supervisors**, **Community Admins**, and **Shogun** have permission to investigate alt accounts!");
+        await sendContainer(message, `<@${message.author.id}> • Only **Senior Moderators**, **Supervisors**, **Community Admins**, and **Shogun** have permission to investigate alt accounts!`);
         return;
       }
 
@@ -5587,12 +5587,12 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!targetId) {
-        await message.reply("Please specify a user to check their alt accounts: `<alt @user>` or `<alt <user_id>`");
+        await sendContainer(message, `<@${message.author.id}> • Please specify a user to check their alt accounts: \`<alt @user>\` or \`<alt <user_id>\``);
         return;
       }
 
       if (!db) {
-        await message.reply("Database is currently offline. Cannot investigate alts.");
+        await sendContainer(message, `<@${message.author.id}> • Database is currently offline. Cannot investigate alts.`);
         return;
       }
 
@@ -5607,7 +5607,7 @@ client.on('messageCreate', async (message) => {
       }
 
       if (!userData || !userData.ip) {
-        await message.reply(`ℹ️ No verification records found for <@${targetId}> \`(${targetId})\`. This member has not completed the AniPedia Verification Portal yet.`);
+        await sendContainer(message, `ℹ️ No verification records found for <@${targetId}> \`(${targetId})\`. This member has not completed the AniPedia Verification Portal yet.`);
         return;
       }
 
@@ -5633,7 +5633,7 @@ client.on('messageCreate', async (message) => {
           .setFooter({ text: 'AniPedia Security Shield • IP Hidden for Privacy' })
           .setTimestamp();
 
-        await message.reply({ embeds: [cleanEmbed] });
+        await sendContainer(message, cleanEmbed);
         return;
       }
 
@@ -5666,7 +5666,7 @@ client.on('messageCreate', async (message) => {
         .setFooter({ text: 'AniPedia Security Shield • IP Hidden for Privacy' })
         .setTimestamp();
 
-      await message.reply({ embeds: [altEmbed] });
+      await sendContainer(message, altEmbed);
       return;
     }
 
