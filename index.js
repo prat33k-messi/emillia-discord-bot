@@ -5621,19 +5621,15 @@ client.on('messageCreate', async (message) => {
         .map(d => d.data());
 
       if (linkedAlts.length === 0) {
-        const cleanEmbed = new EmbedBuilder()
-          .setColor(0x2ECC71)
-          .setTitle('🛡️ Alt Shield • Account Investigation')
-          .setDescription(
-            `• **Target Member:** <@${targetId}> \`(${targetTag} - ${targetId})\`\n` +
-            `• **Verification Status:** \`Verified Member\`\n` +
-            `• **Detected Alts:** \`0 (None Found)\`\n\n` +
-            `✅ **Clean Record:** No other accounts share this verification signature in AniPedia.`
-          )
-          .setFooter({ text: 'AniPedia Security Shield • IP Hidden for Privacy' })
-          .setTimestamp();
+        const cleanContent =
+          `**No Alt Accounts Found: <@${targetId}>**\n` +
+          `-# (${targetTag} • \`${targetId}\`)\n\n` +
+          `No other accounts share this verification signature in AniPedia.`;
 
-        await sendContainer(message, cleanEmbed);
+        await sendContainer(message, {
+          description: cleanContent,
+          footer: 'AniPedia Security Shield • IP Hidden for Privacy'
+        });
         return;
       }
 
@@ -5641,32 +5637,20 @@ client.on('messageCreate', async (message) => {
       const altListFormatted = linkedAlts.map((alt, index) => {
         const isBanned = guildBans.has(alt.userId);
         if (isBanned) hasBannedAlt = true;
-        const statusBadge = isBanned
-          ? '🔨 `BANNED`'
-          : (message.guild.members.cache.has(alt.userId) ? '🟢 `IN SERVER`' : '⚪ `NOT IN SERVER`');
+        const bannedBadge = isBanned ? ' 🔨 `[BANNED]`' : '';
+        return `\`${index + 1}.\` <@${alt.userId}> (${alt.username || alt.userId})${bannedBadge}`;
+      }).join('\n');
 
-        let vTime = '';
-        if (alt.verifiedAt) {
-          const d = alt.verifiedAt.toDate ? alt.verifiedAt.toDate() : new Date(alt.verifiedAt);
-          vTime = `• Verified <t:${Math.floor(d.getTime() / 1000)}:R>`;
-        }
-        return `\`${index + 1}.\` <@${alt.userId}> \`(${alt.username || alt.userId})\`\n   ↳ Status: ${statusBadge} ${vTime}`;
-      }).join('\n\n');
+      const altContent =
+        `**Alt Linked Account Found: <@${targetId}>**\n` +
+        `-# (${targetTag} • \`${targetId}\`)\n\n` +
+        `**Detected Alt Accounts:**\n` +
+        altListFormatted;
 
-      const altEmbed = new EmbedBuilder()
-        .setColor(hasBannedAlt ? 0xE74C3C : 0xE67E22)
-        .setTitle(hasBannedAlt ? '🚨 Alt Shield • Banned Alt Detected!' : '⚠️ Alt Shield • Linked Accounts Found')
-        .setDescription(
-          `• **Target Member:** <@${targetId}> \`(${targetTag} - ${targetId})\`\n` +
-          `• **Total Linked Alts:** \`${linkedAlts.length} account(s)\`\n` +
-          `• **Security Alert:** ${hasBannedAlt ? '⚠️ **Shares verification signature with an actively banned user!**' : 'ℹ️ Shares verification signature with accounts below.'}\n\n` +
-          `**Detected Alt Accounts:**\n` +
-          altListFormatted
-        )
-        .setFooter({ text: 'AniPedia Security Shield • IP Hidden for Privacy' })
-        .setTimestamp();
-
-      await sendContainer(message, altEmbed);
+      await sendContainer(message, {
+        description: altContent,
+        footer: 'AniPedia Security Shield • IP Hidden for Privacy'
+      });
       return;
     }
 
