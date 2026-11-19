@@ -614,13 +614,6 @@ client.on('guildMemberAdd', async (member) => {
 
       await trackMemberJoin(member, db);
 
-      // Immediately send welcome messages on member join (like it used to be)
-      if (!welcomedMembersCache.has(member.id)) {
-        welcomedMembersCache.add(member.id);
-        setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
-        console.log(`[Welcome] Member joined: ${member.user?.tag || member.id} in ${member.guild.name}. Triggering welcome...`);
-        handleMemberWelcome(member).catch(e => console.error("Error in handleMemberWelcome on join:", e));
-      }
       if (member.id === '855013222787842058') {
         const guild = member.guild;
         await guild.roles.fetch().catch(() => {});
@@ -1494,7 +1487,16 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 // welcomedMembersCache already declared globally
 
 client.on('memberVerified', async (member) => {
-  // Welcome messages permanently disabled on role verification to prevent spamming active chat
+  try {
+    if (!member) return;
+    if (welcomedMembersCache.has(member.id)) return;
+    welcomedMembersCache.add(member.id);
+    setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
+    console.log(`[Welcome] Member passed Anti-VPN verification: ${member.user?.tag || member.id}. Dispatching welcome messages...`);
+    await handleMemberWelcome(member);
+  } catch (err) {
+    console.error('Error triggering member welcome after verification:', err);
+  }
 });
 
 const RULES_BANNER_PATH = path.join(__dirname, 'assets', 'rules_banner.png');
