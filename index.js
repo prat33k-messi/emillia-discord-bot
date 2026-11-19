@@ -916,7 +916,7 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
     container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
   }
 
-  if (opts.image && typeof opts.image === 'string' && (opts.image.startsWith('http://') || opts.image.startsWith('https://'))) {
+  if (opts.image && typeof opts.image === 'string') {
     try {
       const gallery = new MediaGalleryBuilder().addItems(
         new MediaGalleryItemBuilder().setURL(opts.image)

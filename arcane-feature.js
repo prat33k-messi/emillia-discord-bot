@@ -725,6 +725,7 @@ async function handleArcaneLeaderboardCommand(message, type, client, sendContain
     await sendContainer(message, {
       title: `🌟  ${toSmallCaps(`Weekly Arcane ${label} Leaderboard`)}`,
       description: `### 🏆 **Weekly Arcane**`,
+      image: `attachment://${type}_leaderboard.png`,
       footer: `${toSmallCaps('AniPedia Weekly Arcane')} • ${guild?.name || 'Sanctuary'}`,
       timestamp: Date.now(),
       files: [attachment]
