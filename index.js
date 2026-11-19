@@ -5308,25 +5308,6 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-
-    const isAuraResetCmd = startsWithPrefix && (
-      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'aurareset' ||
-      cleanQuery === 'aurareset' || cleanQuery.startsWith('aurareset ') ||
-      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'iqreset' ||
-      cleanQuery === 'iqreset' || cleanQuery.startsWith('iqreset ')
-    );
-
-    if (isAuraResetCmd) {
-      if (message.author.id !== '1013822181379162142') {
-        await message.reply("Mou! Only <@1013822181379162142> can reset server Auras and IQs!");
-        return;
-      }
-
-      await resetAllFixedStats(db);
-      await sendContainer(message, `<@${message.author.id}> • All member Auras and IQs have been successfully reset across AniPedia! Everyone will now roll fresh random stats.`);
-      return;
-    }
-
     const isInviteInfoCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'inviteinfo' ||
       cleanQuery === 'inviteinfo' || cleanQuery.startsWith('inviteinfo ') ||
