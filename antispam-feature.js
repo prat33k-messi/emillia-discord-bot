@@ -5,6 +5,7 @@
 
 // Channels & Categories exempt from anti-spam
 const EXEMPT_CHANNEL_IDS = new Set([
+  '1572692755858333737', // Verification channel
   '1522170324475449344',
   '1560934265624076308',
   '1564694091986641106'
