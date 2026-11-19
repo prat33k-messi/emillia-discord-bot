@@ -5644,9 +5644,14 @@ client.on('messageCreate', async (message) => {
       const altListFormatted = linkedAlts.map((alt, index) => {
         const isBanned = guildBans.has(alt.userId);
         if (isBanned) hasBannedAlt = true;
-        const bannedBadge = isBanned ? ' 🔨 `[BANNED]`' : '';
-        return `\`${index + 1}.\` <@${alt.userId}> (${alt.username || alt.userId})${bannedBadge}`;
-      }).join('\n');
+        let status = 'Not in Server';
+        if (isBanned) {
+          status = 'Banned';
+        } else if (message.guild.members.cache.has(alt.userId)) {
+          status = 'In Server';
+        }
+        return `\`${index + 1}.\` <@${alt.userId}> (${alt.username || alt.userId})\n   ↳ Status: ${status}`;
+      }).join('\n\n');
 
       const altContent =
         `**Alt Linked Account Found: <@${targetId}>**\n` +
