@@ -656,7 +656,8 @@ const OFFICIAL_STAFF_ROLE_IDS = {
   COMMUNITY_ADMIN: '1517888043573317672',
   SUPERVISOR: '1542798540676276224',
   SENIOR_MODERATOR: '',
-  MODERATOR: '1521217765833179378'
+  MODERATOR: '1560683368172093464',
+  MODERATOR_LEGACY: '1521217765833179378'
 };
 
 let isCodeBlackFrozen = false;
@@ -704,7 +705,10 @@ function getMemberTier(member) {
     if (member.roles.cache.some(r => {
       const n = r.name.toLowerCase().trim();
       if (n.includes('junior') || n.includes('jr')) return false;
-      return (OFFICIAL_STAFF_ROLE_IDS.MODERATOR && r.id === OFFICIAL_STAFF_ROLE_IDS.MODERATOR) || n === 'moderator' || n === 'mod';
+      return (OFFICIAL_STAFF_ROLE_IDS.MODERATOR && r.id === OFFICIAL_STAFF_ROLE_IDS.MODERATOR) ||
+             (OFFICIAL_STAFF_ROLE_IDS.MODERATOR_LEGACY && r.id === OFFICIAL_STAFF_ROLE_IDS.MODERATOR_LEGACY) ||
+             r.id === '1560683368172093464' ||
+             n === 'moderator' || n === 'mod';
     })) {
       return 1;
     }
@@ -5539,23 +5543,26 @@ client.on('messageCreate', async (message) => {
 
     if (isAltCmd) {
       const modTier = getMemberTier(message.member);
-      const isStaffAuthorized = modTier >= 2 ||
+      const isStaffAuthorized = modTier >= 1 ||
         message.author.id === '1013822181379162142' ||
         message.author.id === '750056830654480510' ||
         isWhitelistedUser(message.author) ||
         (message.member && (
+          message.member.roles.cache.has('1560683368172093464') ||
+          message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.MODERATOR) ||
           message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SHOGUN) ||
           message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.COMMUNITY_ADMIN) ||
           message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SUPERVISOR) ||
           (OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR && message.member.roles.cache.has(OFFICIAL_STAFF_ROLE_IDS.SENIOR_MODERATOR)) ||
           message.member.roles.cache.some(r => {
             const n = r.name.toLowerCase().trim();
-            return n === 'senior moderator' || n === 'sr moderator' || n === 'sr. moderator' || n === 'senior mod';
+            if (n.includes('junior') || n.includes('jr')) return false;
+            return n === 'moderator' || n === 'mod' || n === 'senior moderator' || n === 'sr moderator' || n === 'sr. moderator' || n === 'senior mod';
           })
         ));
 
       if (!isStaffAuthorized) {
-        await sendContainer(message, `<@${message.author.id}> • Only **Senior Moderators**, **Supervisors**, **Community Admins**, and **Shogun** have permission to investigate alt accounts!`);
+        await sendContainer(message, `<@${message.author.id}> • Only **Moderators**, **Senior Moderators**, **Supervisors**, **Community Admins**, and **Shogun** have permission to investigate alt accounts!`);
         return;
       }
 
