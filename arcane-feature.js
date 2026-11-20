@@ -677,6 +677,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       w: 224,
       h: 332,
       accent: '#7098b0',
+      borderStroke: '#7098b0',
+      barFill: '#7098b0',
+      glowColor: '#7098b0',
+      avatarStroke: '#7098b0',
       bgTop: '#0c1622',
       bgBot: '#060c13',
       numColor: '#ffffff',
@@ -694,9 +698,13 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       y: 74,
       w: 224,
       h: 372,
-      accent: '#8ba870',
-      bgTop: '#111e0f',
-      bgBot: '#081008',
+      accent: '#181e28',
+      borderStroke: '#475569',
+      barFill: '#181e28',
+      glowColor: 'rgba(255, 255, 255, 0.28)',
+      avatarStroke: '#475569',
+      bgTop: '#131620',
+      bgBot: '#07090e',
       numColor: '#ffffff',
       numFont: 'italic 900 50px "Segoe UI", Arial Black, Impact, sans-serif',
       numX: 268 + 24,
@@ -713,6 +721,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       w: 224,
       h: 312,
       accent: '#b87070',
+      borderStroke: '#b87070',
+      barFill: '#b87070',
+      glowColor: '#b87070',
+      avatarStroke: '#b87070',
       bgTop: '#200c0c',
       bgBot: '#100606',
       numColor: '#ffffff',
@@ -726,7 +738,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   ];
 
   for (const card of podiumCards) {
-    const { rank, data, x, y, w, h, accent, bgTop, bgBot, numColor, numFont, numX, numY, boxX, boxY, boxSize } = card;
+    const {
+      rank, data, x, y, w, h, accent, borderStroke, barFill, glowColor, avatarStroke,
+      bgTop, bgBot, numColor, numFont, numX, numY, boxX, boxY, boxSize
+    } = card;
     const cardRadius = 20;
     const barHeight = 66;
     const barY = y + h - barHeight;
@@ -746,7 +761,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.fillRect(x, y, w, h);
 
     // Rounded square avatar box
-    await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, accent, rank === 1 ? 2.8 : 2.5, 18);
+    await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, avatarStroke || accent, rank === 1 ? 2.8 : 2.5, 18);
 
     // Crown for Rank 1 (Enlarged to match Image 2)
     if (rank === 1) {
@@ -764,8 +779,8 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.fillText(String(rank), numX, numY);
     ctx.restore();
 
-    // Solid Neon Bottom Bar
-    ctx.fillStyle = accent;
+    // Solid Bottom Bar
+    ctx.fillStyle = barFill || accent;
     ctx.fillRect(x, barY, w, barHeight);
 
     // Display Name & Username & Score
@@ -812,9 +827,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.save();
     ctx.beginPath();
     drawRoundRect(ctx, x, y, w, h, cardRadius);
-    ctx.strokeStyle = accent;
+    ctx.strokeStyle = borderStroke || accent;
     ctx.lineWidth = rank === 1 ? 3.5 : 2.8;
-    ctx.shadowColor = accent;
+    ctx.shadowColor = glowColor || accent;
     ctx.shadowBlur = rank === 1 ? 16 : 14;
     ctx.stroke();
     ctx.restore();
