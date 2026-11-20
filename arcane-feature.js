@@ -293,9 +293,54 @@ let cachedCrownImg = null;
 let crownSearchDone = false;
 
 /**
- * Draws the Rank 1 Crown - loads custom assets/crown.png if available, or renders prominent geometric vector
+ * Automatically trims empty transparent padding from around the crown image
+ * so the actual crown graphic fills the intended size without being shrunk by margins
  */
-async function drawCrown(ctx, cx, cy, width = 76, height = 44) {
+function cropTransparentPadding(img) {
+  try {
+    const c = createCanvas(img.width, img.height);
+    const cctx = c.getContext('2d');
+    cctx.drawImage(img, 0, 0);
+    const imgData = cctx.getImageData(0, 0, img.width, img.height);
+    const data = imgData.data;
+
+    let minX = img.width, minY = img.height, maxX = 0, maxY = 0;
+    let hasPixels = false;
+
+    for (let y = 0; y < img.height; y++) {
+      for (let x = 0; x < img.width; x++) {
+        const alpha = data[(y * img.width + x) * 4 + 3];
+        if (alpha > 15) { // non-transparent
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          hasPixels = true;
+        }
+      }
+    }
+
+    if (!hasPixels) return img;
+
+    const pad = 4;
+    const cropX = Math.max(0, minX - pad);
+    const cropY = Math.max(0, minY - pad);
+    const cropW = Math.min(img.width - cropX, maxX - minX + 1 + pad * 2);
+    const cropH = Math.min(img.height - cropY, maxY - minY + 1 + pad * 2);
+
+    const cropped = createCanvas(cropW, cropH);
+    const croppedCtx = cropped.getContext('2d');
+    croppedCtx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+    return cropped;
+  } catch (e) {
+    return img;
+  }
+}
+
+/**
+ * Draws the Rank 1 Crown - loads custom assets/crown.png if available (autocropped), or renders prominent geometric vector
+ */
+async function drawCrown(ctx, cx, cy, width = 68, height = 42) {
   // Check for custom crown image if not already cached
   if (!cachedCrownImg && !crownSearchDone) {
     crownSearchDone = true;
@@ -308,7 +353,8 @@ async function drawCrown(ctx, cx, cy, width = 76, height = 44) {
     for (const p of possiblePaths) {
       if (fs.existsSync(p)) {
         try {
-          cachedCrownImg = await loadImage(p);
+          const rawImg = await loadImage(p);
+          cachedCrownImg = cropTransparentPadding(rawImg);
           break;
         } catch (e) {}
       }
@@ -324,8 +370,8 @@ async function drawCrown(ctx, cx, cy, width = 76, height = 44) {
     const ratio = imgW / imgH;
     let targetW = width;
     let targetH = width / ratio;
-    if (targetH > height * 1.3) {
-      targetH = height * 1.3;
+    if (targetH > height * 1.1) {
+      targetH = height * 1.1;
       targetW = targetH * ratio;
     }
     ctx.drawImage(cachedCrownImg, cx - targetW / 2, cy - targetH / 2, targetW, targetH);
