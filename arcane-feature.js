@@ -295,7 +295,7 @@ let crownSearchDone = false;
 /**
  * Draws the Rank 1 Crown - loads custom assets/crown.png if available, or renders prominent geometric vector
  */
-async function drawCrown(ctx, cx, cy, width = 84, height = 50) {
+async function drawCrown(ctx, cx, cy, width = 76, height = 44) {
   // Check for custom crown image if not already cached
   if (!cachedCrownImg && !crownSearchDone) {
     crownSearchDone = true;
@@ -317,15 +317,15 @@ async function drawCrown(ctx, cx, cy, width = 84, height = 50) {
 
   if (cachedCrownImg) {
     ctx.save();
-    ctx.shadowColor = 'rgba(232, 195, 205, 0.9)';
-    ctx.shadowBlur = 12;
+    ctx.shadowColor = 'rgba(244, 166, 180, 0.95)';
+    ctx.shadowBlur = 14;
     const imgW = cachedCrownImg.width || width;
     const imgH = cachedCrownImg.height || height;
     const ratio = imgW / imgH;
     let targetW = width;
     let targetH = width / ratio;
-    if (targetH > height * 1.35) {
-      targetH = height * 1.35;
+    if (targetH > height * 1.3) {
+      targetH = height * 1.3;
       targetW = targetH * ratio;
     }
     ctx.drawImage(cachedCrownImg, cx - targetW / 2, cy - targetH / 2, targetW, targetH);
@@ -333,9 +333,9 @@ async function drawCrown(ctx, cx, cy, width = 84, height = 50) {
     return;
   }
 
-  // Fallback: Geometric Stylized Crown with floating diamonds (substantially enlarged & bold)
+  // Fallback: Geometric Stylized Crown with floating diamonds (Solid, prominent, matching Image 2 size)
   ctx.save();
-  ctx.shadowColor = 'rgba(232, 195, 205, 0.95)';
+  ctx.shadowColor = 'rgba(244, 166, 180, 0.95)';
   ctx.shadowBlur = 14;
 
   const w2 = width / 2;
@@ -344,7 +344,7 @@ async function drawCrown(ctx, cx, cy, width = 84, height = 50) {
   const top = cy - height / 2;
   const bottom = cy + height / 2;
 
-  // Floating Diamond jewels above the 3 peaks
+  // 1. Floating Diamond jewels above the 3 peaks
   function drawDiamond(dcx, dcy, size) {
     ctx.beginPath();
     ctx.moveTo(dcx, dcy - size);
@@ -356,18 +356,19 @@ async function drawCrown(ctx, cx, cy, width = 84, height = 50) {
     ctx.fill();
   }
 
-  drawDiamond(cx, top - 3, 7.5);                                 // Center diamond (large)
-  drawDiamond(left + width * 0.12, top + height * 0.22, 6.0);   // Left diamond
-  drawDiamond(right - width * 0.12, top + height * 0.22, 6.0);  // Right diamond
+  drawDiamond(cx, top - 3, 7.0);                                 // Center diamond (large)
+  drawDiamond(left + width * 0.12, top + height * 0.22, 5.5);   // Left diamond
+  drawDiamond(right - width * 0.12, top + height * 0.22, 5.5);  // Right diamond
 
-  // Geometric Crown Body
+  // 2. Solid Geometric Crown Body
   const crownGrad = ctx.createLinearGradient(cx, top, cx, bottom);
   crownGrad.addColorStop(0, '#ffffff');
-  crownGrad.addColorStop(0.5, '#fce7f3');
+  crownGrad.addColorStop(0.35, '#fff0f3');
+  crownGrad.addColorStop(0.7, '#f8b4c0');
   crownGrad.addColorStop(1, '#e89fa9');
   ctx.fillStyle = crownGrad;
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2.8;
+  ctx.lineWidth = 2.6;
 
   ctx.beginPath();
   ctx.moveTo(left, top + height * 0.45);               // Left peak
@@ -382,13 +383,25 @@ async function drawCrown(ctx, cx, cy, width = 84, height = 50) {
   ctx.fill();
   ctx.stroke();
 
+  // Solid Base Band
+  ctx.fillStyle = '#e89fa9';
+  ctx.fillRect(left + width * 0.12, bottom - 3.5, width * 0.76, 3.5);
+
+  // Jewel dots on peak tips
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(left + 1, top + height * 0.45, 2.2, 0, Math.PI * 2);
+  ctx.arc(cx, top + height * 0.12, 2.8, 0, Math.PI * 2);
+  ctx.arc(right - 1, top + height * 0.45, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
   // Inner geometric V accent
   ctx.beginPath();
   ctx.moveTo(cx - width * 0.18, top + height * 0.6);
   ctx.lineTo(cx, top + height * 0.38);
   ctx.lineTo(cx + width * 0.18, top + height * 0.6);
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2.0;
   ctx.stroke();
 
   ctx.restore();
@@ -689,9 +702,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     // Rounded square avatar box
     await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, accent, rank === 1 ? 2.8 : 2.5, 18);
 
-    // Crown for Rank 1 (Enlarged)
+    // Crown for Rank 1 (Enlarged to match Image 2)
     if (rank === 1) {
-      await drawCrown(ctx, x + 138, y + 44, 82, 48);
+      await drawCrown(ctx, x + 130, y + 40, 76, 44);
     }
 
     // Rank Number
