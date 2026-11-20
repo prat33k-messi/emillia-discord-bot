@@ -338,9 +338,9 @@ function cropTransparentPadding(img) {
 }
 
 /**
- * Draws the Rank 1 Crown - loads custom assets/crown.png if available (autocropped), or renders prominent geometric vector
+ * Draws the Rank 1 Crown - in neon yellow, tilted half right at the top right edge
  */
-async function drawCrown(ctx, cx, cy, width = 68, height = 42) {
+async function drawCrown(ctx, cx, cy, width = 72, height = 42, tiltAngle = 0.28) {
   // Check for custom crown image if not already cached
   if (!cachedCrownImg && !crownSearchDone) {
     crownSearchDone = true;
@@ -361,10 +361,17 @@ async function drawCrown(ctx, cx, cy, width = 68, height = 42) {
     }
   }
 
+  ctx.save();
+  ctx.translate(cx, cy);
+  if (tiltAngle !== 0) {
+    ctx.rotate(tiltAngle);
+  }
+
+  // Neon yellow luminous aura glow
+  ctx.shadowColor = '#ffe600';
+  ctx.shadowBlur = 16;
+
   if (cachedCrownImg) {
-    ctx.save();
-    ctx.shadowColor = 'rgba(244, 166, 180, 0.95)';
-    ctx.shadowBlur = 14;
     const imgW = cachedCrownImg.width || width;
     const imgH = cachedCrownImg.height || height;
     const ratio = imgW / imgH;
@@ -374,21 +381,42 @@ async function drawCrown(ctx, cx, cy, width = 68, height = 42) {
       targetH = height * 1.1;
       targetW = targetH * ratio;
     }
-    ctx.drawImage(cachedCrownImg, cx - targetW / 2, cy - targetH / 2, targetW, targetH);
+
+    try {
+      // Recolor custom crown image to vibrant neon yellow
+      const tintCanvas = createCanvas(Math.ceil(targetW), Math.ceil(targetH));
+      const tctx = tintCanvas.getContext('2d');
+      tctx.drawImage(cachedCrownImg, 0, 0, targetW, targetH);
+      tctx.globalCompositeOperation = 'source-in';
+
+      const yGrad = tctx.createLinearGradient(0, 0, 0, targetH);
+      yGrad.addColorStop(0, '#ffffff');
+      yGrad.addColorStop(0.2, '#fffb7d');
+      yGrad.addColorStop(0.6, '#ffe600');
+      yGrad.addColorStop(1, '#eab308');
+      tctx.fillStyle = yGrad;
+      tctx.fillRect(0, 0, targetW, targetH);
+
+      ctx.shadowColor = '#ffe600';
+      ctx.shadowBlur = 18;
+      ctx.drawImage(tintCanvas, -targetW / 2, -targetH / 2, targetW, targetH);
+      // Double pass for intense neon pop
+      ctx.shadowBlur = 0;
+      ctx.drawImage(tintCanvas, -targetW / 2, -targetH / 2, targetW, targetH);
+    } catch (e) {
+      ctx.drawImage(cachedCrownImg, -targetW / 2, -targetH / 2, targetW, targetH);
+    }
+
     ctx.restore();
     return;
   }
 
-  // Fallback: Geometric Stylized Crown with floating diamonds (Solid, prominent, matching Image 2 size)
-  ctx.save();
-  ctx.shadowColor = 'rgba(244, 166, 180, 0.95)';
-  ctx.shadowBlur = 14;
-
+  // Fallback: Geometric Stylized Crown in Neon Yellow
   const w2 = width / 2;
-  const left = cx - w2;
-  const right = cx + w2;
-  const top = cy - height / 2;
-  const bottom = cy + height / 2;
+  const left = -w2;
+  const right = w2;
+  const top = -height / 2;
+  const bottom = height / 2;
 
   // 1. Floating Diamond jewels above the 3 peaks
   function drawDiamond(dcx, dcy, size) {
@@ -402,51 +430,51 @@ async function drawCrown(ctx, cx, cy, width = 68, height = 42) {
     ctx.fill();
   }
 
-  drawDiamond(cx, top - 3, 7.0);                                 // Center diamond (large)
+  drawDiamond(0, top - 3, 7.0);                                  // Center diamond (large)
   drawDiamond(left + width * 0.12, top + height * 0.22, 5.5);   // Left diamond
   drawDiamond(right - width * 0.12, top + height * 0.22, 5.5);  // Right diamond
 
-  // 2. Solid Geometric Crown Body
-  const crownGrad = ctx.createLinearGradient(cx, top, cx, bottom);
+  // 2. Solid Geometric Crown Body in Neon Yellow
+  const crownGrad = ctx.createLinearGradient(0, top, 0, bottom);
   crownGrad.addColorStop(0, '#ffffff');
-  crownGrad.addColorStop(0.35, '#fff0f3');
-  crownGrad.addColorStop(0.7, '#f8b4c0');
-  crownGrad.addColorStop(1, '#e89fa9');
+  crownGrad.addColorStop(0.3, '#fff9c4');
+  crownGrad.addColorStop(0.7, '#fde047');
+  crownGrad.addColorStop(1, '#eab308');
   ctx.fillStyle = crownGrad;
-  ctx.strokeStyle = '#ffffff';
+  ctx.strokeStyle = '#ffe600';
   ctx.lineWidth = 2.6;
 
   ctx.beginPath();
-  ctx.moveTo(left, top + height * 0.45);               // Left peak
+  ctx.moveTo(left, top + height * 0.45);                // Left peak
   ctx.lineTo(left + width * 0.24, top + height * 0.72); // Left valley
-  ctx.lineTo(cx, top + height * 0.12);                  // Center high peak
+  ctx.lineTo(0, top + height * 0.12);                   // Center high peak
   ctx.lineTo(right - width * 0.24, top + height * 0.72);// Right valley
-  ctx.lineTo(right, top + height * 0.45);              // Right peak
-  ctx.lineTo(right - width * 0.14, bottom);            // Right base
-  ctx.lineTo(cx, bottom - height * 0.18);              // Bottom notch
-  ctx.lineTo(left + width * 0.14, bottom);             // Left base
+  ctx.lineTo(right, top + height * 0.45);               // Right peak
+  ctx.lineTo(right - width * 0.14, bottom);             // Right base
+  ctx.lineTo(0, bottom - height * 0.18);               // Bottom notch
+  ctx.lineTo(left + width * 0.14, bottom);              // Left base
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
 
   // Solid Base Band
-  ctx.fillStyle = '#e89fa9';
+  ctx.fillStyle = '#ca8a04';
   ctx.fillRect(left + width * 0.12, bottom - 3.5, width * 0.76, 3.5);
 
   // Jewel dots on peak tips
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
   ctx.arc(left + 1, top + height * 0.45, 2.2, 0, Math.PI * 2);
-  ctx.arc(cx, top + height * 0.12, 2.8, 0, Math.PI * 2);
+  ctx.arc(0, top + height * 0.12, 2.8, 0, Math.PI * 2);
   ctx.arc(right - 1, top + height * 0.45, 2.2, 0, Math.PI * 2);
   ctx.fill();
 
   // Inner geometric V accent
   ctx.beginPath();
-  ctx.moveTo(cx - width * 0.18, top + height * 0.6);
-  ctx.lineTo(cx, top + height * 0.38);
-  ctx.lineTo(cx + width * 0.18, top + height * 0.6);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.moveTo(-width * 0.18, top + height * 0.6);
+  ctx.lineTo(0, top + height * 0.38);
+  ctx.lineTo(width * 0.18, top + height * 0.6);
+  ctx.strokeStyle = '#ffffff';
   ctx.lineWidth = 2.0;
   ctx.stroke();
 
@@ -763,9 +791,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     // Rounded square avatar box
     await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, avatarStroke || accent, rank === 1 ? 2.8 : 2.5, 18);
 
-    // Crown for Rank 1 (Enlarged to match Image 2)
+    // Crown for Rank 1 (Top-right corner on edge, neon yellow, tilted half right ~16°)
     if (rank === 1) {
-      await drawCrown(ctx, x + 130, y + 40, 76, 44);
+      await drawCrown(ctx, x + w - 46, y + 38, 72, 42, 0.28);
     }
 
     // Rank Number
