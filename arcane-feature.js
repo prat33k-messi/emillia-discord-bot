@@ -699,7 +699,6 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   // 5. Bottom Panel: Ranks 4 to 10 (Clean Modern White Panel)
   const panelX = 28;
   const panelW = 704;
-  const panelY = 466;
 
   ctx.save();
   ctx.beginPath();
