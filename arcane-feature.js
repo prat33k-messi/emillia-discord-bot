@@ -263,13 +263,55 @@ function drawPersonSilhouette(ctx, cx, cy, size, color = '#94a3b8') {
   ctx.restore();
 }
 
+// In-memory cache for custom crown image
+let cachedCrownImg = null;
+let crownSearchDone = false;
+
 /**
- * Draws a rich 5-peak golden crown above / next to Rank 1
+ * Draws the Rank 1 Crown - loads custom assets/crown.png if available, or renders geometric vector
  */
-function drawCrown(ctx, cx, cy, width = 46, height = 26) {
+async function drawCrown(ctx, cx, cy, width = 50, height = 30) {
+  // Check for custom crown image if not already cached
+  if (!cachedCrownImg && !crownSearchDone) {
+    crownSearchDone = true;
+    const possiblePaths = [
+      path.join(__dirname, 'assets', 'crown.png'),
+      path.join(__dirname, 'crown.png'),
+      path.join(process.cwd(), 'assets', 'crown.png'),
+      path.join(process.cwd(), 'crown.png')
+    ];
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        try {
+          cachedCrownImg = await loadImage(p);
+          break;
+        } catch (e) {}
+      }
+    }
+  }
+
+  if (cachedCrownImg) {
+    ctx.save();
+    ctx.shadowColor = 'rgba(232, 195, 205, 0.85)';
+    ctx.shadowBlur = 10;
+    const imgW = cachedCrownImg.width || width;
+    const imgH = cachedCrownImg.height || height;
+    const ratio = imgW / imgH;
+    let targetW = width;
+    let targetH = width / ratio;
+    if (targetH > height * 1.35) {
+      targetH = height * 1.35;
+      targetW = targetH * ratio;
+    }
+    ctx.drawImage(cachedCrownImg, cx - targetW / 2, cy - targetH / 2, targetW, targetH);
+    ctx.restore();
+    return;
+  }
+
+  // Fallback: Geometric Stylized Crown with floating diamonds
   ctx.save();
-  ctx.shadowColor = '#f59e0b';
-  ctx.shadowBlur = 12;
+  ctx.shadowColor = 'rgba(232, 195, 205, 0.9)';
+  ctx.shadowBlur = 10;
 
   const w2 = width / 2;
   const left = cx - w2;
@@ -277,43 +319,52 @@ function drawCrown(ctx, cx, cy, width = 46, height = 26) {
   const top = cy - height / 2;
   const bottom = cy + height / 2;
 
-  // Golden gradient fill
-  const grad = ctx.createLinearGradient(cx, top, cx, bottom);
-  grad.addColorStop(0, '#fef08a');
-  grad.addColorStop(0.35, '#facc15');
-  grad.addColorStop(0.7, '#f59e0b');
-  grad.addColorStop(1, '#b45309');
-  ctx.fillStyle = grad;
+  // Floating Diamond jewels above the 3 peaks
+  function drawDiamond(dcx, dcy, size) {
+    ctx.beginPath();
+    ctx.moveTo(dcx, dcy - size);
+    ctx.lineTo(dcx + size * 0.7, dcy);
+    ctx.lineTo(dcx, dcy + size);
+    ctx.lineTo(dcx - size * 0.7, dcy);
+    ctx.closePath();
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+  }
 
-  // 5-peak Crown Path
+  drawDiamond(cx, top - 2, 4.5);                                // Center diamond
+  drawDiamond(left + width * 0.12, top + height * 0.22, 3.8);  // Left diamond
+  drawDiamond(right - width * 0.12, top + height * 0.22, 3.8); // Right diamond
+
+  // Geometric Crown Body
+  const crownGrad = ctx.createLinearGradient(cx, top, cx, bottom);
+  crownGrad.addColorStop(0, '#ffffff');
+  crownGrad.addColorStop(0.5, '#fce7f3');
+  crownGrad.addColorStop(1, '#e89fa9');
+  ctx.fillStyle = crownGrad;
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2.2;
+
   ctx.beginPath();
-  ctx.moveTo(left, bottom);
-  ctx.lineTo(left, top + height * 0.38); // Peak 1 (far left)
-  ctx.lineTo(left + width * 0.22, top + height * 0.65);
-  ctx.lineTo(left + width * 0.35, top + height * 0.22); // Peak 2 (mid left)
-  ctx.lineTo(left + width * 0.45, top + height * 0.6);
-  ctx.lineTo(cx, top);                                  // Peak 3 (center peak, highest)
-  ctx.lineTo(right - width * 0.45, top + height * 0.6);
-  ctx.lineTo(right - width * 0.35, top + height * 0.22);// Peak 4 (mid right)
-  ctx.lineTo(right - width * 0.22, top + height * 0.65);
-  ctx.lineTo(right, top + height * 0.38);               // Peak 5 (far right)
-  ctx.lineTo(right, bottom);
+  ctx.moveTo(left, top + height * 0.45);               // Left peak
+  ctx.lineTo(left + width * 0.24, top + height * 0.72); // Left valley
+  ctx.lineTo(cx, top + height * 0.12);                  // Center high peak
+  ctx.lineTo(right - width * 0.24, top + height * 0.72);// Right valley
+  ctx.lineTo(right, top + height * 0.45);              // Right peak
+  ctx.lineTo(right - width * 0.14, bottom);            // Right base
+  ctx.lineTo(cx, bottom - height * 0.18);              // Bottom notch
+  ctx.lineTo(left + width * 0.14, bottom);             // Left base
   ctx.closePath();
   ctx.fill();
+  ctx.stroke();
 
-  // Crown base band
-  ctx.fillStyle = '#b45309';
-  ctx.fillRect(left, bottom - 3.5, width, 3.5);
-
-  // Tiny jewel dots on crown tips
-  ctx.fillStyle = '#ffffff';
+  // Inner geometric V accent
   ctx.beginPath();
-  ctx.arc(left + 1, top + height * 0.38, 2, 0, Math.PI * 2);
-  ctx.arc(left + width * 0.35, top + height * 0.22, 2.2, 0, Math.PI * 2);
-  ctx.arc(cx, top + 1, 2.8, 0, Math.PI * 2);
-  ctx.arc(right - width * 0.35, top + height * 0.22, 2.2, 0, Math.PI * 2);
-  ctx.arc(right - 1, top + height * 0.38, 2, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.moveTo(cx - width * 0.18, top + height * 0.6);
+  ctx.lineTo(cx, top + height * 0.38);
+  ctx.lineTo(cx + width * 0.18, top + height * 0.6);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+  ctx.lineWidth = 1.8;
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -458,11 +509,11 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // Futuristic blue neon light curves in top corners
+  // Ambient rose-gold glowing curved accents in corners
   ctx.save();
   ctx.lineWidth = 2.5;
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
-  ctx.shadowColor = '#00e5ff';
+  ctx.strokeStyle = 'rgba(244, 166, 180, 0.45)';
+  ctx.shadowColor = '#f4a6b4';
   ctx.shadowBlur = 12;
 
   // Left swoosh
@@ -479,7 +530,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 
   // Second thinner glowing accent curve
   ctx.lineWidth = 1.2;
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.25)';
+  ctx.strokeStyle = 'rgba(244, 166, 180, 0.25)';
   ctx.beginPath();
   ctx.moveTo(0, 110);
   ctx.bezierCurveTo(70, 60, 160, 25, 290, 18);
@@ -499,14 +550,14 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   ctx.fillText(titlePart1, 28, headerY);
   const part1Width = ctx.measureText(titlePart1).width;
 
-  // "OF THE WEEK" in bright yellow/gold bold italic
-  ctx.fillStyle = '#facc15';
+  // "OF THE WEEK" in soft dusty rose bold italic
+  ctx.fillStyle = '#f4a6b4';
   ctx.fillText('OF THE WEEK', 28 + part1Width, headerY);
 
-  // Sparkle star with thin gold line underneath
+  // Sparkle star with thin rose-gold line underneath
   const starX = 28 + (part1Width + ctx.measureText('OF THE WEEK').width) / 2;
   const lineY = headerY + 18;
-  ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+  ctx.strokeStyle = 'rgba(244, 166, 180, 0.45)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(starX - 45, lineY);
@@ -515,7 +566,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   ctx.lineTo(starX + 45, lineY);
   ctx.stroke();
 
-  ctx.fillStyle = '#facc15';
+  ctx.fillStyle = '#f4a6b4';
   ctx.font = '11px "Segoe UI", Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText('✦', starX, lineY);
@@ -531,7 +582,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   ctx.restore();
 
   // 4. Podium Cards (Top 3)
-  // 2nd Place (Left, Blue), 1st Place (Center, Green, Elevated), 3rd Place (Right, Red)
+  // 2nd Place (Left, Slate Blue), 1st Place (Center, Sage Green, Elevated), 3rd Place (Right, Dusty Rose)
   const p1 = topMembers[0] || null;
   const p2 = topMembers[1] || null;
   const p3 = topMembers[2] || null;
@@ -544,9 +595,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       y: 118,
       w: 224,
       h: 328,
-      accent: '#0084ff',
-      bgTop: '#081426',
-      bgBot: '#050c18',
+      accent: '#7098b0',
+      bgTop: '#0c1622',
+      bgBot: '#060c13',
       numColor: '#ffffff',
       numFont: '900 48px "Segoe UI", Arial Black, Impact, sans-serif',
       numX: 28 + 22,
@@ -562,10 +613,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       y: 78,
       w: 224,
       h: 368,
-      accent: '#00e676',
-      bgTop: '#082218',
-      bgBot: '#05140e',
-      numColor: '#fef08a',
+      accent: '#8ba870',
+      bgTop: '#111e0f',
+      bgBot: '#081008',
+      numColor: '#ffffff',
       numFont: 'italic 900 50px "Segoe UI", Arial Black, Impact, sans-serif',
       numX: 268 + 24,
       numY: 78 + 12,
@@ -580,10 +631,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       y: 138,
       w: 224,
       h: 308,
-      accent: '#ff1744',
-      bgTop: '#240a0a',
-      bgBot: '#140606',
-      numColor: '#fed7aa',
+      accent: '#b87070',
+      bgTop: '#200c0c',
+      bgBot: '#100606',
+      numColor: '#ffffff',
       numFont: '900 46px "Segoe UI", Arial Black, Impact, sans-serif',
       numX: 508 + 22,
       numY: 138 + 14,
@@ -618,7 +669,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 
     // Crown for Rank 1
     if (rank === 1) {
-      drawCrown(ctx, x + w / 2 + 16, y + 42, 46, 26);
+      await drawCrown(ctx, x + w / 2 + 16, y + 42, 50, 30);
     }
 
     // Rank Number
@@ -696,17 +747,17 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     ctx.restore();
   }
 
-  // 5. Bottom Panel: Ranks 4 to 10 (Clean Modern White Panel)
+  // 5. Bottom Panel: Ranks 4 to 10 (Clean Modern Warm Blush Panel)
   const panelX = 28;
   const panelW = 704;
 
   ctx.save();
   ctx.beginPath();
   drawRoundRect(ctx, panelX, panelY, panelW, panelH, 20);
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = '#fbf0ef';
   ctx.fill();
 
-  ctx.strokeStyle = '#e2e8f0';
+  ctx.strokeStyle = '#ecd8d6';
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.restore();
@@ -715,7 +766,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     const rowCenterY = panelY + panelH / 2;
     ctx.save();
     ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
+    ctx.fillStyle = '#a0aec0';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Awaiting contenders for Ranks 4 to 10...', panelX + panelW / 2, rowCenterY);
@@ -732,18 +783,18 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       ctx.font = 'bold 17px "Segoe UI", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#2d3748';
       ctx.fillText(String(rankNum), panelX + 26, rowCenterY);
 
       // 2. Dash separator
       ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
-      ctx.fillStyle = '#94a3b8';
+      ctx.fillStyle = '#a0aec0';
       ctx.fillText('-', panelX + 46, rowCenterY);
       ctx.restore();
 
       // 3. Circular Avatar (radius 19)
       const avX = panelX + 76;
-      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 19, '#e2e8f0', 1.5);
+      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 19, '#ecd8d6', 1.5);
 
       // 4. Two Lines of User Info (Display Name + username)
       const rawDisp = member.displayName || member.username;
@@ -759,7 +810,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       ctx.font = 'bold 16px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#1a202c';
       ctx.fillText(scoreText, panelX + panelW - 24, rowCenterY);
       const scoreW = ctx.measureText(scoreText).width;
 
@@ -777,20 +828,20 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       // Display Name (Line 1)
       ctx.textAlign = 'left';
       ctx.font = 'bold 15px "Segoe UI", Montserrat, Arial, sans-serif';
-      ctx.fillStyle = '#0f172a';
+      ctx.fillStyle = '#1a202c';
       const maxTextW = panelW - 120 - scoreW - deltaW - 30;
       ctx.fillText(fitText(ctx, cleanDisp, maxTextW), panelX + 108, rowCenterY - 10);
 
       // Username (Line 2)
       ctx.font = '12px "Segoe UI", Arial, sans-serif';
-      ctx.fillStyle = '#64748b';
+      ctx.fillStyle = '#718096';
       ctx.fillText(fitText(ctx, cleanUser, maxTextW), panelX + 108, rowCenterY + 12);
       ctx.restore();
 
       // Divider line between rows
       if (i < bottomMembers.length - 1) {
         ctx.save();
-        ctx.strokeStyle = '#f1f5f9';
+        ctx.strokeStyle = '#eedad8';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(panelX + 20, rowY + rowHeight);
