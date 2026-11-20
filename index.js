@@ -6,6 +6,7 @@ const { initMusic, handlePlayCommand, handleLockUpcoming, handleUnlockUpcoming, 
 const { initVerificationPortal } = require('./verification-portal');
 const { initLoyalTagSystem, sweepAllMembersLoyalRole } = require('./loyal-tag-feature');
 const { initArcaneFeature, recordArcaneAura, recordArcaneIq, handleArcaneLeaderboardCommand, resetArcaneAura, resetArcaneIq } = require('./arcane-feature');
+const { initRelationshipFeature, handleRelationshipCommand, handleRelationshipButton } = require('./relationship-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -74,6 +75,7 @@ process.on('uncaughtException', (err) => {
 initVerificationPortal(app, client, db);
 initLoyalTagSystem(client);
 initArcaneFeature(db);
+initRelationshipFeature(db);
 
 async function handleBanAltSweep(guild, bannedUserId, reason = 'Alt of banned member') {
   if (!db || !guild) return;
@@ -5676,6 +5678,10 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
+    // Relationship & Family Tree commands (<marry, <adopt, <divorce, <leave, <familytree, <family)
+    const handledRelationship = await handleRelationshipCommand(message, client, db, sendContainer);
+    if (handledRelationship) return;
+
     const isAuraLeaderboardCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auraleaderboard' ||
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auralb' ||
@@ -7187,6 +7193,10 @@ client.on('interactionCreate', async (interaction) => {
     }
     if (interaction.customId.startsWith('aura_') || interaction.customId.startsWith('iq_')) {
       const handled = await handleFixedStatsButton(interaction, db);
+      if (handled) return;
+    }
+    if (interaction.customId.startsWith('rel_')) {
+      const handled = await handleRelationshipButton(interaction, client, db, sendContainer);
       if (handled) return;
     }
     if (interaction.customId.startsWith('verify_staff_approve_')) {
