@@ -263,14 +263,39 @@ function drawPersonSilhouette(ctx, cx, cy, size, color = '#94a3b8') {
   ctx.restore();
 }
 
+/**
+ * Draws a sharp vector 4-point sparkle star so it never fails on Linux/Render fonts
+ */
+function drawSparkleStar(ctx, cx, cy, radius = 6, color = '#f4a6b4') {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  for (let i = 0; i < 4; i++) {
+    const angle = (i * Math.PI) / 2 - Math.PI / 2;
+    const midAngle = angle + Math.PI / 4;
+    const outerX = cx + Math.cos(angle) * radius;
+    const outerY = cy + Math.sin(angle) * radius;
+    const innerX = cx + Math.cos(midAngle) * (radius * 0.22);
+    const innerY = cy + Math.sin(midAngle) * (radius * 0.22);
+    if (i === 0) ctx.moveTo(outerX, outerY);
+    else ctx.lineTo(outerX, outerY);
+    ctx.quadraticCurveTo(cx, cy, innerX, innerY);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 // In-memory cache for custom crown image
 let cachedCrownImg = null;
 let crownSearchDone = false;
 
 /**
- * Draws the Rank 1 Crown - loads custom assets/crown.png if available, or renders geometric vector
+ * Draws the Rank 1 Crown - loads custom assets/crown.png if available, or renders prominent geometric vector
  */
-async function drawCrown(ctx, cx, cy, width = 50, height = 30) {
+async function drawCrown(ctx, cx, cy, width = 84, height = 50) {
   // Check for custom crown image if not already cached
   if (!cachedCrownImg && !crownSearchDone) {
     crownSearchDone = true;
@@ -292,8 +317,8 @@ async function drawCrown(ctx, cx, cy, width = 50, height = 30) {
 
   if (cachedCrownImg) {
     ctx.save();
-    ctx.shadowColor = 'rgba(232, 195, 205, 0.85)';
-    ctx.shadowBlur = 10;
+    ctx.shadowColor = 'rgba(232, 195, 205, 0.9)';
+    ctx.shadowBlur = 12;
     const imgW = cachedCrownImg.width || width;
     const imgH = cachedCrownImg.height || height;
     const ratio = imgW / imgH;
@@ -308,10 +333,10 @@ async function drawCrown(ctx, cx, cy, width = 50, height = 30) {
     return;
   }
 
-  // Fallback: Geometric Stylized Crown with floating diamonds
+  // Fallback: Geometric Stylized Crown with floating diamonds (substantially enlarged & bold)
   ctx.save();
-  ctx.shadowColor = 'rgba(232, 195, 205, 0.9)';
-  ctx.shadowBlur = 10;
+  ctx.shadowColor = 'rgba(232, 195, 205, 0.95)';
+  ctx.shadowBlur = 14;
 
   const w2 = width / 2;
   const left = cx - w2;
@@ -331,9 +356,9 @@ async function drawCrown(ctx, cx, cy, width = 50, height = 30) {
     ctx.fill();
   }
 
-  drawDiamond(cx, top - 2, 4.5);                                // Center diamond
-  drawDiamond(left + width * 0.12, top + height * 0.22, 3.8);  // Left diamond
-  drawDiamond(right - width * 0.12, top + height * 0.22, 3.8); // Right diamond
+  drawDiamond(cx, top - 3, 7.5);                                 // Center diamond (large)
+  drawDiamond(left + width * 0.12, top + height * 0.22, 6.0);   // Left diamond
+  drawDiamond(right - width * 0.12, top + height * 0.22, 6.0);  // Right diamond
 
   // Geometric Crown Body
   const crownGrad = ctx.createLinearGradient(cx, top, cx, bottom);
@@ -342,7 +367,7 @@ async function drawCrown(ctx, cx, cy, width = 50, height = 30) {
   crownGrad.addColorStop(1, '#e89fa9');
   ctx.fillStyle = crownGrad;
   ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = 2.8;
 
   ctx.beginPath();
   ctx.moveTo(left, top + height * 0.45);               // Left peak
@@ -362,8 +387,8 @@ async function drawCrown(ctx, cx, cy, width = 50, height = 30) {
   ctx.moveTo(cx - width * 0.18, top + height * 0.6);
   ctx.lineTo(cx, top + height * 0.38);
   ctx.lineTo(cx + width * 0.18, top + height * 0.6);
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-  ctx.lineWidth = 1.8;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = 2.2;
   ctx.stroke();
 
   ctx.restore();
@@ -492,10 +517,10 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 
   const bottomMembers = topMembers.slice(3, 10);
   const rowCount = Math.max(1, bottomMembers.length);
-  const rowHeight = 60;
+  const rowHeight = 82;
   const panelH = rowCount * rowHeight + 16;
   const panelY = 466;
-  const height = panelY + panelH + 28;
+  const height = panelY + panelH + 30;
 
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
@@ -554,22 +579,19 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   ctx.fillStyle = '#f4a6b4';
   ctx.fillText('OF THE WEEK', 28 + part1Width, headerY);
 
-  // Sparkle star with thin rose-gold line underneath
+  // Sparkle star with thin rose-gold line underneath (rendered via vector so it never fails on Linux/Render)
   const starX = 28 + (part1Width + ctx.measureText('OF THE WEEK').width) / 2;
   const lineY = headerY + 18;
   ctx.strokeStyle = 'rgba(244, 166, 180, 0.45)';
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(starX - 45, lineY);
-  ctx.lineTo(starX - 8, lineY);
-  ctx.moveTo(starX + 8, lineY);
+  ctx.lineTo(starX - 10, lineY);
+  ctx.moveTo(starX + 10, lineY);
   ctx.lineTo(starX + 45, lineY);
   ctx.stroke();
 
-  ctx.fillStyle = '#f4a6b4';
-  ctx.font = '11px "Segoe UI", Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('✦', starX, lineY);
+  drawSparkleStar(ctx, starX, lineY, 6, '#f4a6b4');
   ctx.restore();
 
   // 3. Top Right: ANIPEDIA Header
@@ -592,34 +614,34 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       rank: 2,
       data: p2,
       x: 28,
-      y: 118,
+      y: 114,
       w: 224,
-      h: 328,
+      h: 332,
       accent: '#7098b0',
       bgTop: '#0c1622',
       bgBot: '#060c13',
       numColor: '#ffffff',
       numFont: '900 48px "Segoe UI", Arial Black, Impact, sans-serif',
       numX: 28 + 22,
-      numY: 118 + 14,
+      numY: 114 + 14,
       boxX: 56,
-      boxY: 186,
+      boxY: 182,
       boxSize: 168
     },
     {
       rank: 1,
       data: p1,
       x: 268,
-      y: 78,
+      y: 74,
       w: 224,
-      h: 368,
+      h: 372,
       accent: '#8ba870',
       bgTop: '#111e0f',
       bgBot: '#081008',
       numColor: '#ffffff',
       numFont: 'italic 900 50px "Segoe UI", Arial Black, Impact, sans-serif',
       numX: 268 + 24,
-      numY: 78 + 12,
+      numY: 74 + 12,
       boxX: 292,
       boxY: 152,
       boxSize: 176
@@ -628,18 +650,18 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       rank: 3,
       data: p3,
       x: 508,
-      y: 138,
+      y: 134,
       w: 224,
-      h: 308,
+      h: 312,
       accent: '#b87070',
       bgTop: '#200c0c',
       bgBot: '#100606',
       numColor: '#ffffff',
       numFont: '900 46px "Segoe UI", Arial Black, Impact, sans-serif',
       numX: 508 + 22,
-      numY: 138 + 14,
+      numY: 134 + 14,
       boxX: 539,
-      boxY: 202,
+      boxY: 198,
       boxSize: 162
     }
   ];
@@ -647,7 +669,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   for (const card of podiumCards) {
     const { rank, data, x, y, w, h, accent, bgTop, bgBot, numColor, numFont, numX, numY, boxX, boxY, boxSize } = card;
     const cardRadius = 20;
-    const barHeight = 60;
+    const barHeight = 66;
     const barY = y + h - barHeight;
 
     // Clip to rounded card
@@ -667,9 +689,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     // Rounded square avatar box
     await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, accent, rank === 1 ? 2.8 : 2.5, 18);
 
-    // Crown for Rank 1
+    // Crown for Rank 1 (Enlarged)
     if (rank === 1) {
-      await drawCrown(ctx, x + w / 2 + 16, y + 42, 50, 30);
+      await drawCrown(ctx, x + 138, y + 44, 82, 48);
     }
 
     // Rank Number
@@ -696,41 +718,33 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     const scoreVal = data ? (isAura ? data.aura : data.iq) : null;
     const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '-';
 
-    // Top Row of bar: Display Name (left) & Score (right)
+    // Large prominent Score on right (2.5x larger: 28px bold)
     ctx.save();
-    ctx.font = 'bold 15px "Segoe UI", Montserrat, Arial, sans-serif';
-    ctx.textBaseline = 'middle';
-
-    // Score on right
+    ctx.font = '900 28px "Segoe UI", Montserrat, Arial, sans-serif';
     ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(scoreText, x + w - 14, barY + 22);
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(scoreText, x + w - 14, barY + barHeight / 2);
     const scoreW = ctx.measureText(scoreText).width;
+    ctx.restore();
 
-    // Display Name on left
+    // User details on left
+    ctx.save();
+    const maxDispW = w - scoreW - 24;
+    ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
-    const maxDispW = w - scoreW - 32;
-    ctx.fillText(fitText(ctx, cleanDisp, maxDispW), x + 14, barY + 22);
 
-    // Bottom Row of bar: @username (left) & delta on right (if any)
-    ctx.font = '12px "Segoe UI", Arial, sans-serif';
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    // Display Name (top row)
+    ctx.font = 'bold 16px "Segoe UI", Montserrat, Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(fitText(ctx, cleanDisp, maxDispW), x + 12, barY + 23);
 
-    const prevRank = isAura ? data?.previousAuraRank : data?.previousIqRank;
-    const delta = getRankDelta(rank, prevRank);
-
-    if (delta.diff !== 0) {
-      ctx.textAlign = 'right';
-      ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
-      ctx.fillText(delta.text, x + w - 14, barY + 44);
-      const deltaW = ctx.measureText(delta.text).width + 8;
-      ctx.textAlign = 'left';
-      ctx.font = '12px "Segoe UI", Arial, sans-serif';
-      ctx.fillText(fitText(ctx, cleanUser, w - deltaW - 28), x + 14, barY + 44);
-    } else {
-      ctx.textAlign = 'left';
-      ctx.fillText(fitText(ctx, cleanUser, w - 28), x + 14, barY + 44);
-    }
+    // @username (bottom row)
+    ctx.font = '13px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.88)';
+    ctx.fillText(fitText(ctx, cleanUser, maxDispW), x + 12, barY + 45);
     ctx.restore();
 
     ctx.restore(); // Exit card clipping
@@ -765,7 +779,7 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   if (bottomMembers.length === 0) {
     const rowCenterY = panelY + panelH / 2;
     ctx.save();
-    ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 18px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#a0aec0';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -778,25 +792,25 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       const rowY = panelY + 8 + i * rowHeight;
       const rowCenterY = rowY + rowHeight / 2;
 
-      // 1. Rank Number
+      // 1. Rank Number (Enlarged 24px)
       ctx.save();
-      ctx.font = 'bold 17px "Segoe UI", Arial, sans-serif';
+      ctx.font = '900 24px "Segoe UI", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#2d3748';
-      ctx.fillText(String(rankNum), panelX + 26, rowCenterY);
+      ctx.fillText(String(rankNum), panelX + 30, rowCenterY);
 
-      // 2. Dash separator
-      ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+      // 2. Dash separator (Enlarged 20px)
+      ctx.font = 'bold 20px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#a0aec0';
-      ctx.fillText('-', panelX + 46, rowCenterY);
+      ctx.fillText('-', panelX + 58, rowCenterY);
       ctx.restore();
 
-      // 3. Circular Avatar (radius 19)
-      const avX = panelX + 76;
-      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 19, '#ecd8d6', 1.5);
+      // 3. Circular Avatar (Enlarged to radius 28px / diameter 56px - 2x visual size!)
+      const avX = panelX + 98;
+      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 28, '#ecd8d6', 2.0);
 
-      // 4. Two Lines of User Info (Display Name + username)
+      // 4. Two Lines of User Info (Enlarged 2x!)
       const rawDisp = member.displayName || member.username;
       const cleanDisp = rawDisp.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
       const rawUser = member.username ? `@${member.username}` : 'user';
@@ -805,9 +819,9 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       const scoreVal = isAura ? member.aura : member.iq;
       const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '-';
 
-      // Measure score text on right
+      // Measure score text on right (Enlarged 28px bold)
       ctx.save();
-      ctx.font = 'bold 16px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.font = '900 28px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#1a202c';
@@ -819,23 +833,23 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
       const delta = getRankDelta(rankNum, prevRank);
       let deltaW = 0;
       if (delta.diff !== 0) {
-        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+        ctx.font = 'bold 14px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = delta.color;
-        ctx.fillText(delta.text, panelX + panelW - 28 - scoreW, rowCenterY);
+        ctx.fillText(delta.text, panelX + panelW - 32 - scoreW, rowCenterY);
         deltaW = ctx.measureText(delta.text).width + 8;
       }
 
-      // Display Name (Line 1)
+      // Display Name (Line 1 - Enlarged 20px bold!)
       ctx.textAlign = 'left';
-      ctx.font = 'bold 15px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.font = 'bold 20px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.fillStyle = '#1a202c';
-      const maxTextW = panelW - 120 - scoreW - deltaW - 30;
-      ctx.fillText(fitText(ctx, cleanDisp, maxTextW), panelX + 108, rowCenterY - 10);
+      const maxTextW = panelW - 150 - scoreW - deltaW - 30;
+      ctx.fillText(fitText(ctx, cleanDisp, maxTextW), panelX + 138, rowCenterY - 12);
 
-      // Username (Line 2)
-      ctx.font = '12px "Segoe UI", Arial, sans-serif';
+      // Username (Line 2 - Enlarged 15px!)
+      ctx.font = '15px "Segoe UI", Arial, sans-serif';
       ctx.fillStyle = '#718096';
-      ctx.fillText(fitText(ctx, cleanUser, maxTextW), panelX + 108, rowCenterY + 12);
+      ctx.fillText(fitText(ctx, cleanUser, maxTextW), panelX + 138, rowCenterY + 14);
       ctx.restore();
 
       // Divider line between rows
@@ -844,8 +858,8 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
         ctx.strokeStyle = '#eedad8';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(panelX + 20, rowY + rowHeight);
-        ctx.lineTo(panelX + panelW - 20, rowY + rowHeight);
+        ctx.moveTo(panelX + 24, rowY + rowHeight);
+        ctx.lineTo(panelX + panelW - 24, rowY + rowHeight);
         ctx.stroke();
         ctx.restore();
       }
