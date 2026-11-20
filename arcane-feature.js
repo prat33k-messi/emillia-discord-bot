@@ -240,62 +240,110 @@ function fitText(ctx, text, maxWidth) {
 }
 
 /**
- * Draws a sharp gold crown above Rank 1 avatar
+ * Draws a clean user person silhouette placeholder
  */
-function drawCrown(ctx, cx, cy, width = 38, height = 22) {
+function drawPersonSilhouette(ctx, cx, cy, size, color = '#94a3b8') {
   ctx.save();
-  ctx.fillStyle = '#fbbf24';
-  ctx.shadowColor = '#fbbf24';
-  ctx.shadowBlur = 10;
+  ctx.fillStyle = color;
+  // Head
+  const headR = size * 0.22;
+  ctx.beginPath();
+  ctx.arc(cx, cy - size * 0.16, headR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Torso / shoulders
+  const bodyW = size * 0.72;
+  const bodyTop = cy + size * 0.12;
+  ctx.beginPath();
+  ctx.moveTo(cx - bodyW / 2, cy + size * 0.45);
+  ctx.quadraticCurveTo(cx - bodyW / 2, bodyTop, cx, bodyTop);
+  ctx.quadraticCurveTo(cx + bodyW / 2, bodyTop, cx + bodyW / 2, cy + size * 0.45);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * Draws a rich 5-peak golden crown above / next to Rank 1
+ */
+function drawCrown(ctx, cx, cy, width = 46, height = 26) {
+  ctx.save();
+  ctx.shadowColor = '#f59e0b';
+  ctx.shadowBlur = 12;
+
   const w2 = width / 2;
   const left = cx - w2;
   const right = cx + w2;
   const top = cy - height / 2;
   const bottom = cy + height / 2;
 
+  // Golden gradient fill
+  const grad = ctx.createLinearGradient(cx, top, cx, bottom);
+  grad.addColorStop(0, '#fef08a');
+  grad.addColorStop(0.35, '#facc15');
+  grad.addColorStop(0.7, '#f59e0b');
+  grad.addColorStop(1, '#b45309');
+  ctx.fillStyle = grad;
+
+  // 5-peak Crown Path
   ctx.beginPath();
   ctx.moveTo(left, bottom);
-  ctx.lineTo(left, top + height * 0.35);
-  ctx.lineTo(left + width * 0.25, top + height * 0.6);
-  ctx.lineTo(cx, top);
-  ctx.lineTo(right - width * 0.25, top + height * 0.6);
-  ctx.lineTo(right, top + height * 0.35);
+  ctx.lineTo(left, top + height * 0.38); // Peak 1 (far left)
+  ctx.lineTo(left + width * 0.22, top + height * 0.65);
+  ctx.lineTo(left + width * 0.35, top + height * 0.22); // Peak 2 (mid left)
+  ctx.lineTo(left + width * 0.45, top + height * 0.6);
+  ctx.lineTo(cx, top);                                  // Peak 3 (center peak, highest)
+  ctx.lineTo(right - width * 0.45, top + height * 0.6);
+  ctx.lineTo(right - width * 0.35, top + height * 0.22);// Peak 4 (mid right)
+  ctx.lineTo(right - width * 0.22, top + height * 0.65);
+  ctx.lineTo(right, top + height * 0.38);               // Peak 5 (far right)
   ctx.lineTo(right, bottom);
   ctx.closePath();
   ctx.fill();
 
-  // Jewel dots on crown tips
+  // Crown base band
+  ctx.fillStyle = '#b45309';
+  ctx.fillRect(left, bottom - 3.5, width, 3.5);
+
+  // Tiny jewel dots on crown tips
   ctx.fillStyle = '#ffffff';
   ctx.beginPath();
-  ctx.arc(left + 2, top + height * 0.35, 2.5, 0, Math.PI * 2);
+  ctx.arc(left + 1, top + height * 0.38, 2, 0, Math.PI * 2);
+  ctx.arc(left + width * 0.35, top + height * 0.22, 2.2, 0, Math.PI * 2);
   ctx.arc(cx, top + 1, 2.8, 0, Math.PI * 2);
-  ctx.arc(right - 2, top + height * 0.35, 2.5, 0, Math.PI * 2);
+  ctx.arc(right - width * 0.35, top + height * 0.22, 2.2, 0, Math.PI * 2);
+  ctx.arc(right - 1, top + height * 0.38, 2, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.restore();
 }
 
 /**
- * Draws a circular avatar with border
+ * Draws a circular avatar with border and silhouette fallback
  */
-async function drawCircularAvatar(ctx, avatarUrl, cx, cy, radius, strokeColor, lineWidth = 3) {
+async function drawCircularAvatar(ctx, avatarUrl, cx, cy, radius, strokeColor, lineWidth = 1.5) {
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy, radius, 0, Math.PI * 2);
   ctx.closePath();
   ctx.clip();
 
-  ctx.fillStyle = '#1e2330';
+  ctx.fillStyle = '#e2e8f0';
   ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
 
+  let loaded = false;
   if (avatarUrl) {
     try {
       const img = await loadImage(avatarUrl);
       ctx.drawImage(img, cx - radius, cy - radius, radius * 2, radius * 2);
+      loaded = true;
     } catch (e) {
-      ctx.fillStyle = '#374151';
-      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+      loaded = false;
     }
+  }
+
+  if (!loaded) {
+    drawPersonSilhouette(ctx, cx, cy, radius * 1.7, '#94a3b8');
   }
 
   ctx.restore();
@@ -312,9 +360,9 @@ async function drawCircularAvatar(ctx, avatarUrl, cx, cy, radius, strokeColor, l
 }
 
 /**
- * Draws a square/rectangular avatar with rounded corners in cover mode
+ * Draws a square avatar with rounded corners, dark gradient background, and glowing border
  */
-async function drawSquareAvatar(ctx, avatarUrl, x, y, size, strokeColor, lineWidth = 3.5, cornerRadius = 16) {
+async function drawSquareAvatar(ctx, avatarUrl, x, y, size, strokeColor, lineWidth = 2.5, cornerRadius = 18) {
   ctx.save();
   ctx.beginPath();
   drawRoundRect(ctx, x, y, size, size, cornerRadius);
@@ -322,9 +370,13 @@ async function drawSquareAvatar(ctx, avatarUrl, x, y, size, strokeColor, lineWid
   ctx.clip();
 
   // Dark placeholder fill
-  ctx.fillStyle = '#141a29';
+  const darkGrad = ctx.createLinearGradient(x, y, x, y + size);
+  darkGrad.addColorStop(0, '#1a2333');
+  darkGrad.addColorStop(1, '#0e1522');
+  ctx.fillStyle = darkGrad;
   ctx.fillRect(x, y, size, size);
 
+  let loaded = false;
   if (avatarUrl) {
     try {
       const img = await loadImage(avatarUrl);
@@ -334,10 +386,14 @@ async function drawSquareAvatar(ctx, avatarUrl, x, y, size, strokeColor, lineWid
       const sx = (imgW - minDim) / 2;
       const sy = (imgH - minDim) / 2;
       ctx.drawImage(img, sx, sy, minDim, minDim, x, y, size, size);
+      loaded = true;
     } catch (e) {
-      ctx.fillStyle = '#374151';
-      ctx.fillRect(x, y, size, size);
+      loaded = false;
     }
+  }
+
+  if (!loaded) {
+    drawPersonSilhouette(ctx, x + size / 2, y + size / 2, size * 0.82, '#94a3b8');
   }
 
   ctx.restore();
@@ -376,7 +432,7 @@ function getRankDelta(currRank, prevRank) {
 
 /**
  * Generates the Weekly Arcane Leaderboard Graphic using Canvas
- * Inspired by F1 Grand Prix Podium (Top 3) + Clean White Panel (Ranks 4-10)
+ * Inspired by modern anime/esports podium design (Top 3 neon cards + clean white table for Ranks 4-10)
  */
 async function generateArcaneLeaderboardCard(type, topMembers) {
   const width = 760;
@@ -387,55 +443,95 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   const rowCount = Math.max(1, bottomMembers.length);
   const rowHeight = 60;
   const panelH = rowCount * rowHeight + 16;
-  const panelY = 472;
-  const height = panelY + panelH + 25;
+  const panelY = 466;
+  const height = panelY + panelH + 28;
 
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
   // 1. Overall Dark Background
   const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
-  bgGrad.addColorStop(0, '#090c13');
-  bgGrad.addColorStop(0.5, '#0e1422');
-  bgGrad.addColorStop(1, '#090c13');
+  bgGrad.addColorStop(0, '#050811');
+  bgGrad.addColorStop(0.3, '#080e1e');
+  bgGrad.addColorStop(0.7, '#070c1a');
+  bgGrad.addColorStop(1, '#04070f');
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0, 0, width, height);
 
-  // Red/accent plus pattern (+ + + + +) on top left
+  // Futuristic blue neon light curves in top corners
   ctx.save();
-  ctx.font = '12px "Segoe UI", Arial, sans-serif';
-  ctx.fillStyle = 'rgba(239, 68, 68, 0.35)';
-  for (let px = 25; px < 160; px += 16) {
-    for (let py = 18; py < 45; py += 12) {
-      ctx.fillText('+', px, py);
-    }
-  }
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = 'rgba(0, 229, 255, 0.45)';
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 12;
+
+  // Left swoosh
+  ctx.beginPath();
+  ctx.moveTo(0, 95);
+  ctx.bezierCurveTo(60, 45, 140, 15, 260, 8);
+  ctx.stroke();
+
+  // Right swoosh
+  ctx.beginPath();
+  ctx.moveTo(520, 8);
+  ctx.bezierCurveTo(640, 18, 710, 60, width, 85);
+  ctx.stroke();
+
+  // Second thinner glowing accent curve
+  ctx.lineWidth = 1.2;
+  ctx.strokeStyle = 'rgba(0, 229, 255, 0.25)';
+  ctx.beginPath();
+  ctx.moveTo(0, 110);
+  ctx.bezierCurveTo(70, 60, 160, 25, 290, 18);
+  ctx.stroke();
   ctx.restore();
 
-  // 2. Top Right: ANIPEDIA Header
-  ctx.save();
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-  ctx.fillText('ANIPEDIA', width - 25, 36);
-  ctx.restore();
-
-  // 3. Top Left: Subtitle & Title
+  // 2. Top Left: Title & Sparkle
   ctx.save();
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 12px "Segoe UI", Montserrat, Arial, sans-serif';
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillText('WEEKLY ARCANE', 25, 30);
+  const headerY = 38;
 
-  ctx.font = '900 22px "Segoe UI", Montserrat, Arial, sans-serif';
+  // "AURA RANKING " in bold italic white
+  ctx.font = 'italic 900 22px "Segoe UI", Montserrat, Arial, sans-serif';
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(`${labelText} LEADERBOARD`, 25, 52);
+  const titlePart1 = `${labelText} RANKING `;
+  ctx.fillText(titlePart1, 28, headerY);
+  const part1Width = ctx.measureText(titlePart1).width;
+
+  // "OF THE WEEK" in bright yellow/gold bold italic
+  ctx.fillStyle = '#facc15';
+  ctx.fillText('OF THE WEEK', 28 + part1Width, headerY);
+
+  // Sparkle star with thin gold line underneath
+  const starX = 28 + (part1Width + ctx.measureText('OF THE WEEK').width) / 2;
+  const lineY = headerY + 18;
+  ctx.strokeStyle = 'rgba(250, 204, 21, 0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(starX - 45, lineY);
+  ctx.lineTo(starX - 8, lineY);
+  ctx.moveTo(starX + 8, lineY);
+  ctx.lineTo(starX + 45, lineY);
+  ctx.stroke();
+
+  ctx.fillStyle = '#facc15';
+  ctx.font = '11px "Segoe UI", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('✦', starX, lineY);
+  ctx.restore();
+
+  // 3. Top Right: ANIPEDIA Header
+  ctx.save();
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.font = '900 19px "Segoe UI", Montserrat, Arial, sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('ANIPEDIA', width - 28, headerY);
   ctx.restore();
 
   // 4. Podium Cards (Top 3)
-  // 2nd Place (Left, Orange), 1st Place (Center, Teal, Elevated), 3rd Place (Right, Red)
+  // 2nd Place (Left, Blue), 1st Place (Center, Green, Elevated), 3rd Place (Right, Red)
   const p1 = topMembers[0] || null;
   const p2 = topMembers[1] || null;
   const p3 = topMembers[2] || null;
@@ -444,57 +540,63 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     {
       rank: 2,
       data: p2,
-      x: 25,
-      y: 115,
-      w: 225,
-      h: 330,
-      accent: '#ff8000',
-      bgTop: '#261509',
-      bgBot: '#100a06',
-      stencilSize: 64,
-      boxX: 50,
-      boxY: 198,
-      boxSize: 175,
-      barTextColor: '#000000'
+      x: 28,
+      y: 118,
+      w: 224,
+      h: 328,
+      accent: '#0084ff',
+      bgTop: '#081426',
+      bgBot: '#050c18',
+      numColor: '#ffffff',
+      numFont: '900 48px "Segoe UI", Arial Black, Impact, sans-serif',
+      numX: 28 + 22,
+      numY: 118 + 14,
+      boxX: 56,
+      boxY: 186,
+      boxSize: 168
     },
     {
       rank: 1,
       data: p1,
-      x: 267,
-      y: 75,
-      w: 225,
-      h: 370,
-      accent: '#00d2be',
-      bgTop: '#082822',
-      bgBot: '#051412',
-      stencilSize: 78,
-      boxX: 287,
-      boxY: 188,
-      boxSize: 185,
-      barTextColor: '#000000'
+      x: 268,
+      y: 78,
+      w: 224,
+      h: 368,
+      accent: '#00e676',
+      bgTop: '#082218',
+      bgBot: '#05140e',
+      numColor: '#fef08a',
+      numFont: 'italic 900 50px "Segoe UI", Arial Black, Impact, sans-serif',
+      numX: 268 + 24,
+      numY: 78 + 12,
+      boxX: 292,
+      boxY: 152,
+      boxSize: 176
     },
     {
       rank: 3,
       data: p3,
-      x: 510,
-      y: 135,
-      w: 225,
-      h: 310,
-      accent: '#ef4444',
-      bgTop: '#290909',
-      bgBot: '#120505',
-      stencilSize: 56,
-      boxX: 537.5,
-      boxY: 204,
-      boxSize: 170,
-      barTextColor: '#ffffff'
+      x: 508,
+      y: 138,
+      w: 224,
+      h: 308,
+      accent: '#ff1744',
+      bgTop: '#240a0a',
+      bgBot: '#140606',
+      numColor: '#fed7aa',
+      numFont: '900 46px "Segoe UI", Arial Black, Impact, sans-serif',
+      numX: 508 + 22,
+      numY: 138 + 14,
+      boxX: 539,
+      boxY: 202,
+      boxSize: 162
     }
   ];
 
   for (const card of podiumCards) {
-    const { rank, data, x, y, w, h, accent, bgTop, bgBot, stencilSize, boxX, boxY, boxSize, barTextColor } = card;
-    const cardRadius = 16;
-    const barHeight = 56;
+    const { rank, data, x, y, w, h, accent, bgTop, bgBot, numColor, numFont, numX, numY, boxX, boxY, boxSize } = card;
+    const cardRadius = 20;
+    const barHeight = 60;
     const barY = y + h - barHeight;
 
     // Clip to rounded card
@@ -506,106 +608,102 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
     // Background gradient
     const cardGrad = ctx.createLinearGradient(x, y, x, y + h);
     cardGrad.addColorStop(0, bgTop);
-    cardGrad.addColorStop(0.7, bgBot);
-    cardGrad.addColorStop(1, '#05070a');
+    cardGrad.addColorStop(0.75, bgBot);
+    cardGrad.addColorStop(1, '#05070d');
     ctx.fillStyle = cardGrad;
     ctx.fillRect(x, y, w, h);
 
-    // Subtle diagonal racing speed lines
-    ctx.save();
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
-    ctx.lineWidth = 1;
-    for (let lx = x - 60; lx < x + w + 100; lx += 20) {
-      ctx.beginPath();
-      ctx.moveTo(lx, y);
-      ctx.lineTo(lx - 40, y + h);
-      ctx.stroke();
-    }
-    ctx.restore();
+    // Rounded square avatar box
+    await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, accent, rank === 1 ? 2.8 : 2.5, 18);
 
-    // Prominent Square Photo Box covering middle of card (drawn first)
-    await drawSquareAvatar(ctx, data?.avatarUrl, boxX, boxY, boxSize, accent, rank === 1 ? 4.5 : 3.5, 16);
-
-    // Gold Crown for Rank 1 above the photo box
+    // Crown for Rank 1
     if (rank === 1) {
-      drawCrown(ctx, x + w / 2, boxY - 20, 48, 28);
+      drawCrown(ctx, x + w / 2 + 16, y + 42, 46, 26);
     }
 
-    // Large Stencil Rank Number in top-left (drawn ON TOP with shadow so it is NEVER hidden)
+    // Rank Number
     ctx.save();
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.font = `900 ${stencilSize}px "Segoe UI", Arial Black, Impact, sans-serif`;
-    ctx.fillStyle = '#ffffff';
+    ctx.font = numFont;
+    ctx.fillStyle = numColor;
     ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
     ctx.shadowBlur = 8;
-    ctx.fillText(String(rank), x + 16, y + 8);
+    ctx.fillText(String(rank), numX, numY);
     ctx.restore();
 
-    // Solid Bottom Bar (Driver name & score + rank movement)
+    // Solid Neon Bottom Bar
     ctx.fillStyle = accent;
     ctx.fillRect(x, barY, w, barHeight);
 
-    const rawName = data ? (data.displayName || data.username) : 'VACANT';
-    const cleanName = rawName.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim().toUpperCase();
-    const scoreVal = data ? (isAura ? data.aura : data.iq) : null;
-    const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '--%';
+    // Display Name & Username & Score
+    const rawDisp = data ? (data.displayName || data.username) : 'Display Name';
+    const cleanDisp = rawDisp.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
+    const rawUser = data ? (data.username ? `@${data.username}` : 'user') : 'user';
+    const cleanUser = rawUser.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
 
-    // Movement delta calculation
+    const scoreVal = data ? (isAura ? data.aura : data.iq) : null;
+    const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '-';
+
+    // Top Row of bar: Display Name (left) & Score (right)
+    ctx.save();
+    ctx.font = 'bold 15px "Segoe UI", Montserrat, Arial, sans-serif';
+    ctx.textBaseline = 'middle';
+
+    // Score on right
+    ctx.textAlign = 'right';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(scoreText, x + w - 14, barY + 22);
+    const scoreW = ctx.measureText(scoreText).width;
+
+    // Display Name on left
+    ctx.textAlign = 'left';
+    const maxDispW = w - scoreW - 32;
+    ctx.fillText(fitText(ctx, cleanDisp, maxDispW), x + 14, barY + 22);
+
+    // Bottom Row of bar: @username (left) & delta on right (if any)
+    ctx.font = '12px "Segoe UI", Arial, sans-serif';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+
     const prevRank = isAura ? data?.previousAuraRank : data?.previousIqRank;
     const delta = getRankDelta(rank, prevRank);
 
-    ctx.save();
-    ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
-    const scoreW = ctx.measureText(scoreText).width;
-
-    // Draw Score on right
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = barTextColor;
-    ctx.fillText(scoreText, x + w - 12, barY + barHeight / 2);
-
-    // Draw Movement Delta next to score if available
-    let deltaW = 0;
     if (delta.diff !== 0) {
-      ctx.font = '900 13px "Segoe UI", Arial, sans-serif';
-      deltaW = ctx.measureText(delta.text).width + 6;
-      ctx.fillStyle = delta.diff > 0 ? '#052e16' : '#450a0a';
-      ctx.fillText(delta.text, x + w - 12 - scoreW - 6, barY + barHeight / 2);
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(delta.text, x + w - 14, barY + 44);
+      const deltaW = ctx.measureText(delta.text).width + 8;
+      ctx.textAlign = 'left';
+      ctx.font = '12px "Segoe UI", Arial, sans-serif';
+      ctx.fillText(fitText(ctx, cleanUser, w - deltaW - 28), x + 14, barY + 44);
+    } else {
+      ctx.textAlign = 'left';
+      ctx.fillText(fitText(ctx, cleanUser, w - 28), x + 14, barY + 44);
     }
-
-    // Draw Driver / Player Name on left (Large bold font)
-    ctx.textAlign = 'left';
-    ctx.font = '900 18px "Segoe UI", Montserrat, Arial, sans-serif';
-    ctx.fillStyle = barTextColor;
-    const maxNameW = w - scoreW - deltaW - 24;
-    const fittedName = fitText(ctx, cleanName, maxNameW);
-    ctx.fillText(fittedName, x + 12, barY + barHeight / 2);
     ctx.restore();
 
     ctx.restore(); // Exit card clipping
 
-    // Outer card border stroke
+    // Outer Glowing Border Stroke
     ctx.save();
     ctx.beginPath();
     drawRoundRect(ctx, x, y, w, h, cardRadius);
     ctx.strokeStyle = accent;
-    ctx.lineWidth = rank === 1 ? 2.8 : 2.0;
-    if (rank === 1) {
-      ctx.shadowColor = accent;
-      ctx.shadowBlur = 10;
-    }
+    ctx.lineWidth = rank === 1 ? 3.5 : 2.8;
+    ctx.shadowColor = accent;
+    ctx.shadowBlur = rank === 1 ? 16 : 14;
     ctx.stroke();
     ctx.restore();
   }
 
   // 5. Bottom Panel: Ranks 4 to 10 (Clean Modern White Panel)
-  const panelX = 25;
-  const panelW = 710;
+  const panelX = 28;
+  const panelW = 704;
+  const panelY = 466;
 
   ctx.save();
   ctx.beginPath();
-  drawRoundRect(ctx, panelX, panelY, panelW, panelH, 16);
+  drawRoundRect(ctx, panelX, panelY, panelW, panelH, 20);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
 
@@ -615,12 +713,13 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
   ctx.restore();
 
   if (bottomMembers.length === 0) {
+    const rowCenterY = panelY + panelH / 2;
     ctx.save();
-    ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+    ctx.font = 'bold 16px "Segoe UI", Arial, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Awaiting contenders for Ranks 4 to 10...', panelX + panelW / 2, panelY + panelH / 2);
+    ctx.fillText('Awaiting contenders for Ranks 4 to 10...', panelX + panelW / 2, rowCenterY);
     ctx.restore();
   } else {
     for (let i = 0; i < bottomMembers.length; i++) {
@@ -631,66 +730,72 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 
       // 1. Rank Number
       ctx.save();
-      ctx.font = '900 21px "Segoe UI", Arial, sans-serif';
+      ctx.font = 'bold 17px "Segoe UI", Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0f172a';
       ctx.fillText(String(rankNum), panelX + 26, rowCenterY);
+
+      // 2. Dash separator
+      ctx.font = 'bold 15px "Segoe UI", Arial, sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('-', panelX + 46, rowCenterY);
       ctx.restore();
 
-      // 2. Rank Movement Delta (e.g. ▲ +5 / ▼ -2 / -)
-      const prevRank = isAura ? member.previousAuraRank : member.previousIqRank;
-      const delta = getRankDelta(rankNum, prevRank);
+      // 3. Circular Avatar (radius 19)
+      const avX = panelX + 76;
+      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 19, '#e2e8f0', 1.5);
 
-      ctx.save();
-      ctx.font = '900 13px "Segoe UI", Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = delta.color;
-      ctx.fillText(delta.text, panelX + 56, rowCenterY);
-      ctx.restore();
-
-      // 3. Avatar (Enlarged to radius 21px)
-      const avX = panelX + 96;
-      await drawCircularAvatar(ctx, member.avatarUrl, avX, rowCenterY, 21, '#cbd5e1', 2.0);
-
-      // 4. Name & Score (Enlarged)
-      ctx.save();
-      ctx.font = '900 17px "Segoe UI", Montserrat, Arial, sans-serif';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#0f172a';
-      const rawName = member.displayName || member.username;
-      const cleanName = rawName.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim().toUpperCase();
+      // 4. Two Lines of User Info (Display Name + username)
+      const rawDisp = member.displayName || member.username;
+      const cleanDisp = rawDisp.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
+      const rawUser = member.username ? `@${member.username}` : 'user';
+      const cleanUser = rawUser.replace(/[\u0000-\u001F\u007F-\u009F]/g, '').trim();
 
       const scoreVal = isAura ? member.aura : member.iq;
-      const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '--%';
+      const scoreText = typeof scoreVal === 'number' ? `${scoreVal}%` : '-';
 
+      // Measure score text on right
       ctx.save();
-      ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
-      const scoreW = ctx.measureText(scoreText).width;
-      ctx.restore();
-
-      const maxNameW = panelW - 145 - scoreW - 30;
-      const fittedName = fitText(ctx, cleanName, maxNameW);
-      ctx.fillText(fittedName, panelX + 130, rowCenterY);
-
-      // 5. Score on right
-      ctx.font = '900 20px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.font = 'bold 16px "Segoe UI", Montserrat, Arial, sans-serif';
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#0f172a';
       ctx.fillText(scoreText, panelX + panelW - 24, rowCenterY);
+      const scoreW = ctx.measureText(scoreText).width;
+
+      // Rank Movement Delta (e.g. ▲ +5 / ▼ -2) if any
+      const prevRank = isAura ? member.previousAuraRank : member.previousIqRank;
+      const delta = getRankDelta(rankNum, prevRank);
+      let deltaW = 0;
+      if (delta.diff !== 0) {
+        ctx.font = 'bold 12px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = delta.color;
+        ctx.fillText(delta.text, panelX + panelW - 28 - scoreW, rowCenterY);
+        deltaW = ctx.measureText(delta.text).width + 8;
+      }
+
+      // Display Name (Line 1)
+      ctx.textAlign = 'left';
+      ctx.font = 'bold 15px "Segoe UI", Montserrat, Arial, sans-serif';
+      ctx.fillStyle = '#0f172a';
+      const maxTextW = panelW - 120 - scoreW - deltaW - 30;
+      ctx.fillText(fitText(ctx, cleanDisp, maxTextW), panelX + 108, rowCenterY - 10);
+
+      // Username (Line 2)
+      ctx.font = '12px "Segoe UI", Arial, sans-serif';
+      ctx.fillStyle = '#64748b';
+      ctx.fillText(fitText(ctx, cleanUser, maxTextW), panelX + 108, rowCenterY + 12);
       ctx.restore();
 
       // Divider line between rows
       if (i < bottomMembers.length - 1) {
         ctx.save();
+        ctx.strokeStyle = '#f1f5f9';
+        ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(panelX + 20, rowY + rowHeight);
         ctx.lineTo(panelX + panelW - 20, rowY + rowHeight);
-        ctx.strokeStyle = '#f1f5f9';
-        ctx.lineWidth = 1;
         ctx.stroke();
         ctx.restore();
       }
