@@ -914,8 +914,8 @@ function createContainerMessage(contentOrOptions, legacyOptions = {}) {
       addedThumbnailSection = false;
     }
   }
-  if (!addedThumbnailSection) {
-    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText || ' '));
+  if (!addedThumbnailSection && trimmedText) {
+    container.addTextDisplayComponents(new TextDisplayBuilder().setContent(trimmedText));
   }
 
   if (opts.image && typeof opts.image === 'string') {

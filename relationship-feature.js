@@ -754,15 +754,18 @@ async function generateFamilyTreeBanner(focusMember, guild) {
   ctx.fillRect(0, 0, width, height);
   ctx.restore();
 
+  const focusDisp = focusMember.displayName || focusMember.user?.username || 'User';
+  const familyTitle = `${focusDisp}'s Family Tree`;
+
   // Top Title
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
-  ctx.font = 'italic 900 30px "Segoe UI", Montserrat, sans-serif';
+  ctx.font = 'italic 900 32px "Segoe UI", Montserrat, sans-serif';
   ctx.fillStyle = '#ffffff';
   ctx.shadowColor = '#38bdf8';
   ctx.shadowBlur = 16;
-  ctx.fillText('ANIPEDIA FAMILY TREE', width / 2, 24);
+  ctx.fillText(fitText(ctx, familyTitle, 900), width / 2, 24);
   ctx.restore();
 
   const focusId = focusMember.id;
@@ -1217,8 +1220,6 @@ async function handleFamilyTreeCommand(message, client, sendContainer = null) {
 
   if (typeof sendContainer === 'function') {
     await sendContainer(message, {
-      title: `🌟  ${toSmallCaps('Family Tree')}`,
-      description: `### 🏡 **${toSmallCaps(targetMember.displayName || targetMember.user?.username || 'User')}'s Family Tree**`,
       image: 'attachment://family_tree.png',
       footer: `${toSmallCaps('AniPedia Family Registry')}`,
       timestamp: Date.now(),
@@ -1226,7 +1227,6 @@ async function handleFamilyTreeCommand(message, client, sendContainer = null) {
     });
   } else {
     await message.reply({
-      content: `🏡 **Family Tree for <@${targetMember.id}>:**`,
       files: [attachment]
     });
   }
