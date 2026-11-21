@@ -336,54 +336,102 @@ const slashCommandsData = [
     .setDescription('View Aiko music commands and audio guide (Only visible to you)')
 ];
 
-async function sweepLevel10VerifiedRole(guild) {
-  if (!guild) return { verifiedCount: 0, totalChecked: 0 };
-  try {
-    await guild.roles.fetch().catch(() => {});
-    const verifiedRole = guild.roles.cache.get('1572669219596804186') ||
-                         guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
-    if (!verifiedRole) {
-      console.warn(`[Verified Sweep] Role 1572669219596804186 or "verified" not found in guild ${guild.name}`);
-      return { verifiedCount: 0, totalChecked: 0, error: 'Verified role not found' };
-    }
+async function auditVerifiedMembers(guild, dbInstance) {
+  if (!guild) return { error: 'No guild provided' };
 
-    const members = await guild.members.fetch().catch(err => {
-      console.error('[Verified Sweep] Error fetching members:', err);
-      return guild.members.cache;
-    });
-
-    let verifiedCount = 0;
-    let totalChecked = 0;
-
-    for (const [memberId, member] of members) {
-      if (member.user.bot) continue;
-      totalChecked++;
-
-      if (member.roles.cache.has(verifiedRole.id)) continue;
-
-      const lvl = getMemberLevel(member);
-      const tier = getMemberTier(member);
-      const isLevel10Plus = lvl >= 10;
-      const isStaffOrVip = tier >= 1 || isWhitelistedUser(member);
-
-      if (isLevel10Plus || isStaffOrVip) {
-        try {
-          await member.roles.add(verifiedRole, `Auto-verification for active member (Level ${lvl}, Tier ${tier})`);
-          verifiedCount++;
-          console.log(`[Verified Sweep] Granted verified role to ${member.user.tag} (Level ${lvl}, Tier ${tier})`);
-          await new Promise(r => setTimeout(r, 200));
-        } catch (addErr) {
-          console.error(`[Verified Sweep] Failed to add verified role to ${member.user.tag}:`, addErr.message);
-        }
-      }
-    }
-
-    console.log(`[Verified Sweep] Complete. Awarded verified role to ${verifiedCount} / ${totalChecked} members.`);
-    return { verifiedCount, totalChecked };
-  } catch (err) {
-    console.error('[Verified Sweep] Error running sweep:', err);
-    return { verifiedCount: 0, totalChecked: 0, error: err.message };
+  await guild.roles.fetch().catch(() => {});
+  const verifiedRole = guild.roles.cache.get('1572669219596804186') ||
+                       guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
+  if (!verifiedRole) {
+    return { error: 'Verified role (1572669219596804186 or "verified") not found in server.' };
   }
+
+  // 1. Fetch all registered verified users with an IP from Firestore
+  const registeredIpUsers = new Set();
+  if (dbInstance) {
+    try {
+      const snap = await dbInstance.collection('verified_users').get();
+      snap.forEach(doc => {
+        const data = doc.data();
+        if (data.ip && String(data.ip).trim().length > 0) {
+          registeredIpUsers.add(doc.id);
+          if (data.userId) registeredIpUsers.add(String(data.userId));
+        }
+      });
+      console.log(`[Audit Verify] Found ${registeredIpUsers.size} user IDs with valid IPs in Firestore.`);
+    } catch (dbErr) {
+      console.error('[Audit Verify] Error fetching verified_users from Firestore:', dbErr);
+    }
+  }
+
+  // 2. Fetch all guild members
+  const members = await guild.members.fetch().catch(err => {
+    console.error('[Audit Verify] Error fetching members:', err);
+    return guild.members.cache;
+  });
+
+  const validWithIp = [];
+  const unverifiedWithoutIp = [];
+  const protectedStaff = [];
+
+  for (const [memberId, member] of members) {
+    if (member.user.bot) continue;
+
+    if (!member.roles.cache.has(verifiedRole.id)) {
+      continue;
+    }
+
+    // Check if staff / master / grand admin
+    if (member.id === MASTER_USER_ID || isWhitelistedUser(member) || member.guild?.ownerId === member.id) {
+      protectedStaff.push(member);
+      continue;
+    }
+
+    if (registeredIpUsers.has(member.id)) {
+      validWithIp.push(member);
+    } else {
+      unverifiedWithoutIp.push(member);
+    }
+  }
+
+  return {
+    verifiedRole,
+    totalMembers: members.size,
+    totalRoleHolders: validWithIp.length + unverifiedWithoutIp.length + protectedStaff.length,
+    validWithIp,
+    unverifiedWithoutIp,
+    protectedStaff
+  };
+}
+
+async function executeVerifiedEnforcement(guild, dbInstance) {
+  const audit = await auditVerifiedMembers(guild, dbInstance);
+  if (audit.error) return audit;
+
+  let removedCount = 0;
+  const totalToRemove = audit.unverifiedWithoutIp.length;
+
+  for (let i = 0; i < totalToRemove; i++) {
+    const member = audit.unverifiedWithoutIp[i];
+    try {
+      await member.roles.remove(audit.verifiedRole, 'Enforce Verification: Account lacks registered IP in database. Must verify via portal.');
+      removedCount++;
+      console.log(`[Enforce Verify] Removed verified role from ${member.user?.tag || member.id} (no IP recorded)`);
+    } catch (err) {
+      console.error(`[Enforce Verify] Failed to remove role from ${member.user?.tag || member.id}:`, err.message);
+    }
+    // Respect Discord API rate limit
+    if (i < totalToRemove - 1) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+  }
+
+  return {
+    removedCount,
+    keptCount: audit.validWithIp.length,
+    protectedCount: audit.protectedStaff.length,
+    totalRoleHolders: audit.totalRoleHolders
+  };
 }
 
 client.once('ready', async () => {
@@ -506,14 +554,7 @@ client.once('ready', async () => {
     initMusic(client, sendContainer);
     await sweepAllMembersLoyalRole(client);
 
-    try {
-      const anipediaGuild = client.guilds.cache.get('1517882821673357312') || client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
-      if (anipediaGuild) {
-        await sweepLevel10VerifiedRole(anipediaGuild);
-      }
-    } catch (sweepInitErr) {
-      console.error('[Ready] Error during initial verified sweep:', sweepInitErr);
-    }
+    console.log('[Security] Verified role enforcement active: Level 10+ auto-verification is retired.');
   } catch (err) {
     console.error("Error initializing warn scheduler/role sync on ready:", err);
   }
@@ -5684,23 +5725,107 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    const isSweepVerifiedCmd = startsWithPrefix && (
+    const isSweepRetiredCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'sweepverified' ||
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'verifyactive' ||
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'autoverify'
     );
 
-    if (isSweepVerifiedCmd) {
-      if (message.author.id !== '1013822181379162142' && message.author.id !== '750056830654480510' && !isWhitelistedUser(message.author)) {
-        await message.reply("Mou! 🛡️ Only server administrators can trigger the verified member sweep!");
+    if (isSweepRetiredCmd) {
+      await message.reply("ℹ️ **Notice:** Level 10+ auto-verification is permanently retired! All members must now verify through the Anti-VPN portal with IP checks.\n👉 Use `<enforceverify>` to view unverified accounts or `<enforceverify confirm>` to strip their roles!");
+      return;
+    }
+
+    const isEnforceVerifyCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'enforceverify' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auditverify' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'verifyaudit' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'checkverify' ||
+      cleanQuery.startsWith('enforceverify') ||
+      cleanQuery.startsWith('auditverify') ||
+      cleanQuery.startsWith('verifyaudit')
+    );
+
+    if (isEnforceVerifyCmd) {
+      if (message.author.id !== MASTER_USER_ID && !isWhitelistedUser(message.author)) {
+        await message.reply("Mou! 🛡️ Only server administrators can run the verification enforcement audit!");
         return;
       }
-      const progressMsg = await message.reply("🛡️ **Starting Verified Role sweep for Level 10+ and Staff members...** Please wait...");
-      const result = await sweepLevel10VerifiedRole(message.guild);
-      if (result.error) {
-        await progressMsg.edit(`❌ **Sweep failed:** ${result.error}`);
+
+      const args = cleanQuery.replace(/^(enforceverify|auditverify|verifyaudit|checkverify)\s*/i, '').trim().toLowerCase();
+      const isConfirm = args === 'confirm' || args === 'run' || args === 'execute' || args === 'start';
+
+      if (isConfirm) {
+        const progressMsg = await message.reply("⏳ **Enforcing verification cleanup...** Stripping verified role from accounts with no IP in database. Please wait...");
+        const result = await executeVerifiedEnforcement(message.guild, db);
+        if (result.error) {
+          await progressMsg.edit(`❌ **Enforcement failed:** ${result.error}`);
+          return;
+        }
+
+        const doneEmbed = new EmbedBuilder()
+          .setColor(0x2ECC71)
+          .setTitle('✅ AniPedia Verification Enforcement Complete!')
+          .setDescription(
+            `**All unverified accounts without registered IPs have been stripped.**\n\n` +
+            `• ❌ **Roles Removed:** \`${result.removedCount}\` account(s) *(must now verify via portal)*\n` +
+            `• ✅ **Roles Kept:** \`${result.keptCount}\` account(s) *(verified with clean IP)*\n` +
+            `• 👑 **Staff Protected:** \`${result.protectedCount}\` staff account(s)\n\n` +
+            `🛡️ *100% of current verified role holders in AniPedia now have registered IPs in database!*`
+          )
+          .setFooter({ text: 'AniPedia Security Shield • Enforce Complete' })
+          .setTimestamp();
+
+        await progressMsg.edit({ content: null, embeds: [doneEmbed], components: [] });
+        return;
+      }
+
+      // Default: Audit / Preview mode
+      const progressMsg = await message.reply("🛡️ **Auditing verified role holders against database IP records...** Please wait...");
+      const audit = await auditVerifiedMembers(message.guild, db);
+      if (audit.error) {
+        await progressMsg.edit(`❌ **Audit failed:** ${audit.error}`);
+        return;
+      }
+
+      const auditEmbed = new EmbedBuilder()
+        .setColor(audit.unverifiedWithoutIp.length > 0 ? 0xE67E22 : 0x2ECC71)
+        .setTitle('🛡️ AniPedia Verification Audit & Enforcement')
+        .setDescription(
+          `**AniPedia Security Shield • IP Intelligence Audit**\n\n` +
+          `📊 **Server Summary:**\n` +
+          `• Total Server Members: \`${audit.totalMembers}\`\n` +
+          `• Total Verified Role Holders: \`${audit.totalRoleHolders}\`\n\n` +
+          `✅ **Legitimate Verified Members (Safe & Kept):**\n` +
+          `• **\`${audit.validWithIp.length}\`** members have a valid IP logged in database.\n` +
+          `↳ *These accounts passed the web portal and will **NOT** lose their role.*\n\n` +
+          `⚠️ **Unverified Role Holders (To Be Stripped):**\n` +
+          `• **\`${audit.unverifiedWithoutIp.length}\`** members have **NO IP** recorded.\n` +
+          `↳ *These accounts got the role via Level 10+ or old bypasses. Their verified role will be taken away so they must verify with an IP.*\n\n` +
+          `👑 **Protected Staff / Grand Admins:**\n` +
+          `• **\`${audit.protectedStaff.length}\`** staff accounts (Exempt).\n\n` +
+          (audit.unverifiedWithoutIp.length > 0
+            ? `👉 **To execute removal:** Click the red **"Execute Removal"** button below or type \`<enforceverify confirm>\`!`
+            : `🎉 **100% of verified members have registered IPs!** No action needed.`)
+        )
+        .setFooter({ text: 'AniPedia Security Shield • Verification Audit' })
+        .setTimestamp();
+
+      if (audit.unverifiedWithoutIp.length > 0) {
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`enforce_verify_run_${message.author.id}`)
+            .setLabel(`Execute Removal (${audit.unverifiedWithoutIp.length})`)
+            .setEmoji('⚠️')
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId(`enforce_verify_cancel_${message.author.id}`)
+            .setLabel('Cancel')
+            .setStyle(ButtonStyle.Secondary)
+        );
+        await progressMsg.edit({ content: null, embeds: [auditEmbed], components: [row] });
       } else {
-        await progressMsg.edit(`✅ **Verified Sweep Complete!**\n• Granted **verified** role to **${result.verifiedCount}** eligible active members (Level 10+ / Staff).\n• Total members checked: **${result.totalChecked}**.`);
+        await progressMsg.edit({ content: null, embeds: [auditEmbed], components: [] });
       }
       return;
     }
@@ -7235,6 +7360,61 @@ client.on('interactionCreate', async (interaction) => {
     if (interaction.customId.startsWith('rel_')) {
       const handled = await handleRelationshipButton(interaction, client, db, sendContainer);
       if (handled) return;
+    }
+    if (interaction.customId.startsWith('enforce_verify_run_')) {
+      const authorId = interaction.customId.replace('enforce_verify_run_', '');
+      if (interaction.user.id !== authorId && interaction.user.id !== MASTER_USER_ID && !isWhitelistedUser(interaction.user)) {
+        await interaction.reply({
+          content: "Mou! 🛡️ Only the administrator who started this audit can execute the removal!",
+          ephemeral: true
+        });
+        return;
+      }
+
+      await interaction.update({
+        content: '⏳ **Enforcing verification cleanup...** Stripping verified role from accounts with no IP in database. Please wait...',
+        embeds: [],
+        components: []
+      });
+
+      const result = await executeVerifiedEnforcement(interaction.guild, db);
+      if (result.error) {
+        await interaction.editReply({ content: `❌ **Enforcement failed:** ${result.error}`, embeds: [], components: [] });
+        return;
+      }
+
+      const doneEmbed = new EmbedBuilder()
+        .setColor(0x2ECC71)
+        .setTitle('✅ AniPedia Verification Enforcement Complete!')
+        .setDescription(
+          `**All unverified accounts without registered IPs have been stripped.**\n\n` +
+          `• ❌ **Roles Removed:** \`${result.removedCount}\` account(s) *(must now verify via portal)*\n` +
+          `• ✅ **Roles Kept:** \`${result.keptCount}\` account(s) *(verified with clean IP)*\n` +
+          `• 👑 **Staff Protected:** \`${result.protectedCount}\` staff account(s)\n\n` +
+          `🛡️ *100% of current verified role holders in AniPedia now have registered IPs in database!*`
+        )
+        .setFooter({ text: 'AniPedia Security Shield • Enforce Complete' })
+        .setTimestamp();
+
+      await interaction.editReply({ content: null, embeds: [doneEmbed], components: [] });
+      return;
+    }
+    if (interaction.customId.startsWith('enforce_verify_cancel_')) {
+      const authorId = interaction.customId.replace('enforce_verify_cancel_', '');
+      if (interaction.user.id !== authorId && interaction.user.id !== MASTER_USER_ID && !isWhitelistedUser(interaction.user)) {
+        await interaction.reply({
+          content: "Mou! 🌸 Only the administrator who started this audit can cancel it!",
+          ephemeral: true
+        });
+        return;
+      }
+
+      await interaction.update({
+        content: '❌ **Enforce verification cancelled.** No roles were modified.',
+        embeds: [],
+        components: []
+      });
+      return;
     }
     if (interaction.customId.startsWith('verify_staff_approve_')) {
       await handleStaffApprovalButton(interaction, { getMemberTier, isWhitelistedUser, getModEmojis, logToEmilliaLog });

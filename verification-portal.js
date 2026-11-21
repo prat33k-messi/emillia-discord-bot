@@ -331,9 +331,7 @@ function initVerificationPortal(app, client, db) {
     let isBannedAlt = false;
     let bannedReason = '';
 
-    if (userId === '855013222787842058') {
-      console.log(`[Verification Portal] VIP Exception triggered for ${userId} (${userTag}) - bypassing all checks`);
-    } else if (db) {
+    if (db) {
       try {
         // Live check active Discord bans for this IP
         const guildBans = await guild.bans.fetch().catch(() => new Map());
