@@ -5694,7 +5694,7 @@ client.on('messageCreate', async (message) => {
 
         await sendContainer(message, {
           description: cleanContent,
-          footer: 'AniPedia Security Shield • IP Hidden for Privacy'
+          footer: 'AniPedia Security Shield'
         });
         return;
       }
@@ -5720,7 +5720,7 @@ client.on('messageCreate', async (message) => {
 
       await sendContainer(message, {
         description: altContent,
-        footer: 'AniPedia Security Shield • IP Hidden for Privacy'
+        footer: 'AniPedia Security Shield'
       });
       return;
     }
