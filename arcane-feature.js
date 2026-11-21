@@ -16,7 +16,9 @@ const { AttachmentBuilder, EmbedBuilder } = require('discord.js');
 // Authorized user IDs allowed to run Weekly Arcane commands
 const AUTHORIZED_ARCANE_IDS = new Set([
   '1013822181379162142', // Aerion / Creator
-  '750056830654480510'   // Authorized Admin
+  '1455104414166679656', // Grand Admin
+  '1382005683288936478', // Grand Admin
+  '750056830654480510'   // Grand Admin
 ]);
 
 // In-memory cache for fast leaderboard generation without database latency

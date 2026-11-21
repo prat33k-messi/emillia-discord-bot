@@ -21,7 +21,9 @@ const {
 // Authorized Admin IDs allowed to run Relationship commands
 const AUTHORIZED_ADMIN_IDS = new Set([
   '1013822181379162142', // Aerion / Creator / Main Admin
-  '750056830654480510'   // Authorized Admin
+  '1455104414166679656', // Grand Admin
+  '1382005683288936478', // Grand Admin
+  '750056830654480510'   // Grand Admin
 ]);
 
 // In-memory cache for ultra-fast response without database lag
