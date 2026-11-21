@@ -982,13 +982,6 @@ async function handleRelationshipCommand(message, client, db, sendContainer = nu
   const relationshipCommands = new Set(['marry', 'adopt', 'divorce', 'leave', 'familytree', 'family']);
   if (!relationshipCommands.has(cmd)) return false;
 
-  // STRICT ADMIN PERMISSION: Only Main Admin can execute relationship commands
-  const isMaster = message.author.id === '1013822181379162142' || AUTHORIZED_ADMIN_IDS.has(message.author.id);
-  if (!isMaster) {
-    await message.reply("Mou! 🌸 Only the Main Admin (<@1013822181379162142>) has permission to manage relationship vows & families! ❄️");
-    return true;
-  }
-
   // 1. <marry [@user] [@user2]
   if (cmd === 'marry') {
     await handleMarryCommand(message, client);
@@ -1032,8 +1025,19 @@ async function handleMarryCommand(message, client) {
   let user2Member = null;
 
   if (mentions.length >= 2) {
-    user1Member = mentions[0];
-    user2Member = mentions[1];
+    if (mentions[0].id === message.author.id) {
+      user1Member = mentions[0];
+      user2Member = mentions[1];
+    } else if (mentions[1].id === message.author.id) {
+      user1Member = mentions[1];
+      user2Member = mentions[0];
+    } else if (AUTHORIZED_ADMIN_IDS.has(message.author.id)) {
+      user1Member = mentions[0];
+      user2Member = mentions[1];
+    } else {
+      user1Member = message.member;
+      user2Member = mentions[0];
+    }
   } else if (mentions.length === 1) {
     user2Member = mentions[0];
   }
