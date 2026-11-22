@@ -332,6 +332,10 @@ const slashCommandsData = [
     .setDescription('Show help and available commands'),
 
   new SlashCommandBuilder()
+    .setName('adminhelp')
+    .setDescription('Master Admin Command Registry (Restricted to Master)'),
+
+  new SlashCommandBuilder()
     .setName('aikomusic')
     .setDescription('View Aiko music commands and audio guide (Only visible to you)')
 ];
@@ -2127,6 +2131,309 @@ async function sendInteractiveHelpMenu(source, ctx) {
         await interaction.editReply({ components: [disabledRow] }).catch(() => {});
       } else {
         await responseMsg.edit({ components: [disabledRow] }).catch(() => {});
+      }
+    } catch (err) {}
+  });
+}
+
+function getAdminHelpCategoryPayload(category, guild) {
+  const footerText = 'AniPedia Sanctuary • Master Command Registry';
+
+  switch (category) {
+    case 'master':
+      return {
+        title: 'Master Directives & Control',
+        description:
+          `Restricted solely to Master <@${MASTER_USER_ID}>\n\n` +
+          `• \`Authorization: Protocol Zero <@user/ID>\`\n` +
+          `Revokes credentials, blacklists target member from all bot interactions, and strips privileged execution.\n\n` +
+          `• \`Authorization: Protocol One <@user/ID>\`\n` +
+          `Reinstates cleared operational status and removes target member from Protocol Zero blacklist.\n\n` +
+          `• \`Command override: Code Black\`\n` +
+          `Emergency core freeze. Instantly locks all bot operations and neural pipelines for all users except Master.\n\n` +
+          `• \`Command override: Code White\` (or \`Authorization: Reboot\`)\n` +
+          `Initializes system reboot sequence. Unfreezes the core and restores standard operational directives.\n\n` +
+          `• \`<aurareset [@user]>\` / \`/aurareset\`\n` +
+          `Resets fixed and leaderboard Aura & IQ stats. Without arguments, wipes stats server-wide.\n\n` +
+          `• \`<iqreset [@user]>\` / \`/iqreset\`\n` +
+          `Resets fixed and leaderboard IQ scores for the server or a target user.\n\n` +
+          `• \`<ip <@user|ID>>\`\n` +
+          `Classified IP intelligence lookup. Retrieves registered IP, IP ban status, timestamp, and linked alts.\n\n` +
+          `• \`<reset>\`\n` +
+          `Wipes conversation history and fact extraction memories stored for the author.`,
+        footer: footerText
+      };
+
+    case 'security':
+      return {
+        title: 'Security, Alt Shield & Verification',
+        description:
+          `• \`<alt <@user|ID>>\` / \`<alts <@user|ID>>\`\n` +
+          `Cross-references target user's registered IP signature in database and reveals all linked accounts sharing the IP, along with their server status (In Server, Banned, or Not in Server). Protected admin IDs are shielded.\n\n` +
+          `• \`<enforceverify>\` / \`<auditverify>\`\n` +
+          `Audits every member holding the Verified role against registered IP records. Identifies legitimate vs unverified bypass accounts.\n\n` +
+          `• \`<enforceverify confirm>\`\n` +
+          `Executes automated enforcement sweep: immediately strips the Verified role from all accounts that do not have an IP recorded in the database.\n\n` +
+          `• \`<verification>\`\n` +
+          `Deploys the official AniPedia Anti-VPN Verification Portal panel with the web verification button.\n\n` +
+          `• Automated Background Security:\n` +
+          `Anti-VPN/proxy blocking, Cloudflare WARP/Tor detection, and automated IP cascade auto-bans whenever an account sharing a verified IP is banned.`,
+        footer: footerText
+      };
+
+    case 'moderation':
+      return {
+        title: 'Moderation & Disciplinary Ladder',
+        description:
+          `• \`<warn @user [reason]>\` / \`/warn\`\n` +
+          `Issues an official tiered warning (Levels 1 to 6):\n` +
+          `  Level 1: [on warn 1] nickname tag (24 hours)\n` +
+          `  Level 2: [on warn 2] tag + media/link/emoji/sticker restrictions (3 days)\n` +
+          `  Level 3: 1-hour timeout + Level 2 restrictions (7 days)\n` +
+          `  Level 4: 1-day timeout + Level 2 restrictions (7 days)\n` +
+          `  Level 5: 1-week timeout + nickname tag (1 week)\n` +
+          `  Level 6: Permanent Server Ban\n\n` +
+          `• \`<warns [@user]>\` / \`/warns\`\n` +
+          `Displays warning history, active ladder level, and restriction details.\n\n` +
+          `• \`<clearwarntemp @user [reason]>\` / \`/clearwarntemp\`\n` +
+          `Lifts active restrictions and restores original nickname early (keeps warning count).\n\n` +
+          `• \`<clearwarnperm @user [reason]>\` / \`/clearwarnperm\`\n` +
+          `Permanently resets all warning records and ladder status to Level 0.\n\n` +
+          `• \`<leaderboard>\` / \`/leaderboard\`\n` +
+          `Displays the top warned members ranking in AniPedia.\n\n` +
+          `• \`<jail @user [reason]>\` / \`/jail\`\n` +
+          `Strips all member roles and assigns the Jailed role.\n\n` +
+          `• \`<unjail @user [reason]>\` / \`/unjail\`\n` +
+          `Releases member from jail and restores all original roles.\n\n` +
+          `• \`<timeout @user [dur] [reason]>\` / \`/timeout\`\n` +
+          `Temporarily timeouts member (e.g. 10m, 1h, 1d).\n\n` +
+          `• \`<untimeout @user>\` / \`/untimeout\`\n` +
+          `Removes active timeout immediately.\n\n` +
+          `• \`<kick @user [reason]>\` / \`/kick\`\n` +
+          `Expels member from the server with 15-message chat purge.\n\n` +
+          `• \`<ban @user [reason]>\` / \`/ban\`\n` +
+          `Permanently bans member, triggers IP alt sweep, and purges messages.\n\n` +
+          `• \`<unban <user_id>>\` / \`/unban\`\n` +
+          `Unbans member by ID and clears IP from blacklist if clean.\n\n` +
+          `• \`<purge <1-100> [@user]>\` / \`/purge\`\n` +
+          `Bulk deletes messages in current channel with optional user filter.`,
+        footer: footerText
+      };
+
+    case 'relationship':
+      return {
+        title: 'Family & Relationship Registry',
+        description:
+          `• \`<marry @user>\`\n` +
+          `Sends a marriage proposal with interactive buttons sent to chat and DM. Includes a 15-minute rejection cooldown and 5-minute expiry.\n\n` +
+          `• \`<adopt @user>\`\n` +
+          `Sends an adoption proposal to adopt a user as child into family (sent to chat & DM).\n\n` +
+          `• \`<divorce>\`\n` +
+          `Initiates mutual divorce confirmation. Both partners must confirm before marriage and ties dissolve.\n\n` +
+          `• \`<abandon @child>\`\n` +
+          `Disowns an adopted child. If two parents are present, both parents must confirm. Single parents can abandon directly.\n\n` +
+          `• \`<leave>\`\n` +
+          `Allows an adopted child to voluntarily leave their adoptive family.\n\n` +
+          `• \`<familytree [@user]>\` / \`<family>\`\n` +
+          `Generates high-resolution visual Canvas 3D family tree hierarchy card.`,
+        footer: footerText
+      };
+
+    case 'arcane':
+      return {
+        title: 'Arcane Aura, IQ & Compatibility',
+        description:
+          `• \`<aura [@user]>\` / \`/aura\`\n` +
+          `Measures spiritual Aura percentage (0% - 100%) and renders a custom Canvas card with rare rarity tiers and level boost bonuses.\n\n` +
+          `• \`<iq [@user]>\` / \`/iq\`\n` +
+          `Assesses anime IQ score with anime quotes, character tier artwork, and rarity assessment.\n\n` +
+          `• \`<bestie @user>\` / \`/besties\`\n` +
+          `Tests bestie compatibility score and generates an interactive friendship card.\n\n` +
+          `• \`<auraleaderboard>\` / \`<auralb>\` / \`<auratop>\`\n` +
+          `Displays weekly top Arcane Aura rankings in AniPedia.\n\n` +
+          `• \`<iqleaderboard>\` / \`<iqlb>\` / \`<iqtop>\`\n` +
+          `Displays weekly top Arcane IQ rankings in AniPedia.`,
+        footer: footerText
+      };
+
+    case 'utility':
+      return {
+        title: 'Utilities & Sanctuary Guidelines',
+        description:
+          `• \`<inviteinfo <@user|ID>>\` / \`/inviteinfo\`\n` +
+          `Deep investigation of who invited a member, active invite links, and join chain.\n\n` +
+          `• \`<revokeinvites <@user|ID>>\`\n` +
+          `Revokes and deletes all active server invite links created by a user.\n\n` +
+          `• \`<profile>\` / \`/profile\`\n` +
+          `Displays Aiko core moderation intelligence background and creator attribution.\n\n` +
+          `• \`<avatar [@user]>\` / \`<av>\` / \`/avatar\`\n` +
+          `Renders user avatar framed in signature purple neon styling.\n\n` +
+          `• \`<afk [reason]>\` / \`/afk\`\n` +
+          `Sets AFK status with automatic return welcome and mention logger (Level 5+ required).\n\n` +
+          `• \`<anipedia>\` / \`/anipedia\`\n` +
+          `Displays AniPedia community sanctuary rules, role guide, and server information.\n\n` +
+          `• \`<ping>\`\n` +
+          `Checks bot websocket heartbeat and message round-trip latency.\n\n` +
+          `• \`<aikomusic>\` / \`/aikomusic\`\n` +
+          `Aiko music playback services (Temporarily paused).`,
+        footer: footerText
+      };
+
+    case 'all':
+    default:
+      return {
+        title: 'Master Admin Command Registry',
+        description:
+          `Restricted solely to Master <@${MASTER_USER_ID}>\n\n` +
+          `### Master Directives & Control\n` +
+          `• \`Authorization: Protocol Zero <@user>\` — Revoke credentials & freeze privileges\n` +
+          `• \`Authorization: Protocol One <@user>\` — Restore operational clearance\n` +
+          `• \`Command override: Code Black\` — Emergency core freeze (neural lockdown)\n` +
+          `• \`Command override: Code White\` — Initialize system reboot sequence\n` +
+          `• \`<aurareset [@user]>\` / \`/aurareset\` — Reset server or user Aura & IQ stats\n` +
+          `• \`<iqreset [@user]>\` / \`/iqreset\` — Reset server or user IQ stats\n` +
+          `• \`<ip @user>\` — Confidential IP lookup & alt intelligence\n` +
+          `• \`<reset>\` — Wipe conversation memory & learned facts\n\n` +
+          `### Security & Alt Shield\n` +
+          `• \`<alt @user>\` / \`<alts @user>\` — Scan IP signatures for connected alt accounts\n` +
+          `• \`<enforceverify>\` — Audit verified role holders against registered IP database\n` +
+          `• \`<enforceverify confirm>\` — Strip verified role from accounts with no IP\n` +
+          `• \`<verification>\` — Deploy interactive Anti-VPN verification portal panel\n\n` +
+          `### Moderation & Disciplinary Ladder\n` +
+          `• \`<warn @user [reason]>\` / \`/warn\` — Issue tiered warning (Level 1 to 6)\n` +
+          `• \`<warns [@user]>\` / \`/warns\` — View warning history & ladder level\n` +
+          `• \`<clearwarntemp @user>\` / \`/clearwarntemp\` — Lift restrictions early (retains history)\n` +
+          `• \`<clearwarnperm @user>\` / \`/clearwarnperm\` — Permanently wipe all warnings to 0\n` +
+          `• \`<leaderboard>\` / \`/leaderboard\` — View top warned members\n` +
+          `• \`<jail @user [reason]>\` / \`/jail\` — Strip roles & isolate in jail\n` +
+          `• \`<unjail @user>\` / \`/unjail\` — Release from jail & restore roles\n` +
+          `• \`<timeout @user [dur] [reason]>\` / \`/timeout\` — Timeout member (10m, 1h, 1d)\n` +
+          `• \`<untimeout @user>\` / \`/untimeout\` — Remove timeout immediately\n` +
+          `• \`<kick @user [reason]>\` / \`/kick\` — Expel member from server (+15 msg purge)\n` +
+          `• \`<ban @user [reason]>\` / \`/ban\` — Permanently ban member (+alt sweep & 15 msg purge)\n` +
+          `• \`<unban <user_id>>\` / \`/unban\` — Unban user by ID & clear clean IP\n` +
+          `• \`<purge <1-100> [@user]>\` / \`/purge\` — Bulk delete messages in channel\n\n` +
+          `### Family & Relationships\n` +
+          `• \`<marry @user>\` — Marriage proposal with chat & DM interactive buttons\n` +
+          `• \`<adopt @user>\` — Adoption proposal to take in a child (chat & DM)\n` +
+          `• \`<divorce>\` — Mutual divorce request (both spouses must confirm)\n` +
+          `• \`<abandon @child>\` — Disown child (requires mutual confirmation if 2 parents)\n` +
+          `• \`<leave>\` — Adopted child voluntarily leaves family\n` +
+          `• \`<familytree [@user]>\` / \`<family>\` — High-resolution 3D Canvas family tree card\n\n` +
+          `### Arcane Aura, IQ & Compatibility\n` +
+          `• \`<aura [@user]>\` / \`/aura\` — Roll spiritual Aura card with rare tiers\n` +
+          `• \`<iq [@user]>\` / \`/iq\` — Anime IQ evaluation card with anime quotes\n` +
+          `• \`<bestie @user>\` / \`/besties\` — Test besties compatibility percentage card\n` +
+          `• \`<auraleaderboard>\` / \`<auralb>\` — Weekly Arcane Aura top leaderboard\n` +
+          `• \`<iqleaderboard>\` / \`<iqlb>\` — Weekly Arcane IQ top leaderboard\n\n` +
+          `### Utilities & Sanctuary\n` +
+          `• \`<inviteinfo <@user|ID>>\` / \`/inviteinfo\` — Audit user inviter & invite links\n` +
+          `• \`<revokeinvites <@user|ID>>\` — Delete all invite links created by a user\n` +
+          `• \`<profile>\` / \`/profile\` — View Aiko guardian profile & architecture\n` +
+          `• \`<avatar [@user]>\` / \`<av>\` / \`/avatar\` — View user avatar in neon frame\n` +
+          `• \`<afk [reason]>\` / \`/afk\` — Set AFK status with return notification (Level 5+)\n` +
+          `• \`<anipedia>\` / \`/anipedia\` — Community guidelines & sanctuary overview\n` +
+          `• \`<ping>\` — Check bot latency & Discord gateway ping`,
+        footer: footerText
+      };
+  }
+}
+
+async function sendAdminHelpMenu(source, ctx) {
+  const { guild, user, channel, interaction } = ctx;
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId(`adminhelp_cat_${Date.now()}_${user.id}`)
+    .setPlaceholder('Select a category to inspect in detail...')
+    .addOptions([
+      {
+        label: 'All Commands (Overview)',
+        description: 'Complete registry of all bot commands',
+        value: 'all',
+        emoji: '📋'
+      },
+      {
+        label: 'Master Directives & Control',
+        description: 'Protocol Zero/One, Code Black/White, resets, IP',
+        value: 'master',
+        emoji: '👑'
+      },
+      {
+        label: 'Security & Alt Shield',
+        description: 'Alt accounts, IP lookup, audit & verification',
+        value: 'security',
+        emoji: '🛡️'
+      },
+      {
+        label: 'Moderation & Disciplinary',
+        description: 'Warnings, punishments, jail, timeout, bans, purge',
+        value: 'moderation',
+        emoji: '🔨'
+      },
+      {
+        label: 'Family & Relationships',
+        description: 'Marry, adopt, divorce, abandon, family tree',
+        value: 'relationship',
+        emoji: '💍'
+      },
+      {
+        label: 'Arcane Aura & Stats',
+        description: 'Aura, IQ, bestie compatibility, leaderboards',
+        value: 'arcane',
+        emoji: '✨'
+      },
+      {
+        label: 'Utilities & Sanctuary',
+        description: 'Profile, anipedia, inviteinfo, revokeinvites, ping',
+        value: 'utility',
+        emoji: '⚙️'
+      }
+    ]);
+
+  const row = new ActionRowBuilder().addComponents(selectMenu);
+  const initialPayload = createContainerMessage(getAdminHelpCategoryPayload('all', guild), { components: [row] });
+
+  let responseMsg;
+  if (source === 'slash') {
+    responseMsg = await interaction.reply({ ...initialPayload, fetchReply: true });
+  } else {
+    responseMsg = await channel.send(initialPayload);
+  }
+
+  const collector = responseMsg.createMessageComponentCollector({
+    componentType: ComponentType.StringSelect,
+    time: 180000
+  });
+
+  collector.on('collect', async (i) => {
+    try {
+      const isMasterCollector = (i.user.id === MASTER_USER_ID) ||
+        (i.user.username && (i.user.username.toLowerCase() === 'el_lapulga' || i.user.username.toLowerCase() === '_c0rle0ne'));
+      if (!isMasterCollector) {
+        await i.reply({
+          content: `Mou! 🔒 The Admin Help registry is strictly classified to Master <@${MASTER_USER_ID}>.`,
+          ephemeral: true
+        });
+        return;
+      }
+
+      const selected = i.values[0];
+      const newPayload = createContainerMessage(getAdminHelpCategoryPayload(selected, guild), { components: [row] });
+      await i.update(newPayload);
+    } catch (err) {
+      console.error("Error handling admin help selection:", err);
+    }
+  });
+
+  collector.on('end', async () => {
+    try {
+      selectMenu.setDisabled(true).setPlaceholder('Admin Help expired (Run <adminhelp again)');
+      const disabledRow = new ActionRowBuilder().addComponents(selectMenu);
+      const disabledPayload = createContainerMessage(getAdminHelpCategoryPayload('all', guild), { components: [disabledRow] });
+      if (source === 'slash') {
+        await interaction.editReply(disabledPayload).catch(() => {});
+      } else if (responseMsg && typeof responseMsg.edit === 'function') {
+        await responseMsg.edit(disabledPayload).catch(() => {});
       }
     } catch (err) {}
   });
@@ -5289,7 +5596,7 @@ client.on('messageCreate', async (message) => {
   const trimmedContent = message.content.trim();
 
   const isDiscordTag = /^<(?:@[!&]?|#|a?:[a-zA-Z0-9_]+:)\d+>/.test(trimmedContent);
-  const startsWithPrefix = trimmedContent.startsWith('<') && !isDiscordTag;
+  const startsWithPrefix = (trimmedContent.startsWith('<') && !isDiscordTag) || trimmedContent.startsWith('-');
 
   if (message.reference && message.reference.messageId) {
     try {
@@ -5313,7 +5620,7 @@ client.on('messageCreate', async (message) => {
 
     let cleanQuery = '';
     if (startsWithPrefix) {
-      cleanQuery = trimmedContent.slice(1).trim();
+      cleanQuery = trimmedContent.replace(/^[<-]/, '').trim();
     } else {
       cleanQuery = message.content
         .replace(botMention, '')
@@ -6059,7 +6366,7 @@ client.on('messageCreate', async (message) => {
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
       'aura', 'auras', 'auraleaderboard', 'auralb', 'auratop', 'auraboard', 'aurareset', 'resetaura', 'auralbreset',
-      'iq', 'iqleaderboard', 'iqlb', 'iqtop', 'iqboard', 'iqreset', 'resetiq', 'iqlbreset', 'bestie', 'besties', 'av', 'avatar', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands'
+      'iq', 'iqleaderboard', 'iqlb', 'iqtop', 'iqboard', 'iqreset', 'resetiq', 'iqlbreset', 'bestie', 'besties', 'av', 'avatar', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands', 'adminhelp'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -6879,6 +7186,31 @@ client.on('messageCreate', async (message) => {
         channel: message.channel,
         replyFn: makeReplyFn(message.channel)
       }, targetMember);
+      return;
+    }
+
+    const isAdminHelpCmd = startsWithPrefix && (
+      words[0] === 'adminhelp' ||
+      cleanQuery === 'adminhelp' ||
+      cleanQuery.startsWith('adminhelp ') ||
+      lowerQuery === 'adminhelp' ||
+      lowerQuery.startsWith('adminhelp ')
+    );
+
+    if (isAdminHelpCmd) {
+      const isSoleMaster = (message.author.id === MASTER_USER_ID) ||
+        (message.author.username && (message.author.username.toLowerCase() === 'el_lapulga' || message.author.username.toLowerCase() === '_c0rle0ne'));
+      if (!isSoleMaster) {
+        await sendContainer(message, `<@${message.author.id}> • Access Denied. The Admin Command Registry is strictly restricted to Master <@${MASTER_USER_ID}>.`);
+        return;
+      }
+      await sendAdminHelpMenu('prefix', {
+        guild: message.guild,
+        member: message.member,
+        user: message.author,
+        channel: message.channel,
+        replyFn: makeReplyFn(message.channel)
+      });
       return;
     }
 
@@ -8348,6 +8680,27 @@ client.on('interactionCreate', async (interaction) => {
 
     if (commandName === 'help') {
       await sendInteractiveHelpMenu('slash', {
+        guild: guild,
+        member: member,
+        user: user,
+        channel: channel,
+        interaction: interaction,
+        replyFn: makeReplyFn(interaction)
+      });
+      return;
+    }
+
+    if (commandName === 'adminhelp') {
+      const isSoleMaster = (user.id === MASTER_USER_ID) ||
+        (user.username && (user.username.toLowerCase() === 'el_lapulga' || user.username.toLowerCase() === '_c0rle0ne'));
+      if (!isSoleMaster) {
+        await interaction.reply({
+          content: `Mou! 🔒 Access Denied. The Admin Command Registry is strictly restricted to Master <@${MASTER_USER_ID}>.`,
+          ephemeral: true
+        });
+        return;
+      }
+      await sendAdminHelpMenu('slash', {
         guild: guild,
         member: member,
         user: user,
