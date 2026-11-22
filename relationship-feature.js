@@ -972,6 +972,20 @@ const activeDivorceConfirmations = new Map();
 // Active mutual abandon confirmations: key: `${min(p1, p2)}_${max(p1, p2)}_${childId}` -> Set(confirmedParentIds)
 const activeAbandonConfirmations = new Map();
 
+// Proposal anti-spam limits
+const PROPOSAL_EXPIRY_MS = 5 * 60 * 1000;       // 5 minutes expiry
+const REJECTION_COOLDOWN_MS = 15 * 60 * 1000;   // 15 minutes rejection cooldown
+const COMMAND_COOLDOWN_MS = 30 * 1000;          // 30 seconds command rate limit
+
+// Tracks active pending proposals: key: `${senderId}_${type}` -> { targetId, createdAt }
+const activePendingProposals = new Map();
+
+// Tracks rejection cooldowns: key: `${rejectedSenderId}_${rejecterId}_${type}` -> expiresAt
+const rejectionCooldowns = new Map();
+
+// Tracks user command rate limits: key: `${userId}_${cmd}` -> lastUsed timestamp
+const relCommandCooldowns = new Map();
+
 /**
  * Universal safe Container sender with fallback
  */
@@ -1161,15 +1175,64 @@ async function handleMarryCommand(message, client, sendContainer = null) {
     return;
   }
 
+  // Anti-spam & Cooldown Checks
+  const now = Date.now();
+  const lastMarryCmd = relCommandCooldowns.get(`${user1Member.id}_marry`) || 0;
+  if (now - lastMarryCmd < COMMAND_COOLDOWN_MS) {
+    const waitSecs = Math.ceil((COMMAND_COOLDOWN_MS - (now - lastMarryCmd)) / 1000);
+    await sendRelContainer(message, {
+      description: `Please wait ${waitSecs} second${waitSecs > 1 ? 's' : ''} before using marry again.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  // Check 15-minute rejection cooldown (blocked only if user2Member rejected user1Member)
+  const rejectionKey = `${user1Member.id}_${user2Member.id}_marry`;
+  const rejectionExpiry = rejectionCooldowns.get(rejectionKey);
+  if (rejectionExpiry && rejectionExpiry > now) {
+    const waitMins = Math.ceil((rejectionExpiry - now) / 60000);
+    await sendRelContainer(message, {
+      description: `You were recently declined by <@${user2Member.id}>. Please wait ${waitMins} minute${waitMins > 1 ? 's' : ''} before proposing to them again.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  // If user1Member was the one who rejected user2Member in the past, proposing now clears any previous block
+  rejectionCooldowns.delete(`${user2Member.id}_${user1Member.id}_marry`);
+
+  // Check active pending proposal limit (max 1 active proposal, 5m expiry)
+  const pendingProposal = activePendingProposals.get(`${user1Member.id}_marry`);
+  if (pendingProposal) {
+    if (now - pendingProposal.createdAt < PROPOSAL_EXPIRY_MS) {
+      const waitMins = Math.ceil((PROPOSAL_EXPIRY_MS - (now - pendingProposal.createdAt)) / 60000);
+      await sendRelContainer(message, {
+        description: `You already have an active marriage proposal to <@${pendingProposal.targetId}>. Please wait for their response or for the proposal to expire (${waitMins}m).`,
+        footer: 'AniPedia Sanctuary'
+      }, sendContainer);
+      return;
+    } else {
+      activePendingProposals.delete(`${user1Member.id}_marry`);
+    }
+  }
+
+  // Record rate limit and active pending proposal
+  relCommandCooldowns.set(`${user1Member.id}_marry`, now);
+  activePendingProposals.set(`${user1Member.id}_marry`, {
+    targetId: user2Member.id,
+    createdAt: now
+  });
+
   // Build Interactive Proposal Row (No emojis, no bold)
   const channelId = message.channel?.id || '';
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`rel_marry_accept_${user1Member.id}_${user2Member.id}_${channelId}`)
+      .setCustomId(`rel_marry_accept_${user1Member.id}_${user2Member.id}_${channelId}_${now}`)
       .setLabel('Accept (Yes)')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`rel_marry_decline_${user1Member.id}_${user2Member.id}_${channelId}`)
+      .setCustomId(`rel_marry_decline_${user1Member.id}_${user2Member.id}_${channelId}_${now}`)
       .setLabel('Decline (No)')
       .setStyle(ButtonStyle.Danger)
   );
@@ -1247,15 +1310,64 @@ async function handleAdoptCommand(message, client, sendContainer = null) {
     return;
   }
 
+  // Anti-spam & Cooldown Checks
+  const now = Date.now();
+  const lastAdoptCmd = relCommandCooldowns.get(`${message.author.id}_adopt`) || 0;
+  if (now - lastAdoptCmd < COMMAND_COOLDOWN_MS) {
+    const waitSecs = Math.ceil((COMMAND_COOLDOWN_MS - (now - lastAdoptCmd)) / 1000);
+    await sendRelContainer(message, {
+      description: `Please wait ${waitSecs} second${waitSecs > 1 ? 's' : ''} before using adopt again.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  // Check 15-minute rejection cooldown (blocked only if targetMember rejected message.author)
+  const rejectionKey = `${message.author.id}_${targetMember.id}_adopt`;
+  const rejectionExpiry = rejectionCooldowns.get(rejectionKey);
+  if (rejectionExpiry && rejectionExpiry > now) {
+    const waitMins = Math.ceil((rejectionExpiry - now) / 60000);
+    await sendRelContainer(message, {
+      description: `You were recently declined by <@${targetMember.id}>. Please wait ${waitMins} minute${waitMins > 1 ? 's' : ''} before proposing to them again.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  // If message.author was the one who rejected targetMember in the past, proposing now clears any previous block
+  rejectionCooldowns.delete(`${targetMember.id}_${message.author.id}_adopt`);
+
+  // Check active pending proposal limit (max 1 active proposal, 5m expiry)
+  const pendingProposal = activePendingProposals.get(`${message.author.id}_adopt`);
+  if (pendingProposal) {
+    if (now - pendingProposal.createdAt < PROPOSAL_EXPIRY_MS) {
+      const waitMins = Math.ceil((PROPOSAL_EXPIRY_MS - (now - pendingProposal.createdAt)) / 60000);
+      await sendRelContainer(message, {
+        description: `You already have an active adoption proposal to <@${pendingProposal.targetId}>. Please wait for their response or for the proposal to expire (${waitMins}m).`,
+        footer: 'AniPedia Sanctuary'
+      }, sendContainer);
+      return;
+    } else {
+      activePendingProposals.delete(`${message.author.id}_adopt`);
+    }
+  }
+
+  // Record rate limit and active pending proposal
+  relCommandCooldowns.set(`${message.author.id}_adopt`, now);
+  activePendingProposals.set(`${message.author.id}_adopt`, {
+    targetId: targetMember.id,
+    createdAt: now
+  });
+
   // Build Interactive Proposal Row (No emojis, no bold)
   const channelId = message.channel?.id || '';
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`rel_adopt_accept_${message.author.id}_${targetMember.id}_${channelId}`)
+      .setCustomId(`rel_adopt_accept_${message.author.id}_${targetMember.id}_${channelId}_${now}`)
       .setLabel('Accept (Yes)')
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
-      .setCustomId(`rel_adopt_decline_${message.author.id}_${targetMember.id}_${channelId}`)
+      .setCustomId(`rel_adopt_decline_${message.author.id}_${targetMember.id}_${channelId}_${now}`)
       .setLabel('Decline (No)')
       .setStyle(ButtonStyle.Danger)
   );
@@ -1490,6 +1602,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     const user1Id = parts[0];
     const user2Id = parts[1];
     const originChannelId = parts[2] || null;
+    const createdAt = parseInt(parts[3]) || 0;
 
     if (interaction.user.id !== user2Id) {
       await interaction.reply({
@@ -1499,7 +1612,24 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
       return true;
     }
 
+    // Check 5-minute proposal expiration
+    if (createdAt && (Date.now() - createdAt > PROPOSAL_EXPIRY_MS)) {
+      await interaction.deferUpdate().catch(() => {});
+      activePendingProposals.delete(`${user1Id}_marry`);
+      await sendRelContainer(interaction, {
+        description: 'This marriage proposal has expired. Please send a new proposal.',
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
+
     await interaction.deferUpdate().catch(() => {});
+
+    // Clear pending proposal and rejection cooldowns between these two
+    activePendingProposals.delete(`${user1Id}_marry`);
+    rejectionCooldowns.delete(`${user1Id}_${user2Id}_marry`);
+    rejectionCooldowns.delete(`${user2Id}_${user1Id}_marry`);
 
     // Save Marriage
     const now = new Date();
@@ -1577,6 +1707,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     const user1Id = parts[0];
     const user2Id = parts[1];
     const originChannelId = parts[2] || null;
+    const createdAt = parseInt(parts[3]) || 0;
 
     if (interaction.user.id !== user2Id) {
       await interaction.reply({
@@ -1586,7 +1717,23 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
       return true;
     }
 
+    // Check 5-minute proposal expiration
+    if (createdAt && (Date.now() - createdAt > PROPOSAL_EXPIRY_MS)) {
+      await interaction.deferUpdate().catch(() => {});
+      activePendingProposals.delete(`${user1Id}_marry`);
+      await sendRelContainer(interaction, {
+        description: 'This marriage proposal has expired.',
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
+
     await interaction.deferUpdate().catch(() => {});
+
+    // Free pending proposal slot & set 15-minute rejection cooldown for user1 proposing to user2
+    activePendingProposals.delete(`${user1Id}_marry`);
+    rejectionCooldowns.set(`${user1Id}_${user2Id}_marry`, Date.now() + REJECTION_COOLDOWN_MS);
 
     await sendRelContainer(interaction, {
       description: `<@${user2Id}> declined the marriage proposal from <@${user1Id}>.`,
@@ -1621,6 +1768,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     const parentId = parts[0];
     const childId = parts[1];
     const originChannelId = parts[2] || null;
+    const createdAt = parseInt(parts[3]) || 0;
 
     if (interaction.user.id !== childId) {
       await interaction.reply({
@@ -1630,7 +1778,24 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
       return true;
     }
 
+    // Check 5-minute proposal expiration
+    if (createdAt && (Date.now() - createdAt > PROPOSAL_EXPIRY_MS)) {
+      await interaction.deferUpdate().catch(() => {});
+      activePendingProposals.delete(`${parentId}_adopt`);
+      await sendRelContainer(interaction, {
+        description: 'This adoption proposal has expired. Please send a new proposal.',
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
+
     await interaction.deferUpdate().catch(() => {});
+
+    // Clear pending proposal and rejection cooldowns between these two
+    activePendingProposals.delete(`${parentId}_adopt`);
+    rejectionCooldowns.delete(`${parentId}_${childId}_adopt`);
+    rejectionCooldowns.delete(`${childId}_${parentId}_adopt`);
 
     const now = new Date();
     const parentRec = getRelationshipRecord(parentId);
@@ -1740,6 +1905,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     const parentId = parts[0];
     const childId = parts[1];
     const originChannelId = parts[2] || null;
+    const createdAt = parseInt(parts[3]) || 0;
 
     if (interaction.user.id !== childId) {
       await interaction.reply({
@@ -1749,7 +1915,23 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
       return true;
     }
 
+    // Check 5-minute proposal expiration
+    if (createdAt && (Date.now() - createdAt > PROPOSAL_EXPIRY_MS)) {
+      await interaction.deferUpdate().catch(() => {});
+      activePendingProposals.delete(`${parentId}_adopt`);
+      await sendRelContainer(interaction, {
+        description: 'This adoption proposal has expired.',
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
+
     await interaction.deferUpdate().catch(() => {});
+
+    // Free pending proposal slot & set 15-minute rejection cooldown for parent proposing to child
+    activePendingProposals.delete(`${parentId}_adopt`);
+    rejectionCooldowns.set(`${parentId}_${childId}_adopt`, Date.now() + REJECTION_COOLDOWN_MS);
 
     await sendRelContainer(interaction, {
       description: `<@${childId}> declined the adoption proposal from <@${parentId}>.`,
