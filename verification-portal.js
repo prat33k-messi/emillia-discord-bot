@@ -205,8 +205,8 @@ function initVerificationPortal(app, client, db) {
       console.warn('[Verification Portal] VPN pre-check failed, continuing to OAuth:', e.message);
     }
 
-    // Redirect to Discord OAuth2
-    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify`;
+    // Redirect to Discord OAuth2 (force consent prompt so users see which account is active and can switch)
+    const discordAuthUrl = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=identify&prompt=consent`;
     res.redirect(discordAuthUrl);
   });
 
@@ -316,8 +316,36 @@ function initVerificationPortal(app, client, db) {
     const userId = discordUser.id;
     const userTag = `${discordUser.username}#${discordUser.discriminator || '0'}`;
 
-    // 4. Find Guild & Member
-    const guild = client.guilds.cache.get('1517882821673357312') || client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
+    // 4. Find Guild & Member across all bot guilds
+    let guild = null;
+    let member = null;
+
+    const knownGuildIds = ['1517882821673357312', '1555205544984449034'];
+    for (const gid of knownGuildIds) {
+      const g = client.guilds.cache.get(gid);
+      if (g) {
+        member = await g.members.fetch(userId).catch(() => null);
+        if (member) {
+          guild = g;
+          break;
+        }
+      }
+    }
+
+    if (!member) {
+      for (const g of client.guilds.cache.values()) {
+        member = await g.members.fetch(userId).catch(() => null);
+        if (member) {
+          guild = g;
+          break;
+        }
+      }
+    }
+
+    if (!guild) {
+      guild = client.guilds.cache.get('1517882821673357312') || client.guilds.cache.get('1555205544984449034') || client.guilds.cache.first();
+    }
+
     if (!guild) {
       return res.status(500).send(renderHtmlPage({
         status: 'error',
@@ -438,14 +466,19 @@ function initVerificationPortal(app, client, db) {
 
     // 7. Clean User: Assign Member Role
     try {
-      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member && guild) {
+        member = await guild.members.fetch(userId).catch(() => null);
+      }
+
       if (!member) {
         return res.status(404).send(renderHtmlPage({
           status: 'error',
           icon: '❓',
           title: 'Not in Server',
-          message: 'You must join AniPedia before completing verification!',
-          details: 'Please join the Discord server first, then click Verify again.'
+          message: `The Discord account <strong style="color: #BF5AF2;">@${discordUser.username}</strong> is not a member of AniPedia!`,
+          details: `<strong>Logged in as:</strong> @${discordUser.username} (${userId})<br><br>` +
+                   `⚠️ <strong>Wrong account?</strong> Your browser is currently logged into this account instead of your main AniPedia account.<br><br>` +
+                   `<a class="btn" href="/verify" style="margin-top: 10px; display: inline-block;">Switch Account & Try Again</a>`
         }));
       }
 
