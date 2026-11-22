@@ -5830,7 +5830,7 @@ client.on('messageCreate', async (message) => {
       return;
     }
 
-    // Relationship & Family Tree commands (<marry, <adopt, <divorce, <leave, <familytree, <family)
+    // Relationship & Family Tree commands (<marry, <adopt, <divorce, <abandon, <leave, <familytree, <family)
     const handledRelationship = await handleRelationshipCommand(message, client, db, sendContainer);
     if (handledRelationship) return;
 

@@ -966,47 +966,92 @@ async function drawFamilyNodeCard(ctx, member, x, y, w, h, badgeText, strokeColo
  * ====================================================================
  */
 
+// Active mutual divorce confirmations: key: `${min(u1, u2)}_${max(u1, u2)}` -> Set(confirmedUserIds)
+const activeDivorceConfirmations = new Map();
+
+// Active mutual abandon confirmations: key: `${min(p1, p2)}_${max(p1, p2)}_${childId}` -> Set(confirmedParentIds)
+const activeAbandonConfirmations = new Map();
+
 /**
- * Handles text commands: <marry, <adopt, <divorce, <leave, <familytree, <family
+ * Universal safe Container sender with fallback
+ */
+async function sendRelContainer(target, payload, sendContainer) {
+  if (typeof sendContainer === 'function') {
+    return await sendContainer(target, payload);
+  }
+  if (target.reply && typeof target.reply === 'function') {
+    if (target.deferred && !target.replied) return await target.editReply(payload);
+    if (target.replied) return await target.followUp(payload);
+    return await target.reply(payload);
+  }
+  if (target.send && typeof target.send === 'function') {
+    return await target.send(payload);
+  }
+}
+
+/**
+ * Sends a direct message safely, ignoring blocked DMs
+ */
+async function sendSafeDM(target, payload, sendContainer) {
+  if (!target) return;
+  const user = target.user || target;
+  try {
+    if (typeof sendContainer === 'function') {
+      await sendContainer(user, payload);
+    } else if (user.send) {
+      await user.send(payload);
+    }
+  } catch (e) {
+    // DM disabled or blocked
+  }
+}
+
+/**
+ * Handles text commands: <marry, <adopt, <divorce, <abandon, <leave, <familytree, <family
  */
 async function handleRelationshipCommand(message, client, db, sendContainer = null) {
   const content = (message.content || '').trim();
-  const lower = content.toLowerCase();
 
-  // Check prefix: '<' or other configured prefixes
+  // Check prefix: '<' or '-'
   if (!content.startsWith('<') && !content.startsWith('-')) return false;
 
   const rawCmd = content.slice(1).trim();
   const cmd = (rawCmd.split(/\s+/)[0] || '').toLowerCase();
 
-  const relationshipCommands = new Set(['marry', 'adopt', 'divorce', 'leave', 'familytree', 'family']);
+  const relationshipCommands = new Set(['marry', 'adopt', 'divorce', 'abandon', 'leave', 'familytree', 'family']);
   if (!relationshipCommands.has(cmd)) return false;
 
-  // 1. <marry [@user] [@user2]
+  // 1. <marry [@user]
   if (cmd === 'marry') {
-    await handleMarryCommand(message, client);
+    await handleMarryCommand(message, client, sendContainer);
     return true;
   }
 
   // 2. <adopt [@user]
   if (cmd === 'adopt') {
-    await handleAdoptCommand(message, client);
+    await handleAdoptCommand(message, client, sendContainer);
     return true;
   }
 
   // 3. <divorce [@user]
   if (cmd === 'divorce') {
-    await handleDivorceCommand(message, client);
+    await handleDivorceCommand(message, client, sendContainer);
     return true;
   }
 
-  // 4. <leave
+  // 4. <abandon [@child]
+  if (cmd === 'abandon') {
+    await handleAbandonCommand(message, client, sendContainer);
+    return true;
+  }
+
+  // 5. <leave
   if (cmd === 'leave') {
-    await handleLeaveCommand(message, client);
+    await handleLeaveCommand(message, client, sendContainer);
     return true;
   }
 
-  // 5. <familytree / <family [@user]
+  // 6. <familytree / <family [@user]
   if (cmd === 'familytree' || cmd === 'family') {
     await handleFamilyTreeCommand(message, client, sendContainer);
     return true;
@@ -1018,7 +1063,7 @@ async function handleRelationshipCommand(message, client, db, sendContainer = nu
 /**
  * <marry handler
  */
-async function handleMarryCommand(message, client) {
+async function handleMarryCommand(message, client, sendContainer = null) {
   const mentions = Array.from(message.mentions.members.filter(m => m.id !== client.user.id).values());
 
   let user1Member = message.member;
@@ -1043,17 +1088,26 @@ async function handleMarryCommand(message, client) {
   }
 
   if (!user2Member) {
-    await message.reply("💍 Please mention a valid user to marry! Example: `<marry @user>`");
+    await sendRelContainer(message, {
+      description: 'Please mention a valid user to marry. Example: <marry @user>',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   if (user1Member.id === user2Member.id) {
-    await message.reply("Mou! 🌸 You cannot marry yourself!");
+    await sendRelContainer(message, {
+      description: 'You cannot marry yourself.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   if (user2Member.user?.bot) {
-    await message.reply("Mou! 🌸 You cannot marry a bot!");
+    await sendRelContainer(message, {
+      description: 'You cannot marry a bot.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
@@ -1061,59 +1115,85 @@ async function handleMarryCommand(message, client) {
   const rel2 = getRelationshipRecord(user2Member.id);
 
   if (rel1.spouseId) {
-    await message.reply(`❌ <@${user1Member.id}> is already married to <@${rel1.spouseId}>! You must divorce first before marrying someone else!`);
+    await sendRelContainer(message, {
+      description: `<@${user1Member.id}> is already married to <@${rel1.spouseId}>. You must divorce first before marrying someone else.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   if (rel2.spouseId) {
-    await message.reply(`❌ <@${user2Member.id}> is already married to <@${rel2.spouseId}>!`);
+    await sendRelContainer(message, {
+      description: `<@${user2Member.id}> is already married to <@${rel2.spouseId}>.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   // Check parent-child conflict
   if (rel1.childrenIds.includes(user2Member.id) || rel2.childrenIds.includes(user1Member.id)) {
-    await message.reply("❌ Forbidden: A parent cannot marry their adopted child!");
+    await sendRelContainer(message, {
+      description: 'A parent cannot marry their adopted child.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
-  // Build Interactive Proposal Row
+  // Build Interactive Proposal Row (No emojis, no bold)
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`rel_marry_accept_${user1Member.id}_${user2Member.id}`)
       .setLabel('Accept (Yes)')
-      .setStyle(ButtonStyle.Success)
-      .setEmoji('💍'),
+      .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(`rel_marry_decline_${user1Member.id}_${user2Member.id}`)
       .setLabel('Decline (No)')
       .setStyle(ButtonStyle.Danger)
-      .setEmoji('✖️')
   );
 
-  await message.reply({
-    content: `💍 **Marriage Proposal**\n<@${user2Member.id}>, do you want to accept this marriage proposal from <@${user1Member.id}>?`,
+  const proposalDesc = `<@${user2Member.id}>, do you accept the marriage proposal from <@${user1Member.id}>?`;
+
+  await sendRelContainer(message, {
+    description: proposalDesc,
+    footer: 'AniPedia Sanctuary',
     components: [row]
-  });
+  }, sendContainer);
+
+  // Send DM to target user with proposal
+  await sendSafeDM(user2Member, {
+    description: `You received a marriage proposal from <@${user1Member.id}> in ${message.guild.name}. Do you accept?`,
+    footer: 'AniPedia Sanctuary',
+    components: [row]
+  }, sendContainer);
 }
 
 /**
  * <adopt handler
  */
-async function handleAdoptCommand(message, client) {
+async function handleAdoptCommand(message, client, sendContainer = null) {
   const targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
 
   if (!targetMember) {
-    await message.reply("🏡 Please mention a user to adopt! Example: `<adopt @user>`");
+    await sendRelContainer(message, {
+      description: 'Please mention a user to adopt. Example: <adopt @user>',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   if (targetMember.id === message.author.id) {
-    await message.reply("Mou! 🌸 You cannot adopt yourself!");
+    await sendRelContainer(message, {
+      description: 'You cannot adopt yourself.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   if (targetMember.user?.bot) {
-    await message.reply("Mou! 🌸 You cannot adopt a bot!");
+    await sendRelContainer(message, {
+      description: 'You cannot adopt a bot.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
@@ -1121,79 +1201,202 @@ async function handleAdoptCommand(message, client) {
   const childRel = getRelationshipRecord(targetMember.id);
 
   if (parentRel.spouseId === targetMember.id) {
-    await message.reply("❌ You cannot adopt your own spouse!");
+    await sendRelContainer(message, {
+      description: 'You cannot adopt your own spouse.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   if (childRel.parentIds && childRel.parentIds.length > 0) {
-    await message.reply(`❌ <@${targetMember.id}> is already adopted in a family! They must leave their family first.`);
+    await sendRelContainer(message, {
+      description: `<@${targetMember.id}> is already adopted in a family. They must leave their family first.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
   if (parentRel.childrenIds.includes(targetMember.id)) {
-    await message.reply(`❌ <@${targetMember.id}> is already your adopted child!`);
+    await sendRelContainer(message, {
+      description: `<@${targetMember.id}> is already your adopted child.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
-  // Build Interactive Proposal Row
+  // Build Interactive Proposal Row (No emojis, no bold)
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`rel_adopt_accept_${message.author.id}_${targetMember.id}`)
       .setLabel('Accept (Yes)')
-      .setStyle(ButtonStyle.Success)
-      .setEmoji('🏡'),
+      .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
       .setCustomId(`rel_adopt_decline_${message.author.id}_${targetMember.id}`)
       .setLabel('Decline (No)')
       .setStyle(ButtonStyle.Danger)
-      .setEmoji('✖️')
   );
 
-  await message.reply({
-    content: `🏡 **Adoption Proposal**\n<@${targetMember.id}>, do you accept the proposal to be adopted into the family of <@${message.author.id}>?`,
+  const proposalDesc = `<@${targetMember.id}>, do you accept the proposal to be adopted into the family of <@${message.author.id}>?`;
+
+  await sendRelContainer(message, {
+    description: proposalDesc,
+    footer: 'AniPedia Sanctuary',
     components: [row]
-  });
+  }, sendContainer);
+
+  // Send DM to target user with proposal
+  await sendSafeDM(targetMember, {
+    description: `You received an adoption proposal to join the family of <@${message.author.id}> in ${message.guild.name}. Do you accept?`,
+    footer: 'AniPedia Sanctuary',
+    components: [row]
+  }, sendContainer);
 }
 
 /**
- * <divorce handler
+ * <divorce handler (requires mutual confirmation from both partners)
  */
-async function handleDivorceCommand(message, client) {
+async function handleDivorceCommand(message, client, sendContainer = null) {
   const rel = getRelationshipRecord(message.author.id);
   if (!rel.spouseId) {
-    await message.reply("❌ You are not married to anyone!");
+    await sendRelContainer(message, {
+      description: 'You are not married to anyone.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
-  const spouseId = rel.spouseId;
+  const user1Id = message.author.id;
+  const user2Id = rel.spouseId;
 
-  // Build Interactive Confirmation Row
+  const key = [user1Id, user2Id].sort().join('_');
+  activeDivorceConfirmations.set(key, new Set());
+
+  // Interactive Confirmation Row (No emojis, no bold)
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`rel_divorce_confirm_${message.author.id}_${spouseId}`)
-      .setLabel('Confirm Divorce')
-      .setStyle(ButtonStyle.Danger)
-      .setEmoji('💔'),
+      .setCustomId(`rel_divorce_confirm_${user1Id}_${user2Id}`)
+      .setLabel('Confirm (Yes)')
+      .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
-      .setCustomId(`rel_divorce_cancel_${message.author.id}_${spouseId}`)
-      .setLabel('Cancel')
+      .setCustomId(`rel_divorce_cancel_${user1Id}_${user2Id}`)
+      .setLabel('Cancel (No)')
       .setStyle(ButtonStyle.Secondary)
   );
 
-  await message.reply({
-    content: `💔 **Divorce Confirmation**\n<@${message.author.id}>, do you really want to divorce <@${spouseId}>?\n⚠️ *Note: Dissolving this marriage will also dissolve all associated family adoptions!*`,
+  const desc = `Divorce confirmation requested between <@${user1Id}> and <@${user2Id}>.\nBoth partners must confirm to proceed. Dissolving this marriage will also dissolve all associated family adoptions.\n\nStatus:\n<@${user1Id}>: Pending\n<@${user2Id}>: Pending`;
+
+  await sendRelContainer(message, {
+    description: desc,
+    footer: 'AniPedia Sanctuary',
     components: [row]
-  });
+  }, sendContainer);
+
+  const spouseMember = message.guild.members.cache.get(user2Id) || await message.guild.members.fetch(user2Id).catch(() => null);
+  if (spouseMember) {
+    await sendSafeDM(spouseMember, {
+      description: `A divorce confirmation was requested by <@${user1Id}> in ${message.guild.name}. Both partners must confirm in the server.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+  }
+}
+
+/**
+ * <abandon handler (Parents remove an adopted child; if two parents, both must confirm)
+ */
+async function handleAbandonCommand(message, client, sendContainer = null) {
+  let targetMember = message.mentions.members.filter(m => m.id !== client.user.id && m.id !== message.author.id).first();
+
+  if (!targetMember) {
+    const args = message.content.trim().split(/\s+/).slice(1);
+    if (args[0]) {
+      const cleanId = args[0].replace(/[<@!>]/g, '');
+      targetMember = message.guild.members.cache.get(cleanId) || await message.guild.members.fetch(cleanId).catch(() => null);
+    }
+  }
+
+  if (!targetMember) {
+    await sendRelContainer(message, {
+      description: 'Please mention an adopted child to abandon. Example: <abandon @child>',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  const parentRec = getRelationshipRecord(message.author.id);
+  if (!parentRec.childrenIds || !parentRec.childrenIds.includes(targetMember.id)) {
+    await sendRelContainer(message, {
+      description: `<@${targetMember.id}> is not your adopted child.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  const spouseId = parentRec.spouseId;
+  const isTwoParents = Boolean(spouseId);
+
+  if (isTwoParents) {
+    // Two parents: both must confirm in the same message
+    const key = `${[message.author.id, spouseId].sort().join('_')}_${targetMember.id}`;
+    activeAbandonConfirmations.set(key, new Set());
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`rel_abandon_confirm_${message.author.id}_${spouseId}_${targetMember.id}`)
+        .setLabel('Confirm (Yes)')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`rel_abandon_cancel_${message.author.id}_${spouseId}_${targetMember.id}`)
+        .setLabel('Cancel (No)')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    const desc = `Abandon confirmation requested for <@${targetMember.id}>.\nBoth parents (<@${message.author.id}> and <@${spouseId}>) must confirm to remove the child from the family.\n\nStatus:\n<@${message.author.id}>: Pending\n<@${spouseId}>: Pending`;
+
+    await sendRelContainer(message, {
+      description: desc,
+      footer: 'AniPedia Sanctuary',
+      components: [row]
+    }, sendContainer);
+
+    const spouseMember = message.guild.members.cache.get(spouseId) || await message.guild.members.fetch(spouseId).catch(() => null);
+    if (spouseMember) {
+      await sendSafeDM(spouseMember, {
+        description: `An abandon request for <@${targetMember.id}> was initiated by <@${message.author.id}> in ${message.guild.name}. Both parents must confirm in the server.`,
+        footer: 'AniPedia Sanctuary'
+      }, sendContainer);
+    }
+  } else {
+    // Single parent: direct confirmation
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`rel_abandon_confirm_${message.author.id}_none_${targetMember.id}`)
+        .setLabel('Confirm (Yes)')
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId(`rel_abandon_cancel_${message.author.id}_none_${targetMember.id}`)
+        .setLabel('Cancel (No)')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await sendRelContainer(message, {
+      description: `Do you want to abandon and remove <@${targetMember.id}> from your family?`,
+      footer: 'AniPedia Sanctuary',
+      components: [row]
+    }, sendContainer);
+  }
 }
 
 /**
  * <leave handler
  */
-async function handleLeaveCommand(message, client) {
+async function handleLeaveCommand(message, client, sendContainer = null) {
   const rel = getRelationshipRecord(message.author.id);
 
   if (!rel.parentIds || rel.parentIds.length === 0) {
-    await message.reply("❌ You are not currently adopted by any family!");
+    await sendRelContainer(message, {
+      description: 'You are not currently adopted by any family.',
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
     return;
   }
 
@@ -1210,7 +1413,23 @@ async function handleLeaveCommand(message, client) {
   rel.parentIds = [];
   await saveRelationshipRecord(message.author.id, { parentIds: [] });
 
-  await message.reply(`🏡 <@${message.author.id}> has left their adopted family and is now independent!`);
+  await sendRelContainer(message, {
+    description: `<@${message.author.id}> has left their adopted family and is now independent.`,
+    footer: 'AniPedia Sanctuary',
+    timestamp: Date.now()
+  }, sendContainer);
+
+  // Notify former parents via DM
+  for (const pid of formerParents) {
+    const pMember = message.guild.members.cache.get(pid) || await message.guild.members.fetch(pid).catch(() => null);
+    if (pMember) {
+      await sendSafeDM(pMember, {
+        description: `<@${message.author.id}> has left your family in ${message.guild.name}.`,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now()
+      }, sendContainer);
+    }
+  }
 }
 
 /**
@@ -1224,18 +1443,12 @@ async function handleFamilyTreeCommand(message, client, sendContainer = null) {
   const cardBuffer = await generateFamilyTreeBanner(targetMember, message.guild);
   const attachment = new AttachmentBuilder(cardBuffer, { name: 'family_tree.png' });
 
-  if (typeof sendContainer === 'function') {
-    await sendContainer(message, {
-      image: 'attachment://family_tree.png',
-      footer: `${toSmallCaps('AniPedia Family Registry')}`,
-      timestamp: Date.now(),
-      files: [attachment]
-    });
-  } else {
-    await message.reply({
-      files: [attachment]
-    });
-  }
+  await sendRelContainer(message, {
+    image: 'attachment://family_tree.png',
+    footer: 'AniPedia Family Registry',
+    timestamp: Date.now(),
+    files: [attachment]
+  }, sendContainer);
 }
 
 /**
@@ -1253,7 +1466,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     if (interaction.user.id !== user2Id) {
       await interaction.reply({
-        content: `Mou! 🌸 Only <@${user2Id}> can accept or decline this proposal! ❄️`,
+        content: `Only <@${user2Id}> can accept or decline this proposal.`,
         ephemeral: true
       });
       return true;
@@ -1270,21 +1483,44 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     const u1Member = guild.members.cache.get(user1Id) || await guild.members.fetch(user1Id).catch(() => null);
     const u2Member = guild.members.cache.get(user2Id) || await guild.members.fetch(user2Id).catch(() => null);
 
+    let bannerBuffer = null;
     if (u1Member && u2Member) {
-      const bannerBuffer = await generateMarriageBanner(u1Member, u2Member, now);
-      const attachment = new AttachmentBuilder(bannerBuffer, { name: 'marriage.png' });
-
-      await interaction.editReply({
-        content: `💍💖 **A Match Made in Heaven!**\n<@${user1Id}> and <@${user2Id}> are now officially married! Congratulations! ✨`,
-        components: [],
-        files: [attachment]
-      });
-    } else {
-      await interaction.editReply({
-        content: `💍💖 <@${user1Id}> and <@${user2Id}> are now officially married!`,
-        components: []
-      });
+      bannerBuffer = await generateMarriageBanner(u1Member, u2Member, now);
     }
+
+    const files = bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'marriage.png' })] : [];
+    const completedDesc = `<@${user1Id}> and <@${user2Id}> are now officially married.`;
+
+    await sendRelContainer(interaction, {
+      description: completedDesc,
+      image: bannerBuffer ? 'attachment://marriage.png' : undefined,
+      footer: 'AniPedia Sanctuary',
+      timestamp: Date.now(),
+      files,
+      components: []
+    }, sendContainer);
+
+    // Send DM notifications to both users with the marriage banner
+    if (u1Member) {
+      await sendSafeDM(u1Member, {
+        description: `You and <@${user2Id}> are now officially married in ${guild.name}.`,
+        image: bannerBuffer ? 'attachment://marriage.png' : undefined,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        files: bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'marriage.png' })] : []
+      }, sendContainer);
+    }
+
+    if (u2Member) {
+      await sendSafeDM(u2Member, {
+        description: `You and <@${user1Id}> are now officially married in ${guild.name}.`,
+        image: bannerBuffer ? 'attachment://marriage.png' : undefined,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        files: bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'marriage.png' })] : []
+      }, sendContainer);
+    }
+
     return true;
   }
 
@@ -1296,16 +1532,19 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     if (interaction.user.id !== user2Id) {
       await interaction.reply({
-        content: `Mou! 🌸 Only <@${user2Id}> can respond to this proposal!`,
+        content: `Only <@${user2Id}> can respond to this proposal.`,
         ephemeral: true
       });
       return true;
     }
 
-    await interaction.update({
-      content: `💔 **Proposal Declined**\n<@${user2Id}> has declined the marriage proposal from <@${user1Id}>.`,
+    await interaction.deferUpdate().catch(() => {});
+
+    await sendRelContainer(interaction, {
+      description: `<@${user2Id}> declined the marriage proposal from <@${user1Id}>.`,
+      footer: 'AniPedia Sanctuary',
       components: []
-    });
+    }, sendContainer);
     return true;
   }
 
@@ -1317,7 +1556,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     if (interaction.user.id !== childId) {
       await interaction.reply({
-        content: `Mou! 🌸 Only <@${childId}> can accept or decline this adoption proposal!`,
+        content: `Only <@${childId}> can accept or decline this adoption proposal.`,
         ephemeral: true
       });
       return true;
@@ -1357,21 +1596,54 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     const parentsArr = [parent1Member];
     if (spouseMember) parentsArr.push(spouseMember);
 
+    let bannerBuffer = null;
     if (parent1Member && childMember) {
-      const bannerBuffer = await generateAdoptionBanner(parentsArr, childMember, now);
-      const attachment = new AttachmentBuilder(bannerBuffer, { name: 'adopt.png' });
-
-      await interaction.editReply({
-        content: `🏡💕 **Welcome to the Family!**\n<@${childId}> has officially been adopted into the family of <@${parentId}>${spouseId ? ` and <@${spouseId}>` : ''}! 🎉`,
-        components: [],
-        files: [attachment]
-      });
-    } else {
-      await interaction.editReply({
-        content: `🏡💕 <@${childId}> has been officially adopted!`,
-        components: []
-      });
+      bannerBuffer = await generateAdoptionBanner(parentsArr, childMember, now);
     }
+
+    const files = bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'adopt.png' })] : [];
+    const completedDesc = `<@${childId}> has officially been adopted into the family of <@${parentId}>${spouseId ? ` and <@${spouseId}>` : ''}.`;
+
+    await sendRelContainer(interaction, {
+      description: completedDesc,
+      image: bannerBuffer ? 'attachment://adopt.png' : undefined,
+      footer: 'AniPedia Sanctuary',
+      timestamp: Date.now(),
+      files,
+      components: []
+    }, sendContainer);
+
+    // Send DM notifications to child and parents
+    if (childMember) {
+      await sendSafeDM(childMember, {
+        description: `You have officially been adopted into the family of <@${parentId}>${spouseId ? ` and <@${spouseId}>` : ''} in ${guild.name}.`,
+        image: bannerBuffer ? 'attachment://adopt.png' : undefined,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        files: bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'adopt.png' })] : []
+      }, sendContainer);
+    }
+
+    if (parent1Member) {
+      await sendSafeDM(parent1Member, {
+        description: `<@${childId}> has officially joined your family in ${guild.name}.`,
+        image: bannerBuffer ? 'attachment://adopt.png' : undefined,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        files: bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'adopt.png' })] : []
+      }, sendContainer);
+    }
+
+    if (spouseMember) {
+      await sendSafeDM(spouseMember, {
+        description: `<@${childId}> has officially joined your family in ${guild.name}.`,
+        image: bannerBuffer ? 'attachment://adopt.png' : undefined,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        files: bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'adopt.png' })] : []
+      }, sendContainer);
+    }
+
     return true;
   }
 
@@ -1383,28 +1655,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     if (interaction.user.id !== childId) {
       await interaction.reply({
-        content: `Mou! 🌸 Only <@${childId}> can respond to this proposal!`,
-        ephemeral: true
-      });
-      return true;
-    }
-
-    await interaction.update({
-      content: `❌ **Adoption Declined**\n<@${childId}> declined the adoption proposal from <@${parentId}>.`,
-      components: []
-    });
-    return true;
-  }
-
-  // 5. Divorce Confirm
-  if (customId.startsWith('rel_divorce_confirm_')) {
-    const parts = customId.replace('rel_divorce_confirm_', '').split('_');
-    const user1Id = parts[0];
-    const user2Id = parts[1];
-
-    if (interaction.user.id !== user1Id && interaction.user.id !== user2Id) {
-      await interaction.reply({
-        content: `Mou! 🌸 Only <@${user1Id}> or <@${user2Id}> can confirm this divorce!`,
+        content: `Only <@${childId}> can respond to this proposal.`,
         ephemeral: true
       });
       return true;
@@ -1412,11 +1663,70 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     await interaction.deferUpdate().catch(() => {});
 
+    await sendRelContainer(interaction, {
+      description: `<@${childId}> declined the adoption proposal from <@${parentId}>.`,
+      footer: 'AniPedia Sanctuary',
+      components: []
+    }, sendContainer);
+    return true;
+  }
+
+  // 5. Divorce Confirm (Dual Confirmation Required)
+  if (customId.startsWith('rel_divorce_confirm_')) {
+    const parts = customId.replace('rel_divorce_confirm_', '').split('_');
+    const user1Id = parts[0];
+    const user2Id = parts[1];
+
+    if (interaction.user.id !== user1Id && interaction.user.id !== user2Id) {
+      await interaction.reply({
+        content: `Only <@${user1Id}> or <@${user2Id}> can confirm this divorce.`,
+        ephemeral: true
+      });
+      return true;
+    }
+
+    const key = [user1Id, user2Id].sort().join('_');
+    let confirmed = activeDivorceConfirmations.get(key);
+    if (!confirmed) {
+      confirmed = new Set();
+      activeDivorceConfirmations.set(key, confirmed);
+    }
+    confirmed.add(interaction.user.id);
+
+    if (confirmed.size < 2) {
+      // First partner confirmed, waiting for second partner
+      await interaction.deferUpdate().catch(() => {});
+      const otherId = interaction.user.id === user1Id ? user2Id : user1Id;
+      const statusDesc = `Divorce confirmation requested between <@${user1Id}> and <@${user2Id}>.\nBoth partners must confirm to proceed. Dissolving this marriage will also dissolve all associated family adoptions.\n\nStatus:\n<@${user1Id}>: ${confirmed.has(user1Id) ? 'Confirmed' : 'Pending'}\n<@${user2Id}>: ${confirmed.has(user2Id) ? 'Confirmed' : 'Pending'}\n\nWaiting for <@${otherId}> to confirm.`;
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`rel_divorce_confirm_${user1Id}_${user2Id}`)
+          .setLabel('Confirm (Yes)')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`rel_divorce_cancel_${user1Id}_${user2Id}`)
+          .setLabel('Cancel (No)')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      await sendRelContainer(interaction, {
+        description: statusDesc,
+        footer: 'AniPedia Sanctuary',
+        components: [row]
+      }, sendContainer);
+      return true;
+    }
+
+    // Both partners have confirmed divorce!
+    activeDivorceConfirmations.delete(key);
+    await interaction.deferUpdate().catch(() => {});
+
     const now = new Date();
     const rel1 = getRelationshipRecord(user1Id);
     const rel2 = getRelationshipRecord(user2Id);
 
-    // As requested: When they get divorced, adoption will also break!
+    // As requested: When divorced, all family adoption ties dissolve
     const allChildren = new Set([...(rel1.childrenIds || []), ...(rel2.childrenIds || [])]);
     for (const cid of allChildren) {
       const childRec = getRelationshipRecord(cid);
@@ -1424,7 +1734,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
       await saveRelationshipRecord(cid, { parentIds: [] });
     }
 
-    // Clear marriage and adoptions
+    // Clear marriage and children
     await saveRelationshipRecord(user1Id, { spouseId: null, marriedAt: null, childrenIds: [] });
     await saveRelationshipRecord(user2Id, { spouseId: null, marriedAt: null, childrenIds: [] });
 
@@ -1432,21 +1742,44 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     const u1Member = guild.members.cache.get(user1Id) || await guild.members.fetch(user1Id).catch(() => null);
     const u2Member = guild.members.cache.get(user2Id) || await guild.members.fetch(user2Id).catch(() => null);
 
+    let bannerBuffer = null;
     if (u1Member && u2Member) {
-      const bannerBuffer = await generateDivorceBanner(u1Member, u2Member, now);
-      const attachment = new AttachmentBuilder(bannerBuffer, { name: 'divorce.png' });
-
-      await interaction.editReply({
-        content: `💔 **Marriage Dissolved.**\n<@${user1Id}> and <@${user2Id}> are now officially divorced. All family adoption ties have also been dissolved.`,
-        components: [],
-        files: [attachment]
-      });
-    } else {
-      await interaction.editReply({
-        content: `💔 <@${user1Id}> and <@${user2Id}> are now divorced.`,
-        components: []
-      });
+      bannerBuffer = await generateDivorceBanner(u1Member, u2Member, now);
     }
+
+    const files = bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'divorce.png' })] : [];
+    const divorceDesc = `<@${user1Id}> and <@${user2Id}> are now officially divorced. All family adoption ties have also been dissolved.`;
+
+    await sendRelContainer(interaction, {
+      description: divorceDesc,
+      image: bannerBuffer ? 'attachment://divorce.png' : undefined,
+      footer: 'AniPedia Sanctuary',
+      timestamp: Date.now(),
+      files,
+      components: []
+    }, sendContainer);
+
+    // Send DM notifications to both users
+    if (u1Member) {
+      await sendSafeDM(u1Member, {
+        description: `You and <@${user2Id}> are now officially divorced in ${guild.name}. All family adoption ties have also been dissolved.`,
+        image: bannerBuffer ? 'attachment://divorce.png' : undefined,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        files: bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'divorce.png' })] : []
+      }, sendContainer);
+    }
+
+    if (u2Member) {
+      await sendSafeDM(u2Member, {
+        description: `You and <@${user1Id}> are now officially divorced in ${guild.name}. All family adoption ties have also been dissolved.`,
+        image: bannerBuffer ? 'attachment://divorce.png' : undefined,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        files: bannerBuffer ? [new AttachmentBuilder(bannerBuffer, { name: 'divorce.png' })] : []
+      }, sendContainer);
+    }
+
     return true;
   }
 
@@ -1458,16 +1791,191 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     if (interaction.user.id !== user1Id && interaction.user.id !== user2Id) {
       await interaction.reply({
-        content: `Mou! 🌸 Only <@${user1Id}> or <@${user2Id}> can cancel this action!`,
+        content: `Only <@${user1Id}> or <@${user2Id}> can cancel this action.`,
         ephemeral: true
       });
       return true;
     }
 
-    await interaction.update({
-      content: `✨ **Divorce Cancelled.** The sacred vows remain intact. 💕`,
+    const key = [user1Id, user2Id].sort().join('_');
+    activeDivorceConfirmations.delete(key);
+
+    await interaction.deferUpdate().catch(() => {});
+
+    await sendRelContainer(interaction, {
+      description: `Divorce cancelled by <@${interaction.user.id}>. The marriage remains intact.`,
+      footer: 'AniPedia Sanctuary',
       components: []
-    });
+    }, sendContainer);
+    return true;
+  }
+
+  // 7. Abandon Confirm (Single parent or Dual Confirmation for two parents)
+  if (customId.startsWith('rel_abandon_confirm_')) {
+    const parts = customId.replace('rel_abandon_confirm_', '').split('_');
+    const p1 = parts[0];
+    const p2 = parts[1];
+    const childId = parts[2];
+
+    const isSingleParent = (p2 === 'none');
+
+    if (isSingleParent) {
+      if (interaction.user.id !== p1) {
+        await interaction.reply({
+          content: `Only <@${p1}> can confirm this action.`,
+          ephemeral: true
+        });
+        return true;
+      }
+
+      await interaction.deferUpdate().catch(() => {});
+
+      const p1Rec = getRelationshipRecord(p1);
+      const cRec = getRelationshipRecord(childId);
+
+      p1Rec.childrenIds = (p1Rec.childrenIds || []).filter(cid => cid !== childId);
+      cRec.parentIds = (cRec.parentIds || []).filter(pid => pid !== p1);
+
+      await saveRelationshipRecord(p1, { childrenIds: p1Rec.childrenIds });
+      await saveRelationshipRecord(childId, { parentIds: cRec.parentIds });
+
+      await sendRelContainer(interaction, {
+        description: `<@${childId}> has been removed from the family of <@${p1}>.`,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now(),
+        components: []
+      }, sendContainer);
+
+      const guild = interaction.guild;
+      const childMember = guild.members.cache.get(childId) || await guild.members.fetch(childId).catch(() => null);
+      if (childMember) {
+        await sendSafeDM(childMember, {
+          description: `You have been removed from the family of <@${p1}> in ${guild.name}.`,
+          footer: 'AniPedia Sanctuary',
+          timestamp: Date.now()
+        }, sendContainer);
+      }
+      return true;
+    }
+
+    // Two parents: both must confirm
+    if (interaction.user.id !== p1 && interaction.user.id !== p2) {
+      await interaction.reply({
+        content: `Only <@${p1}> or <@${p2}> can confirm this action.`,
+        ephemeral: true
+      });
+      return true;
+    }
+
+    const key = `${[p1, p2].sort().join('_')}_${childId}`;
+    let confirmed = activeAbandonConfirmations.get(key);
+    if (!confirmed) {
+      confirmed = new Set();
+      activeAbandonConfirmations.set(key, confirmed);
+    }
+    confirmed.add(interaction.user.id);
+
+    if (confirmed.size < 2) {
+      await interaction.deferUpdate().catch(() => {});
+      const otherId = interaction.user.id === p1 ? p2 : p1;
+      const desc = `Abandon confirmation requested for <@${childId}>.\nBoth parents (<@${p1}> and <@${p2}>) must confirm to remove the child from the family.\n\nStatus:\n<@${p1}>: ${confirmed.has(p1) ? 'Confirmed' : 'Pending'}\n<@${p2}>: ${confirmed.has(p2) ? 'Confirmed' : 'Pending'}\n\nWaiting for <@${otherId}> to confirm.`;
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`rel_abandon_confirm_${p1}_${p2}_${childId}`)
+          .setLabel('Confirm (Yes)')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId(`rel_abandon_cancel_${p1}_${p2}_${childId}`)
+          .setLabel('Cancel (No)')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      await sendRelContainer(interaction, {
+        description: desc,
+        footer: 'AniPedia Sanctuary',
+        components: [row]
+      }, sendContainer);
+      return true;
+    }
+
+    // Both parents confirmed!
+    activeAbandonConfirmations.delete(key);
+    await interaction.deferUpdate().catch(() => {});
+
+    const p1Rec = getRelationshipRecord(p1);
+    const p2Rec = getRelationshipRecord(p2);
+    const cRec = getRelationshipRecord(childId);
+
+    p1Rec.childrenIds = (p1Rec.childrenIds || []).filter(cid => cid !== childId);
+    p2Rec.childrenIds = (p2Rec.childrenIds || []).filter(cid => cid !== childId);
+    cRec.parentIds = (cRec.parentIds || []).filter(pid => pid !== p1 && pid !== p2);
+
+    await saveRelationshipRecord(p1, { childrenIds: p1Rec.childrenIds });
+    await saveRelationshipRecord(p2, { childrenIds: p2Rec.childrenIds });
+    await saveRelationshipRecord(childId, { parentIds: cRec.parentIds });
+
+    await sendRelContainer(interaction, {
+      description: `<@${childId}> has officially been removed from the family of <@${p1}> and <@${p2}>.`,
+      footer: 'AniPedia Sanctuary',
+      timestamp: Date.now(),
+      components: []
+    }, sendContainer);
+
+    const guild = interaction.guild;
+    const childMember = guild.members.cache.get(childId) || await guild.members.fetch(childId).catch(() => null);
+    const p1Member = guild.members.cache.get(p1) || await guild.members.fetch(p1).catch(() => null);
+    const p2Member = guild.members.cache.get(p2) || await guild.members.fetch(p2).catch(() => null);
+
+    if (childMember) {
+      await sendSafeDM(childMember, {
+        description: `You have been removed from the family of <@${p1}> and <@${p2}> in ${guild.name}.`,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now()
+      }, sendContainer);
+    }
+    if (p1Member) {
+      await sendSafeDM(p1Member, {
+        description: `<@${childId}> has been removed from your family in ${guild.name}.`,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now()
+      }, sendContainer);
+    }
+    if (p2Member) {
+      await sendSafeDM(p2Member, {
+        description: `<@${childId}> has been removed from your family in ${guild.name}.`,
+        footer: 'AniPedia Sanctuary',
+        timestamp: Date.now()
+      }, sendContainer);
+    }
+    return true;
+  }
+
+  // 8. Abandon Cancel
+  if (customId.startsWith('rel_abandon_cancel_')) {
+    const parts = customId.replace('rel_abandon_cancel_', '').split('_');
+    const p1 = parts[0];
+    const p2 = parts[1];
+    const childId = parts[2];
+
+    if (interaction.user.id !== p1 && (p2 === 'none' || interaction.user.id !== p2)) {
+      await interaction.reply({
+        content: `Only authorized parents can cancel this action.`,
+        ephemeral: true
+      });
+      return true;
+    }
+
+    const key = `${[p1, p2].sort().join('_')}_${childId}`;
+    activeAbandonConfirmations.delete(key);
+
+    await interaction.deferUpdate().catch(() => {});
+
+    await sendRelContainer(interaction, {
+      description: `Abandon action cancelled by <@${interaction.user.id}>. <@${childId}> remains in the family.`,
+      footer: 'AniPedia Sanctuary',
+      components: []
+    }, sendContainer);
     return true;
   }
 
