@@ -7,6 +7,7 @@ const { initVerificationPortal } = require('./verification-portal');
 const { initLoyalTagSystem, sweepAllMembersLoyalRole } = require('./loyal-tag-feature');
 const { initArcaneFeature, recordArcaneAura, recordArcaneIq, handleArcaneLeaderboardCommand, resetArcaneAura, resetArcaneIq } = require('./arcane-feature');
 const { initRelationshipFeature, handleRelationshipCommand, handleRelationshipButton } = require('./relationship-feature');
+const { handleMessageXp, handleLevelCommand, handleRankCommand, handleXpLeaderboardCommand } = require('./leveling-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -326,6 +327,15 @@ const slashCommandsData = [
   new SlashCommandBuilder()
     .setName('aurareset')
     .setDescription('Reset all server Auras and IQs (1013822181379162142 only)'),
+
+  new SlashCommandBuilder()
+    .setName('rank')
+    .setDescription('View your server XP level, rank position, and progression card')
+    .addUserOption(opt => opt.setName('user').setDescription('The member to check (leave empty for yourself)').setRequired(false)),
+
+  new SlashCommandBuilder()
+    .setName('xpleaderboard')
+    .setDescription('View the AniPedia XP Level Leaderboard'),
 
   new SlashCommandBuilder()
     .setName('auraleaderboard')
@@ -2334,6 +2344,10 @@ function getAdminHelpCategoryPayload(category, guild) {
           `• \`<bestie @user>\` / \`/besties\` — Test besties compatibility percentage card\n` +
           `• \`<auraleaderboard>\` / \`<auralb>\` — Weekly Arcane Aura top leaderboard\n` +
           `• \`<iqleaderboard>\` / \`<iqlb>\` — Weekly Arcane IQ top leaderboard\n\n` +
+          `### Progression & Leveling\n` +
+          `• \`<rank [@user]>\` / \`/rank\` — High-res visual rank card with XP, progress bar & stats\n` +
+          `• \`<xpleaderboard>\` / \`<levels>\` — Server XP leaderboard rankings\n` +
+          `• \`<level @user [level]>\` — [Master Only] Adjust member level & award milestone roles\n\n` +
           `### Utilities & Sanctuary\n` +
           `• \`<inviteinfo <@user|ID>>\` / \`/inviteinfo\` — Audit user inviter & invite links\n` +
           `• \`<revokeinvites <@user|ID>>\` — Delete all invite links created by a user\n` +
@@ -5601,6 +5615,9 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
+  // Automatic Leveling & Message XP tracking (Isolated to test channel during test mode)
+  await handleMessageXp(message, db, client, sendContainer).catch(err => console.error('[Leveling] Message XP Error:', err.message));
+
   const trimmedContent = message.content.trim();
 
   const isDiscordTag = /^<(?:@[!&]?|#|a?:[a-zA-Z0-9_]+:)\d+>/.test(trimmedContent);
@@ -6149,6 +6166,40 @@ client.on('messageCreate', async (message) => {
     const handledRelationship = await handleRelationshipCommand(message, client, db, sendContainer);
     if (handledRelationship) return;
 
+    // Leveling commands (<level, <rank, <xpleaderboard, <levels)
+    const isLevelCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'level' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'setlevel' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'addlevel'
+    );
+    if (isLevelCmd) {
+      await handleLevelCommand(message, client, db, sendContainer);
+      return;
+    }
+
+    const isRankCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'rank' ||
+      cleanQuery === 'rank' || cleanQuery.startsWith('rank ') ||
+      lowerQuery === 'rank' || lowerQuery.startsWith('rank ')
+    );
+    if (isRankCmd) {
+      await handleRankCommand(message, client, db, sendContainer);
+      return;
+    }
+
+    const isXpLeaderboardCmd = startsWithPrefix && (
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'xpleaderboard' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'xplb' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'xptop' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'levels' ||
+      (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'levelboard' ||
+      lowerQuery === 'leaderboard xp' || lowerQuery === 'top xp'
+    );
+    if (isXpLeaderboardCmd) {
+      await handleXpLeaderboardCommand(message, client, db, sendContainer);
+      return;
+    }
+
     const isAuraLeaderboardCmd = startsWithPrefix && (
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auraleaderboard' ||
       (cleanQuery.split(/\s+/)[0] || '').toLowerCase() === 'auralb' ||
@@ -6378,7 +6429,7 @@ client.on('messageCreate', async (message) => {
       'jail', 'unjail',
       'kick', 'ban', 'unban', 'purge', 'clean',
       'aura', 'auras', 'auraleaderboard', 'auralb', 'auratop', 'auraboard', 'aurareset', 'resetaura', 'auralbreset',
-      'iq', 'iqleaderboard', 'iqlb', 'iqtop', 'iqboard', 'iqreset', 'resetiq', 'iqlbreset', 'bestie', 'besties', 'av', 'avatar', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands', 'adminhelp'
+      'iq', 'iqleaderboard', 'iqlb', 'iqtop', 'iqboard', 'iqreset', 'resetiq', 'iqlbreset', 'bestie', 'besties', 'av', 'avatar', 'profile', 'anipedia', 'ping', 'reset', 'help', 'commands', 'adminhelp', 'level', 'setlevel', 'rank', 'xpleaderboard', 'xplb', 'xptop', 'levels'
     ];
     const hasCommandWord = commandKeywords.some(kw => preCheckWords.includes(kw) || lowerQuery.includes(kw));
 
@@ -8669,6 +8720,18 @@ client.on('interactionCreate', async (interaction) => {
       if (!allowed) return;
       await interaction.deferReply();
       await handleArcaneLeaderboardCommand(interaction, 'iq', client, sendContainer);
+      return;
+    }
+
+    if (commandName === 'rank') {
+      await interaction.deferReply();
+      await handleRankCommand(interaction, client, db, sendContainer);
+      return;
+    }
+
+    if (commandName === 'xpleaderboard') {
+      await interaction.deferReply();
+      await handleXpLeaderboardCommand(interaction, client, db, sendContainer);
       return;
     }
 
