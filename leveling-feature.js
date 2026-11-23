@@ -131,25 +131,11 @@ async function saveUserLevelData(userId, data, db = null) {
 
 /**
  * Grants matching level milestone roles to member
+ * NOTE: Auto-granting roles is disabled for now during the testing phase
  */
 async function syncMemberLevelRoles(member, currentLevel) {
-  if (!member || !member.roles || !member.guild) return [];
-  const addedRoles = [];
-
-  for (const tier of LEVEL_ROLE_TIERS) {
-    if (currentLevel >= tier.minLevel) {
-      const role = member.guild.roles.cache.find(r => r.name.toLowerCase() === tier.name.toLowerCase());
-      if (role && !member.roles.cache.has(role.id)) {
-        try {
-          await member.roles.add(role, `Level up milestone: reached Level ${currentLevel}`);
-          addedRoles.push(tier.name);
-        } catch (err) {
-          console.warn(`[Leveling] Failed to grant role ${tier.name} to ${member.user.tag}:`, err.message);
-        }
-      }
-    }
-  }
-  return addedRoles;
+  // Disabled per instructions during testing phase
+  return [];
 }
 
 /**
@@ -254,6 +240,11 @@ async function handleLevelCommand(message, client, db, sendContainer) {
     return;
   }
 
+  if (LEVELING_TEST_MODE && message.channel.id !== TESTING_CHANNEL_ID) {
+    await sendContainer(message, `<@${authorId}> • Leveling testing is currently restricted to <#${TESTING_CHANNEL_ID}>.`);
+    return;
+  }
+
   const content = message.content.replace(/^<level\s*/i, '').trim();
   const mentionedMember = message.mentions.members.first() || message.member;
   const targetId = mentionedMember.id;
@@ -333,11 +324,6 @@ function formatVoiceTime(seconds = 0) {
  * Supports custom rank.png background or procedural dark glassmorphism container
  */
 async function generateRankCard(member, levelData, rankPosition) {
-  const width = 960;
-  const height = 300;
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
-
   const level = levelData.level || 1;
   const currentXp = levelData.currentXp || 0;
   const nextXp = getXpNeededForNextLevel(level);
@@ -350,19 +336,13 @@ async function generateRankCard(member, levelData, rankPosition) {
     path.join(process.cwd(), 'assets', 'rank.png'),
     path.join(__dirname, 'assets', 'rank.png'),
     path.join(process.cwd(), 'rank.png'),
-    path.join(__dirname, 'rank.png'),
-    'C:/Users/Pradeep/.gemini/antigravity/brain/ecdc0373-4ef7-4871-8390-9440773aa398/.user_uploaded/media_1795457327225_6d248697.png'
+    path.join(__dirname, 'rank.png')
   ];
   let customBg = null;
   for (const p of customBgPaths) {
     if (fs.existsSync(p)) {
       try {
         customBg = await loadImage(p);
-        // Auto-save to project directory if not already there
-        const targetPath = path.join(process.cwd(), 'rank.png');
-        if (p !== targetPath && !fs.existsSync(targetPath)) {
-          fs.copyFileSync(p, targetPath);
-        }
         break;
       } catch (e) {}
     }
@@ -496,6 +476,18 @@ async function handleRankCommand(context, client, db, sendContainer) {
   const isInteraction = Boolean(context.isChatInputCommand || (context.reply && context.commandName));
   const channel = context.channel;
   const guild = context.guild;
+  const authorId = isInteraction ? context.user.id : context.author.id;
+  const channelId = context.channelId || channel?.id;
+
+  if (LEVELING_TEST_MODE && (authorId !== MASTER_USER_ID || channelId !== TESTING_CHANNEL_ID)) {
+    if (isInteraction) {
+      await context.reply({ content: `Leveling system is currently in private testing in <#${TESTING_CHANNEL_ID}> for Master.`, ephemeral: true });
+    } else {
+      const msg = await context.reply(`Leveling system is currently in private testing in <#${TESTING_CHANNEL_ID}> for Master.`);
+      setTimeout(() => msg.delete().catch(() => {}), 5000);
+    }
+    return;
+  }
 
   let targetMember = null;
   if (isInteraction) {
@@ -543,6 +535,18 @@ async function handleRankCommand(context, client, db, sendContainer) {
 async function handleXpLeaderboardCommand(context, client, db, sendContainer) {
   const isInteraction = Boolean(context.isChatInputCommand || (context.reply && context.commandName));
   const guild = context.guild;
+  const authorId = isInteraction ? context.user.id : context.author.id;
+  const channelId = context.channelId || context.channel?.id;
+
+  if (LEVELING_TEST_MODE && (authorId !== MASTER_USER_ID || channelId !== TESTING_CHANNEL_ID)) {
+    if (isInteraction) {
+      await context.reply({ content: `XP Leaderboard is currently in private testing in <#${TESTING_CHANNEL_ID}> for Master.`, ephemeral: true });
+    } else {
+      const msg = await context.reply(`XP Leaderboard is currently in private testing in <#${TESTING_CHANNEL_ID}> for Master.`);
+      setTimeout(() => msg.delete().catch(() => {}), 5000);
+    }
+    return;
+  }
 
   let topUsers = [];
   if (db) {
