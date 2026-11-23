@@ -328,6 +328,14 @@ const slashCommandsData = [
     .setDescription('Reset all server Auras and IQs (1013822181379162142 only)'),
 
   new SlashCommandBuilder()
+    .setName('auraleaderboard')
+    .setDescription('View the Weekly Arcane Aura Leaderboard'),
+
+  new SlashCommandBuilder()
+    .setName('iqleaderboard')
+    .setDescription('View the Weekly Arcane IQ Leaderboard'),
+
+  new SlashCommandBuilder()
     .setName('help')
     .setDescription('Show help and available commands'),
 
@@ -6154,6 +6162,8 @@ client.on('messageCreate', async (message) => {
 
     if (isAuraLeaderboardCmd) {
       if (!await enforceAikoChannel(message, message.author.id)) return;
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'auralb');
+      if (!allowed) return;
       await handleArcaneLeaderboardCommand(message, 'aura', client, sendContainer);
       return;
     }
@@ -6171,6 +6181,8 @@ client.on('messageCreate', async (message) => {
 
     if (isIqLeaderboardCmd) {
       if (!await enforceAikoChannel(message, message.author.id)) return;
+      const allowed = await handleFeatureCooldown(message, message.author.id, 'iqlb');
+      if (!allowed) return;
       await handleArcaneLeaderboardCommand(message, 'iq', client, sendContainer);
       return;
     }
@@ -8639,6 +8651,24 @@ client.on('interactionCreate', async (interaction) => {
       await interaction.deferReply();
       const iqPayload = await buildIqPayload(targetMember, guild, user.id);
       await interaction.editReply(iqPayload);
+      return;
+    }
+
+    if (commandName === 'auraleaderboard' || commandName === 'auralb') {
+      if (!await enforceAikoChannel(interaction, interaction.user.id)) return;
+      const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'auralb');
+      if (!allowed) return;
+      await interaction.deferReply();
+      await handleArcaneLeaderboardCommand(interaction, 'aura', client, sendContainer);
+      return;
+    }
+
+    if (commandName === 'iqleaderboard' || commandName === 'iqlb') {
+      if (!await enforceAikoChannel(interaction, interaction.user.id)) return;
+      const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'iqlb');
+      if (!allowed) return;
+      await interaction.deferReply();
+      await handleArcaneLeaderboardCommand(interaction, 'iq', client, sendContainer);
       return;
     }
 

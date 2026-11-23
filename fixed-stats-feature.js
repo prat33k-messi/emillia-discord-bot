@@ -41,27 +41,21 @@ const AURA_TIERS = [
   { min: 95.1, max: 100.0, weight: 200,   label: 'Anirare Piece', rarityMin: 96, rarityMax: 100 }
 ];
 
+const INSIGNIA_ROLE_ID = '1571078604354363412';
+
 function getMemberLevelBoost(member) {
   if (!member || !member.roles || !member.roles.cache) {
     return { boostPercent: 0, levelRoleName: null };
   }
 
-  const roleNames = Array.from(member.roles.cache.values()).map(r => (r.name || '').toLowerCase());
+  const hasInsignia = member.roles.cache.has(INSIGNIA_ROLE_ID) ||
+    member.roles.cache.some(r => {
+      const name = (r.name || '').toLowerCase().trim();
+      return name === 'insignia' || name.includes('insignia');
+    });
 
-  const levelConfigs = [
-    { regex: /level\s*60\+?/i, boost: 15, label: 'Level 60+' },
-    { regex: /level\s*50\+?/i, boost: 12, label: 'Level 50+' },
-    { regex: /level\s*40\+?/i, boost: 10, label: 'Level 40+' },
-    { regex: /level\s*30\+?/i, boost: 8,  label: 'Level 30+' },
-    { regex: /level\s*20\+?/i, boost: 6,  label: 'Level 20+' },
-    { regex: /level\s*10\+?/i, boost: 4,  label: 'Level 10+' },
-    { regex: /level\s*5\+?/i,  boost: 2,  label: 'Level 5+'  }
-  ];
-
-  for (const cfg of levelConfigs) {
-    if (roleNames.some(name => cfg.regex.test(name))) {
-      return { boostPercent: cfg.boost, levelRoleName: cfg.label };
-    }
+  if (hasInsignia) {
+    return { boostPercent: 5, levelRoleName: 'Insignia' };
   }
 
   return { boostPercent: 0, levelRoleName: null };
@@ -80,7 +74,7 @@ function rollAuraPercent(fixedScore = null, boostPercent = 0, boostRoleName = nu
     };
   }
 
-  const clampedBoost = Math.max(0, Math.min(15, boostPercent));
+  const clampedBoost = Math.max(0, Math.min(5, boostPercent));
   let tiers = AURA_TIERS;
 
   if (clampedBoost > 0) {

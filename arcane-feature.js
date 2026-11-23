@@ -976,19 +976,15 @@ async function generateArcaneLeaderboardCard(type, topMembers) {
 /**
  * Handles <auraleaderboard and <iqleaderboard execution with Container V2 styling
  */
-async function handleArcaneLeaderboardCommand(message, type, client, sendContainer = null) {
-  const authorId = message.author.id;
-  const isMaster = message.author.id === '1013822181379162142' || AUTHORIZED_ARCANE_IDS.has(authorId);
+async function handleArcaneLeaderboardCommand(context, type, client, sendContainer = null) {
+  const isInteraction = Boolean(context.isChatInputCommand || (context.reply && context.commandName));
+  const channel = context.channel;
+  const guild = context.guild;
 
-  // Strict authorization check
-  if (!isMaster) {
-    await message.reply("Mou! 🌸 Only authorized guardians can summon the Weekly Arcane Leaderboard! ❄️");
-    return;
+  if (!isInteraction && channel && typeof channel.sendTyping === 'function') {
+    channel.sendTyping().catch(() => {});
   }
 
-  await message.channel.sendTyping().catch(() => {});
-
-  const guild = message.guild;
   const topMembers = await getTopArcaneMembers(type, guild);
 
   const isAura = type === 'aura';
@@ -997,7 +993,7 @@ async function handleArcaneLeaderboardCommand(message, type, client, sendContain
   const attachment = new AttachmentBuilder(cardBuffer, { name: `${type}_leaderboard.png` });
 
   if (typeof sendContainer === 'function') {
-    await sendContainer(message, {
+    await sendContainer(context, {
       title: `🌟  ${toSmallCaps(`Weekly Arcane ${label} Leaderboard`)}`,
       description: `### 🏆 **Weekly Arcane**`,
       image: `attachment://${type}_leaderboard.png`,
@@ -1014,7 +1010,15 @@ async function handleArcaneLeaderboardCommand(message, type, client, sendContain
       .setFooter({ text: `${toSmallCaps('AniPedia Weekly Arcane')} • ${guild?.name || 'Sanctuary'}`, iconURL: guild?.iconURL() || client.user.displayAvatarURL() })
       .setTimestamp();
 
-    await message.reply({ embeds: [embed], files: [attachment] });
+    if (isInteraction) {
+      if (context.deferred && !context.replied) {
+        await context.editReply({ embeds: [embed], files: [attachment] });
+      } else {
+        await context.reply({ embeds: [embed], files: [attachment] });
+      }
+    } else {
+      await context.reply({ embeds: [embed], files: [attachment] });
+    }
   }
 }
 
