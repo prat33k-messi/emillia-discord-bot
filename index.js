@@ -805,6 +805,14 @@ client.on('guildMemberAdd', async (member) => {
       }
 
       await trackMemberJoin(member, db);
+
+      // Trigger immediate welcome messages for every member joining the server (regardless of verification)
+      if (!welcomedMembersCache.has(member.id)) {
+        welcomedMembersCache.add(member.id);
+        setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
+        console.log(`[Welcome] Member joined server: ${member.user?.tag || member.id}. Dispatching welcome messages...`);
+        await handleMemberWelcome(member);
+      }
     }
   } catch (welcomeErr) {
     console.error('Error triggering member welcome flow on join:', welcomeErr);
