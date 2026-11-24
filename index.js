@@ -806,11 +806,10 @@ client.on('guildMemberAdd', async (member) => {
 
       await trackMemberJoin(member, db);
 
-      // Trigger immediate welcome messages for every member joining the server (regardless of verification)
+      // Trigger one-time welcome message when the member joins the server
       if (!welcomedMembersCache.has(member.id)) {
         welcomedMembersCache.add(member.id);
-        setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
-        console.log(`[Welcome] Member joined server: ${member.user?.tag || member.id}. Dispatching welcome messages...`);
+        console.log(`[Welcome] Member joined server: ${member.user?.tag || member.id}. Dispatching one-time welcome message...`);
         await handleMemberWelcome(member);
       }
     }
@@ -1698,13 +1697,10 @@ async function handleMemberWelcome(member, fallbackChannel = null) {
 client.on('memberVerified', async (member) => {
   try {
     if (!member) return;
-    if (welcomedMembersCache.has(member.id)) return;
-    welcomedMembersCache.add(member.id);
-    setTimeout(() => welcomedMembersCache.delete(member.id), 300000);
-    console.log(`[Welcome] Member passed Anti-VPN verification: ${member.user?.tag || member.id}. Dispatching welcome messages...`);
-    await handleMemberWelcome(member);
+    // Welcome message is only sent once upon joining the server; do NOT send any welcome message after verification
+    console.log(`[Verify] Member passed verification: ${member.user?.tag || member.id}. Verified role granted (no welcome dispatched).`);
   } catch (err) {
-    console.error('Error triggering member welcome after verification:', err);
+    console.error('Error in memberVerified handler:', err);
   }
 });
 
