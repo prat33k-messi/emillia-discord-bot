@@ -208,6 +208,7 @@ const jailedUsersCache = new Map();
 const inMemoryWarnRecords = new Map();
 
 const featureCooldowns = new Map();
+const unverifiedMediaCooldown = new Map();
 
 const slashCommandsData = [
   new SlashCommandBuilder()
@@ -453,6 +454,132 @@ async function executeVerifiedEnforcement(guild, dbInstance) {
     keptCount: audit.validWithIp.length,
     protectedCount: audit.protectedStaff.length,
     totalRoleHolders: audit.totalRoleHolders
+  };
+}
+
+async function findUnverifiedMembers(guild) {
+  if (!guild) return { error: 'No guild provided' };
+
+  await guild.roles.fetch().catch(() => {});
+  const verifiedRole = guild.roles.cache.get('1572669219596804186') ||
+                       guild.roles.cache.find(r => r.name.toLowerCase() === 'verified');
+
+  const members = await guild.members.fetch().catch(err => {
+    console.error('[Unverified Kick] Error fetching members:', err);
+    return guild.members.cache;
+  });
+
+  const me = guild.members.me || (await guild.members.fetchMe().catch(() => null));
+  const unverifiedList = [];
+  const protectedList = [];
+
+  for (const [memberId, member] of members) {
+    if (member.user.bot) continue;
+
+    // Check if protected (Master, Grand Admin, Whitelist, Server Owner, Staff)
+    const isMaster = member.id === MASTER_USER_ID ||
+      (member.user?.username && (member.user.username.toLowerCase() === 'el_lapulga' || member.user.username.toLowerCase() === '_c0rle0ne'));
+    const isProtected = isMaster ||
+      isWhitelistedUser(member) ||
+      member.guild.ownerId === member.id ||
+      (typeof getMemberTier === 'function' && getMemberTier(member) > 0) ||
+      (typeof canBypassAikoChannel === 'function' && canBypassAikoChannel(member));
+
+    if (isProtected) {
+      protectedList.push(member);
+      continue;
+    }
+
+    // Check if they have verified role
+    const hasVerifiedRole = (verifiedRole && member.roles.cache.has(verifiedRole.id)) ||
+      member.roles.cache.some(r => {
+        const n = (r.name || '').toLowerCase().trim();
+        return n === 'verified' || n === 'member';
+      });
+
+    if (hasVerifiedRole) {
+      continue;
+    }
+
+    // Role hierarchy check: bot cannot kick members with higher or equal role
+    if (me && member.roles.highest.position >= me.roles.highest.position) {
+      protectedList.push(member);
+      continue;
+    }
+
+    unverifiedList.push(member);
+  }
+
+  return {
+    verifiedRole,
+    totalMembers: members.size,
+    unverifiedList,
+    protectedList
+  };
+}
+
+async function executeUnverifiedKick(guild, mode = 'trial') {
+  const scan = await findUnverifiedMembers(guild);
+  if (scan.error) return scan;
+
+  const TRIAL_TEST_USER_ID = '1457012696678404237';
+  let targetMembers = [];
+
+  if (mode === 'trial') {
+    // Specifically target the test user ID 1457012696678404237 for trial verification
+    const testMember = guild.members.cache.get(TRIAL_TEST_USER_ID) || (await guild.members.fetch(TRIAL_TEST_USER_ID).catch(() => null));
+    if (testMember) {
+      targetMembers = [testMember];
+    } else {
+      return {
+        error: `Test member <@${TRIAL_TEST_USER_ID}> (\`${TRIAL_TEST_USER_ID}\`) is not currently in the server! Please make sure this account has joined the server before running the trial.`
+      };
+    }
+  } else {
+    targetMembers = scan.unverifiedList;
+  }
+
+  const kickMessage = `You have been kicked from the server due to inactivity.\n\nIf you would like to rejoin the server, you are welcome to join again using the link below:\nhttps://discord.gg/QSMENJqhRa`;
+
+  let kickedCount = 0;
+  let dmedCount = 0;
+  let failedCount = 0;
+
+  for (let i = 0; i < targetMembers.length; i++) {
+    const member = targetMembers[i];
+    try {
+      // 1. Send DM before kicking
+      try {
+        await member.send(kickMessage);
+        dmedCount++;
+      } catch (dmErr) {}
+
+      // 2. Kick member
+      await member.kick(`AniPedia Unverified Kick (${mode})`);
+      kickedCount++;
+      console.log(`[Unverified Kick] (${i + 1}/${targetMembers.length}) Kicked ${member.user?.tag || member.id}`);
+    } catch (kickErr) {
+      console.error(`[Unverified Kick] Failed to kick ${member.user?.tag || member.id}:`, kickErr.message);
+      failedCount++;
+    }
+
+    // 3. Respect Discord API rate limits
+    if (i < targetMembers.length - 1) {
+      await new Promise(r => setTimeout(r, 450));
+    }
+  }
+
+  return {
+    mode,
+    totalMembers: scan.totalMembers,
+    totalUnverified: scan.unverifiedList.length,
+    targetCount: targetMembers.length,
+    targetUserIds: targetMembers.map(m => m.id),
+    kickedCount,
+    dmedCount,
+    failedCount,
+    protectedCount: scan.protectedList.length,
+    remainingUnverified: Math.max(0, scan.unverifiedList.length - kickedCount)
   };
 }
 
@@ -824,14 +951,7 @@ function canUseAfk(member) {
 }
 
 function canUseGif(member) {
-  if (!member) return false;
-
-  if (isWhitelistedUser(member)) return true;
-  if (member.guild && member.guild.ownerId === member.id) return true;
-
-  if (getMemberTier(member) >= 1) return true;
-
-  return getMemberLevel(member) >= 5;
+  return isVerifiedMember(member);
 }
 
 function parseDuration(str) {
@@ -1101,6 +1221,7 @@ function makeReplyFn(target) {
 
 const AIKO_COMMAND_CHANNEL_ID = '1568586444979703818';
 const VERIFICATION_CHANNEL_ID = '1572692755858333737';
+const VERIFIED_ROLE_ID = '1572669219596804186';
 
 const AIKO_BYPASS_ROLE_IDS = new Set([
   '1517887565431046267', // Shogun
@@ -1108,6 +1229,24 @@ const AIKO_BYPASS_ROLE_IDS = new Set([
   '1542798540676276224', // Supervisor
   '1521217765833179378'  // Senior Moderator
 ]);
+
+function isVerifiedMember(member) {
+  if (!member) return false;
+  if (member.id === MASTER_USER_ID) return true;
+  if (isWhitelistedUser(member)) return true;
+  if (member.guild && member.guild.ownerId === member.id) return true;
+  if (getMemberTier(member) >= 1) return true;
+  if (canBypassAikoChannel(member)) return true;
+
+  if (member.roles && member.roles.cache) {
+    if (member.roles.cache.has(VERIFIED_ROLE_ID)) return true;
+    if (member.roles.cache.some(r => {
+      const n = (r.name || '').toLowerCase().trim();
+      return n === 'verified' || n === 'member';
+    })) return true;
+  }
+  return false;
+}
 
 function canBypassAikoChannel(member, user = null) {
   if (user && isWhitelistedUser(user)) return true;
@@ -2194,6 +2333,8 @@ function getAdminHelpCategoryPayload(category, guild) {
           `Executes automated enforcement sweep: immediately strips the Verified role from all accounts that do not have an IP recorded in the database.\n\n` +
           `• \`<verification>\`\n` +
           `Deploys the official AniPedia Anti-VPN Verification Portal panel with the web verification button.\n\n` +
+          `• \`<unverified kick trial>\` / \`<unverified kick permanent>\`\n` +
+          `Purges unverified members lacking verified role (trial: 10 test kicks, permanent: all unverified) with rejoin DM.\n\n` +
           `• Automated Background Security:\n` +
           `Anti-VPN/proxy blocking, Cloudflare WARP/Tor detection, and automated IP cascade auto-bans whenever an account sharing a verified IP is banned.`,
         footer: footerText
@@ -2316,7 +2457,9 @@ function getAdminHelpCategoryPayload(category, guild) {
           `• \`<alt @user>\` / \`<alts @user>\` — Scan IP signatures for connected alt accounts\n` +
           `• \`<enforceverify>\` — Audit verified role holders against registered IP database\n` +
           `• \`<enforceverify confirm>\` — Strip verified role from accounts with no IP\n` +
-          `• \`<verification>\` — Deploy interactive Anti-VPN verification portal panel\n\n` +
+          `• \`<verification>\` — Deploy interactive Anti-VPN verification portal panel\n` +
+          `• \`<unverified kick trial>\` — Kick 10 unverified members with re-invite DM\n` +
+          `• \`<unverified kick permanent>\` — Purge all unverified members from server with re-invite DM\n\n` +
           `### Moderation & Disciplinary Ladder\n` +
           `• \`<warn @user [reason]>\` / \`/warn\` — Issue tiered warning (Level 1 to 6)\n` +
           `• \`<warns [@user]>\` / \`/warns\` — View warning history & ladder level\n` +
@@ -5358,19 +5501,25 @@ client.on('messageCreate', async (message) => {
     }
   }
 
-  if (hasGifAttachment || hasGifLink) {
-    if (!canUseGif(message.member)) {
-      await message.delete().catch(() => {});
-      const { url1 } = await getAikoEmojis(message.guild);
-      const gifWarnEmbed = new EmbedBuilder()
-        .setDescription(`<@${message.author.id}> • Reach level 5+ to use gif`);
-      if (url1) gifWarnEmbed.setThumbnail(url1);
+  const hasMediaAttachment = Boolean(message.attachments && message.attachments.size > 0);
 
-      const warnMsg = await sendContainer(message.channel, gifWarnEmbed).catch(() => {});
-      if (warnMsg) {
-        setTimeout(() => {
-          warnMsg.delete().catch(() => {});
-        }, 5000);
+  // Unverified Gatekeeper: Only Verified members can send pictures/media or GIFs
+  if (hasMediaAttachment || hasGifAttachment || hasGifLink) {
+    if (message.channel.id !== VERIFICATION_CHANNEL_ID && !isVerifiedMember(message.member)) {
+      await message.delete().catch(() => {});
+      const now = Date.now();
+      const lastAlert = unverifiedMediaCooldown.get(message.author.id) || 0;
+      if (now - lastAlert > 5000) {
+        unverifiedMediaCooldown.set(message.author.id, now);
+        const alertMsg = await sendContainer(
+          message.channel,
+          `<@${message.author.id}> • You are not eligible to send media or GIFs! Please get verified in <#${VERIFICATION_CHANNEL_ID}> to unlock media permissions.`
+        ).catch(() => {});
+        if (alertMsg && typeof alertMsg.delete === 'function') {
+          setTimeout(() => {
+            alertMsg.delete().catch(() => {});
+          }, 5000);
+        }
       }
       return;
     }
@@ -5635,6 +5784,17 @@ client.on('messageCreate', async (message) => {
   }
 
   if (!startsWithPrefix && !isMentioned) return;
+
+  if (!isVerifiedMember(message.member)) {
+    const unverifiedAlert = `<@${message.author.id}> • You need the **Verified** role to use Aiko features! Please get verified in <#${VERIFICATION_CHANNEL_ID}>.`;
+    const alertMsg = await sendContainer(message.channel, unverifiedAlert).catch(() => {});
+    if (alertMsg && typeof alertMsg.delete === 'function') {
+      setTimeout(() => {
+        alertMsg.delete().catch(() => {});
+      }, 5000);
+    }
+    return;
+  }
 
   try {
     const username = message.author.username;
@@ -6158,6 +6318,131 @@ client.on('messageCreate', async (message) => {
         await progressMsg.edit({ content: null, embeds: [auditEmbed], components: [row] });
       } else {
         await progressMsg.edit({ content: null, embeds: [auditEmbed], components: [] });
+      }
+      return;
+    }
+
+    const isUnverifiedKickCmd = startsWithPrefix && (
+      cleanQuery.toLowerCase().startsWith('unverified kick') ||
+      cleanQuery.toLowerCase().startsWith('unverifiedkick')
+    );
+
+    if (isUnverifiedKickCmd) {
+      const isSoleMaster = (message.author.id === MASTER_USER_ID) ||
+        (message.author.username && (message.author.username.toLowerCase() === 'el_lapulga' || message.author.username.toLowerCase() === '_c0rle0ne'));
+
+      if (!isSoleMaster && message.author.id !== '1013822181379162142') {
+        await sendContainer(message, `Mou! 🔒 This critical command is restricted solely to Master <@${MASTER_USER_ID}>.`);
+        return;
+      }
+
+      const rawArgs = cleanQuery.replace(/^(unverified\s*kick|unverifiedkick)\s*/i, '').trim().toLowerCase();
+      const isTrial = rawArgs === 'trial' || rawArgs === 'test' || rawArgs === '10';
+      const isPermanent = rawArgs === 'permanent' || rawArgs === 'perm' || rawArgs === 'all' || rawArgs === 'confirm';
+
+      if (isTrial) {
+        const progressMsg = await message.reply("⏳ **Executing Unverified Kick (Trial Test on target alt)...** Sending DM and kicking. Please wait...");
+        const result = await executeUnverifiedKick(message.guild, 'trial');
+        if (result.error) {
+          await progressMsg.edit(`❌ **Unverified kick failed:** ${result.error}`);
+          return;
+        }
+
+        const doneEmbed = new EmbedBuilder()
+          .setColor(0x3498DB)
+          .setTitle('🧪 Unverified Kick Complete • Trial Test')
+          .setDescription(
+            `**Trial test executed on test user <@${result.targetUserIds?.[0] || '1457012696678404237'}>!**\n\n` +
+            `• 👢 **Members Kicked:** \`${result.kickedCount} / ${result.targetCount}\`\n` +
+            `• 📩 **DMs Delivered:** \`${result.dmedCount > 0 ? 'Yes (rejoin link included)' : 'No (DMs closed/blocked)'}\`\n` +
+            `• ⚠️ **Errors / Failed:** \`${result.failedCount}\`\n` +
+            `• 👥 **Total Remaining Unverified in Server:** \`${result.remainingUnverified}\`\n\n` +
+            `👉 *Check the DM and server on your test account. When ready, kick all unverified members with:* \`<unverified kick permanent>\``
+          )
+          .setFooter({ text: 'AniPedia Sanctuary • Master Purge Directives' })
+          .setTimestamp();
+
+        await progressMsg.edit({ content: null, embeds: [doneEmbed], components: [] });
+        return;
+      }
+
+      if (isPermanent) {
+        const progressMsg = await message.reply("⏳ **Executing Full Server Unverified Purge (Permanent)...** Sending DMs and kicking all unverified members. Please wait...");
+        const result = await executeUnverifiedKick(message.guild, 'permanent');
+        if (result.error) {
+          await progressMsg.edit(`❌ **Unverified kick failed:** ${result.error}`);
+          return;
+        }
+
+        const doneEmbed = new EmbedBuilder()
+          .setColor(0xE74C3C)
+          .setTitle('⚡ Unverified Kick Complete • Full Server Purge')
+          .setDescription(
+            `**All unverified members have been kicked from the server!**\n\n` +
+            `• 👢 **Total Members Kicked:** \`${result.kickedCount} / ${result.targetCount}\`\n` +
+            `• 📩 **DMs Delivered:** \`${result.dmedCount}\` *(rejoin link included)*\n` +
+            `• ⚠️ **Errors / Failed:** \`${result.failedCount}\`\n` +
+            `• 🛡️ **Protected Staff & Whitelist:** \`${result.protectedCount}\`\n\n` +
+            `✅ *Purge complete! Only verified members remain in AniPedia.*`
+          )
+          .setFooter({ text: 'AniPedia Sanctuary • Master Purge Directives' })
+          .setTimestamp();
+
+        await progressMsg.edit({ content: null, embeds: [doneEmbed], components: [] });
+        return;
+      }
+
+      // Default: Scan and show interactive prompt
+      const progressMsg = await message.reply("🔍 **Scanning server for unverified members...** Please wait...");
+      const scan = await findUnverifiedMembers(message.guild);
+      if (scan.error) {
+        await progressMsg.edit(`❌ **Scan failed:** ${scan.error}`);
+        return;
+      }
+
+      const promptEmbed = new EmbedBuilder()
+        .setColor(scan.unverifiedList.length > 0 ? 0xE67E22 : 0x2ECC71)
+        .setTitle('🛡️ AniPedia Unverified Kick Management')
+        .setDescription(
+          `**Master Purge Directives**\n\n` +
+          `📊 **Scan Results:**\n` +
+          `• Total Server Members: \`${scan.totalMembers}\`\n` +
+          `• Unverified Members (Eligible for Kick): \`${scan.unverifiedList.length}\`\n` +
+          `• Protected Staff & Whitelist (Exempt): \`${scan.protectedList.length}\`\n\n` +
+          `📩 **Each kicked member receives the official DM:**\n` +
+          `> *You have been kicked from the server due to inactivity.*\n` +
+          `> *If you would like to rejoin the server, you are welcome to join again using the link below:*\n` +
+          `> *https://discord.gg/QSMENJqhRa*\n\n` +
+          `**Choose Execution Mode:**\n` +
+          `• \`<unverified kick trial>\` ➔ Kicks test user <@1457012696678404237> as a single-account trial.\n` +
+          `• \`<unverified kick permanent>\` ➔ Kicks **ALL ${scan.unverifiedList.length} unverified members**.\n\n` +
+          (scan.unverifiedList.length > 0
+            ? `*Or click one of the action buttons below:*`
+            : `🎉 **Zero unverified members found! All members have the verified role.**`)
+        )
+        .setFooter({ text: 'AniPedia Security Shield • Master Command' })
+        .setTimestamp();
+
+      if (scan.unverifiedList.length > 0) {
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId(`unverified_kick_trial_${message.author.id}`)
+            .setLabel(`Kick Test Alt (1457012696678404237)`)
+            .setEmoji('🧪')
+            .setStyle(ButtonStyle.Primary),
+          new ButtonBuilder()
+            .setCustomId(`unverified_kick_perm_${message.author.id}`)
+            .setLabel(`Kick All (${scan.unverifiedList.length})`)
+            .setEmoji('⚠️')
+            .setStyle(ButtonStyle.Danger),
+          new ButtonBuilder()
+            .setCustomId(`unverified_kick_cancel_${message.author.id}`)
+            .setLabel('Cancel')
+            .setStyle(ButtonStyle.Secondary)
+        );
+        await progressMsg.edit({ content: null, embeds: [promptEmbed], components: [row] });
+      } else {
+        await progressMsg.edit({ content: null, embeds: [promptEmbed], components: [] });
       }
       return;
     }
@@ -7811,6 +8096,92 @@ client.on('interactionCreate', async (interaction) => {
       });
       return;
     }
+    if (interaction.customId.startsWith('unverified_kick_trial_')) {
+      const authorId = interaction.customId.replace('unverified_kick_trial_', '');
+      if (interaction.user.id !== authorId && interaction.user.id !== MASTER_USER_ID) {
+        await interaction.reply({ content: `Mou! 🔒 Restricted solely to Master <@${MASTER_USER_ID}>.`, ephemeral: true });
+        return;
+      }
+
+      await interaction.update({
+        content: '⏳ **Executing Unverified Kick (Trial Test on target alt)...** Sending DM and kicking. Please wait...',
+        embeds: [],
+        components: []
+      });
+
+      const result = await executeUnverifiedKick(interaction.guild, 'trial');
+      if (result.error) {
+        await interaction.editReply({ content: `❌ **Unverified kick failed:** ${result.error}`, embeds: [], components: [] });
+        return;
+      }
+
+      const doneEmbed = new EmbedBuilder()
+        .setColor(0x3498DB)
+        .setTitle('🧪 Unverified Kick Complete • Trial Test')
+        .setDescription(
+          `**Trial test executed on test user <@${result.targetUserIds?.[0] || '1457012696678404237'}>!**\n\n` +
+          `• 👢 **Members Kicked:** \`${result.kickedCount} / ${result.targetCount}\`\n` +
+          `• 📩 **DMs Delivered:** \`${result.dmedCount > 0 ? 'Yes (rejoin link included)' : 'No (DMs closed/blocked)'}\`\n` +
+          `• ⚠️ **Errors / Failed:** \`${result.failedCount}\`\n` +
+          `• 👥 **Total Remaining Unverified in Server:** \`${result.remainingUnverified}\`\n\n` +
+          `👉 *Check your test account! Then execute full server purge with:* \`<unverified kick permanent>\``
+        )
+        .setFooter({ text: 'AniPedia Sanctuary • Master Purge Directives' })
+        .setTimestamp();
+
+      await interaction.editReply({ content: null, embeds: [doneEmbed], components: [] });
+      return;
+    }
+    if (interaction.customId.startsWith('unverified_kick_perm_')) {
+      const authorId = interaction.customId.replace('unverified_kick_perm_', '');
+      if (interaction.user.id !== authorId && interaction.user.id !== MASTER_USER_ID) {
+        await interaction.reply({ content: `Mou! 🔒 Restricted solely to Master <@${MASTER_USER_ID}>.`, ephemeral: true });
+        return;
+      }
+
+      await interaction.update({
+        content: '⏳ **Executing Full Server Unverified Purge (Permanent)...** Sending DMs and kicking all unverified members. Please wait...',
+        embeds: [],
+        components: []
+      });
+
+      const result = await executeUnverifiedKick(interaction.guild, 'permanent');
+      if (result.error) {
+        await interaction.editReply({ content: `❌ **Unverified kick failed:** ${result.error}`, embeds: [], components: [] });
+        return;
+      }
+
+      const doneEmbed = new EmbedBuilder()
+        .setColor(0xE74C3C)
+        .setTitle('⚡ Unverified Kick Complete • Full Server Purge')
+        .setDescription(
+          `**All unverified members have been kicked from the server!**\n\n` +
+          `• 👢 **Total Members Kicked:** \`${result.kickedCount} / ${result.targetCount}\`\n` +
+          `• 📩 **DMs Delivered:** \`${result.dmedCount}\` *(rejoin link included)*\n` +
+          `• ⚠️ **Errors / Failed:** \`${result.failedCount}\`\n` +
+          `• 🛡️ **Protected Staff & Whitelist:** \`${result.protectedCount}\`\n\n` +
+          `✅ *Purge complete! Only verified members remain in AniPedia.*`
+        )
+        .setFooter({ text: 'AniPedia Sanctuary • Master Purge Directives' })
+        .setTimestamp();
+
+      await interaction.editReply({ content: null, embeds: [doneEmbed], components: [] });
+      return;
+    }
+    if (interaction.customId.startsWith('unverified_kick_cancel_')) {
+      const authorId = interaction.customId.replace('unverified_kick_cancel_', '');
+      if (interaction.user.id !== authorId && interaction.user.id !== MASTER_USER_ID) {
+        await interaction.reply({ content: `Mou! 🔒 Restricted solely to Master <@${MASTER_USER_ID}>.`, ephemeral: true });
+        return;
+      }
+
+      await interaction.update({
+        content: '❌ **Unverified kick cancelled.** No members were kicked.',
+        embeds: [],
+        components: []
+      });
+      return;
+    }
     if (interaction.customId.startsWith('verify_staff_approve_')) {
       await handleStaffApprovalButton(interaction, { getMemberTier, isWhitelistedUser, getModEmojis, logToEmilliaLog });
       return;
@@ -7983,6 +8354,11 @@ client.on('interactionCreate', async (interaction) => {
   const { commandName, options, guild, member, user, channel } = interaction;
   if (!guild) {
     await interaction.reply({ content: "Commands can only be used in a server! 🌸", ephemeral: true });
+    return;
+  }
+
+  if (!isVerifiedMember(member)) {
+    await sendContainer(interaction, `<@${user.id}> • You need the **Verified** role to use Aiko features! Please get verified in <#${VERIFICATION_CHANNEL_ID}>.`, { ephemeral: true }).catch(() => {});
     return;
   }
 
