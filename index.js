@@ -8,6 +8,7 @@ const { initLoyalTagSystem, sweepAllMembersLoyalRole } = require('./loyal-tag-fe
 const { initArcaneFeature, recordArcaneAura, recordArcaneIq, handleArcaneLeaderboardCommand, resetArcaneAura, resetArcaneIq } = require('./arcane-feature');
 const { initRelationshipFeature, handleRelationshipCommand, handleRelationshipButton } = require('./relationship-feature');
 const { handleMessageXp, handleLevelCommand, handleRankCommand, handleXpLeaderboardCommand } = require('./leveling-feature');
+const { initBumpFeature, handleBumpMessage, handleBumpCheckCommand, BUMP_CHANNEL_ID } = require('./bump-feature');
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
@@ -702,6 +703,7 @@ client.once('ready', async () => {
     await initInviteTracker(client);
     initMusic(client, sendContainer);
     await sweepAllMembersLoyalRole(client);
+    await initBumpFeature(client, db, sendContainer);
 
     console.log('[Security] Verified role enforcement active: Level 10+ auto-verification is retired.');
   } catch (err) {
@@ -5464,6 +5466,12 @@ async function executeUnjail(source, ctx, targetMember, reason) {
 
 client.on('messageCreate', async (message) => {
 
+  // Disboard Bot Bump Listener (Bypass standard bot ignore check)
+  if (message.author?.id === '302050872383242240') {
+    await handleBumpMessage(message, client, db, sendContainer);
+    return;
+  }
+
   if (message.author.bot) return;
   if (!message.guild) return;
 
@@ -5827,6 +5835,11 @@ client.on('messageCreate', async (message) => {
       const latency = Math.max(1, Date.now() - message.createdTimestamp);
       const apiPing = client.ws.ping >= 0 ? Math.round(client.ws.ping) : latency;
       await sendContainer(message, `<@${message.author.id}> • 🏓 Pong! Latency is **${latency}ms** (API: **${apiPing}ms**).`);
+      return;
+    }
+
+    if (startsWithPrefix && (lowerQuery === 'bump' || lowerQuery === 'bumpcheck' || lowerQuery === 'bumptime')) {
+      await handleBumpCheckCommand(message, sendContainer);
       return;
     }
 
