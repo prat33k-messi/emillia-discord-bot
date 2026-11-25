@@ -200,6 +200,40 @@ async function drawCircularAvatar(ctx, avatarUrl, cx, cy, radius, strokeColor = 
 }
 
 /**
+ * Wipes all family and relationship records from memory and Firestore
+ */
+async function resetAllFamilies(db) {
+  relationshipCache.clear();
+  activeDivorceConfirmations.clear();
+  activeAbandonConfirmations.clear();
+  activePendingProposals.clear();
+
+  const targetDb = db || dbRef;
+  let deletedCount = 0;
+  if (targetDb) {
+    try {
+      const snapshot = await targetDb.collection('relationships').get();
+      if (!snapshot.empty) {
+        const docs = snapshot.docs;
+        for (let i = 0; i < docs.length; i += 400) {
+          const batch = targetDb.batch();
+          const chunk = docs.slice(i, i + 400);
+          for (const doc of chunk) {
+            batch.delete(doc.ref);
+            deletedCount++;
+          }
+          await batch.commit();
+        }
+      }
+      console.log(`[Relationship] Reset all families: deleted ${deletedCount} Firestore records.`);
+    } catch (err) {
+      console.error('[Relationship] Error resetting families in Firestore:', err.message);
+    }
+  }
+  return deletedCount;
+}
+
+/**
  * Preloads all relationships from Firestore into memory
  */
 async function initRelationshipFeature(db) {
@@ -210,6 +244,16 @@ async function initRelationshipFeature(db) {
   }
 
   try {
+    // One-time reset requested by Master (runs only once, never on subsequent restarts)
+    const resetMarkerRef = db.collection('server_settings').doc('family_reset_v1');
+    const resetMarkerSnap = await resetMarkerRef.get().catch(() => null);
+    if (!resetMarkerSnap || !resetMarkerSnap.exists) {
+      await resetAllFamilies(db);
+      await resetMarkerRef.set({ resetAt: new Date(), reason: 'Master requested full family reset' }).catch(() => {});
+      console.log('[Relationship] One-time family_reset_v1 completed.');
+      return;
+    }
+
     const snapshot = await db.collection('relationships').get();
     if (!snapshot.empty) {
       snapshot.forEach(doc => {
@@ -247,6 +291,29 @@ function getRelationshipRecord(userId) {
     relationshipCache.set(userId, rec);
   }
   return rec;
+}
+
+/**
+ * Returns otherId when otherId sits above userId in the family tree
+ * (parent, grandparent, ...), else null. Walks both parent slots and
+ * guards against an already-corrupted loop with the seen set.
+ */
+function findAncestorLink(userId, otherId) {
+  if (!userId || !otherId) return null;
+
+  const seen = new Set();
+  const queue = [...(getRelationshipRecord(userId).parentIds || [])];
+
+  while (queue.length > 0) {
+    const id = queue.shift();
+    if (!id || seen.has(id)) continue;
+    if (id === otherId) return id;
+
+    seen.add(id);
+    queue.push(...(getRelationshipRecord(id).parentIds || []));
+  }
+
+  return null;
 }
 
 /**
@@ -1236,8 +1303,26 @@ async function handleRelationshipCommand(message, client, db, sendContainer = nu
   const rawCmd = content.slice(1).trim();
   const cmd = (rawCmd.split(/\s+/)[0] || '').toLowerCase();
 
-  const relationshipCommands = new Set(['marry', 'adopt', 'divorce', 'abandon', 'leave', 'familytree', 'family']);
+  const relationshipCommands = new Set(['marry', 'adopt', 'divorce', 'abandon', 'leave', 'familytree', 'family', 'resetfamilies', 'familyreset']);
   if (!relationshipCommands.has(cmd)) return false;
+
+  // Master-only: <resetfamilies / <familyreset
+  if (cmd === 'resetfamilies' || cmd === 'familyreset') {
+    if (message.author.id !== '1013822181379162142') {
+      await sendRelContainer(message, {
+        description: 'Mou! 🔒 This command is restricted solely to Master <@1013822181379162142>.',
+        footer: 'AniPedia Sanctuary'
+      }, sendContainer);
+      return true;
+    }
+    const deletedCount = await resetAllFamilies(db);
+    await sendRelContainer(message, {
+      description: `All server families, marriages, and adoptions have been reset. (\`${deletedCount}\` database records cleared)`,
+      footer: 'AniPedia Sanctuary',
+      timestamp: Date.now()
+    }, sendContainer);
+    return true;
+  }
 
   // 1. <marry [@user]
   if (cmd === 'marry') {
@@ -1468,31 +1553,6 @@ async function handleAdoptCommand(message, client, sendContainer = null) {
   const parentRel = getRelationshipRecord(message.author.id);
   const childRel = getRelationshipRecord(targetMember.id);
 
-  // Prevent circular adoption (cannot adopt your own parent, grandparent, etc.)
-  const isAncestor = (potentialAncestorId, nodeId) => {
-    const visited = new Set();
-    const queue = [nodeId];
-    while (queue.length > 0) {
-      const curr = queue.shift();
-      if (visited.has(curr)) continue;
-      visited.add(curr);
-      const rec = getRelationshipRecord(curr);
-      for (const pid of (rec.parentIds || [])) {
-        if (pid === potentialAncestorId) return true;
-        queue.push(pid);
-      }
-    }
-    return false;
-  };
-
-  if (isAncestor(targetMember.id, message.author.id)) {
-    await sendRelContainer(message, {
-      description: `You cannot adopt <@${targetMember.id}> because they are already your parent or ancestor!`,
-      footer: 'AniPedia Sanctuary'
-    }, sendContainer);
-    return;
-  }
-
   if (parentRel.spouseId === targetMember.id) {
     await sendRelContainer(message, {
       description: 'You cannot adopt your own spouse.',
@@ -1512,6 +1572,24 @@ async function handleAdoptCommand(message, client, sendContainer = null) {
   if (parentRel.childrenIds.includes(targetMember.id)) {
     await sendRelContainer(message, {
       description: `<@${targetMember.id}> is already your adopted child.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  // A descendant cannot adopt an ancestor, and an ancestor cannot adopt a
+  // descendant: either way the family tree would end up in a loop.
+  if (findAncestorLink(message.author.id, targetMember.id)) {
+    await sendRelContainer(message, {
+      description: `It's not possible. <@${targetMember.id}> is your ancestor.`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
+  if (findAncestorLink(targetMember.id, message.author.id)) {
+    await sendRelContainer(message, {
+      description: `It's not possible. <@${targetMember.id}> is your descendant.`,
       footer: 'AniPedia Sanctuary'
     }, sendContainer);
     return;
@@ -1834,6 +1912,17 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     await interaction.deferUpdate().catch(() => {});
 
+    // The pair may have changed since the proposal was sent: never marry
+    // someone who is already married now.
+    if (getRelationshipRecord(user1Id).spouseId || getRelationshipRecord(user2Id).spouseId) {
+      await sendRelContainer(interaction, {
+        description: 'This proposal can no longer be completed - one of you is already married now.',
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
+
     // Clear pending proposal and rejection cooldowns between these two
     activePendingProposals.delete(`${user1Id}_marry`);
     rejectionCooldowns.delete(`${user1Id}_${user2Id}_marry`);
@@ -2000,21 +2089,40 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 
     await interaction.deferUpdate().catch(() => {});
 
-    // Clear pending proposal and rejection cooldowns between these two
-    activePendingProposals.delete(`${parentId}_${childId}_adopt`);
-    rejectionCooldowns.delete(`${parentId}_${childId}_adopt`);
-    rejectionCooldowns.delete(`${childId}_${parentId}_adopt`);
-
-    // Safety guard: ensure child wasn't already adopted while proposal was pending
-    const existingChildRec = getRelationshipRecord(childId);
-    if (existingChildRec.parentIds && existingChildRec.parentIds.length > 0) {
+    // The child may have been adopted elsewhere since the proposal was sent.
+    if ((getRelationshipRecord(childId).parentIds || []).length > 0) {
       await sendRelContainer(interaction, {
-        description: `<@${childId}> is already adopted in a family. They must leave their family first.`,
+        description: `It's not possible. <@${childId}> has already joined another family since this proposal was sent.`,
         footer: 'AniPedia Sanctuary',
         components: []
       }, sendContainer);
       return true;
     }
+
+    // Re-check on accept: if the tree changed while the proposal sat there,
+    // accepting it must not be able to close a loop.
+    if (findAncestorLink(parentId, childId)) {
+      await sendRelContainer(interaction, {
+        description: `It's not possible. <@${childId}> is <@${parentId}>'s ancestor, so this adoption cannot be completed.`,
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
+
+    if (findAncestorLink(childId, parentId)) {
+      await sendRelContainer(interaction, {
+        description: `It's not possible. <@${childId}> is <@${parentId}>'s descendant, so this adoption cannot be completed.`,
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
+
+    // Clear pending proposal and rejection cooldowns between these two
+    activePendingProposals.delete(`${parentId}_${childId}_adopt`);
+    rejectionCooldowns.delete(`${parentId}_${childId}_adopt`);
+    rejectionCooldowns.delete(`${childId}_${parentId}_adopt`);
 
     const now = new Date();
     const parentRec = getRelationshipRecord(parentId);
@@ -2229,6 +2337,18 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     // Both partners have confirmed divorce!
     activeDivorceConfirmations.delete(key);
     await interaction.deferUpdate().catch(() => {});
+
+    // Only dissolve a marriage that still exists: an old message's buttons
+    // must never be able to wipe a newer family's children.
+    if (getRelationshipRecord(user1Id).spouseId !== user2Id ||
+        getRelationshipRecord(user2Id).spouseId !== user1Id) {
+      await sendRelContainer(interaction, {
+        description: 'This marriage is no longer active, so there is nothing to dissolve.',
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
 
     const now = new Date();
     const rel1 = getRelationshipRecord(user1Id);
@@ -2502,6 +2622,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
 module.exports = {
   AUTHORIZED_ADMIN_IDS,
   initRelationshipFeature,
+  resetAllFamilies,
   handleRelationshipCommand,
   handleRelationshipButton,
   generateMarriageBanner,
