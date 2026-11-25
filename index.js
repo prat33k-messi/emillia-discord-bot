@@ -6465,8 +6465,13 @@ client.on('messageCreate', async (message) => {
     }
 
     // Relationship & Family Tree commands (<marry, <adopt, <divorce, <abandon, <leave, <familytree, <family)
-    const handledRelationship = await handleRelationshipCommand(message, client, db, sendContainer);
-    if (handledRelationship) return;
+    const relCmdWord = (cleanQuery.split(/\s+/)[0] || '').toLowerCase();
+    const isRelCmd = startsWithPrefix && ['marry', 'adopt', 'divorce', 'abandon', 'leave', 'familytree', 'family'].includes(relCmdWord);
+    if (isRelCmd) {
+      if (!(await enforceAikoChannel(message, message.author.id))) return;
+      await handleRelationshipCommand(message, client, db, sendContainer);
+      return;
+    }
 
     // Leveling commands (<level, <rank, <xpleaderboard, <levels)
     const isLevelCmd = startsWithPrefix && (
