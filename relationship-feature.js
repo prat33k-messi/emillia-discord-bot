@@ -728,20 +728,102 @@ async function generateDivorceBanner(user1Member, user2Member, divorceDate = new
 }
 
 /**
- * 4. Generates the Family Tree Canvas Card
+ * Helper: Safely fetches a guild member by ID (cache first, then API fetch)
+ */
+async function fetchGuildMemberSafe(guild, userId) {
+  if (!guild || !userId) return null;
+  return guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
+}
+
+/**
+ * 4. Generates the Multi-Generation Family Tree Canvas Card
+ *    - Displays Parents on top (if adopted)
+ *    - Focus User & Spouse in the middle
+ *    - Unlimited Children below
+ *    - Grandchildren (children's adopted children) at the bottom with exact parent-child links
  */
 async function generateFamilyTreeBanner(focusMember, guild) {
-  const width = 1200;
-  const height = 675;
+  const focusId = focusMember.id;
+  const rel = getRelationshipRecord(focusId);
+
+  // 1. Gather Parents
+  const parentMembers = [];
+  for (const pid of (rel.parentIds || [])) {
+    const pm = await fetchGuildMemberSafe(guild, pid);
+    if (pm) parentMembers.push(pm);
+  }
+
+  // 2. Gather Spouse
+  const spouseMember = rel.spouseId ? await fetchGuildMemberSafe(guild, rel.spouseId) : null;
+  const isMarried = Boolean(spouseMember);
+
+  // 3. Gather ALL Children + their Children (Grandchildren)
+  const childrenData = [];
+  for (const cid of (rel.childrenIds || [])) {
+    const childMember = await fetchGuildMemberSafe(guild, cid);
+    if (!childMember) continue;
+
+    const childRel = getRelationshipRecord(cid);
+    const grandchildren = [];
+    for (const gcid of (childRel.childrenIds || [])) {
+      const gcMember = await fetchGuildMemberSafe(guild, gcid);
+      if (gcMember) grandchildren.push(gcMember);
+    }
+    childrenData.push({ member: childMember, grandchildren });
+  }
+
+  // 4. Compute Dynamic Dimensions & Subtree Layout
+  const cardW = 210;
+  const cardH = 86;
+  const hGap = 24;
+  const vGap = 54;
+
+  const hasParents = parentMembers.length > 0;
+  const hasChildren = childrenData.length > 0;
+  const hasGrandchildren = childrenData.some(c => c.grandchildren.length > 0);
+
+  let totalSubtreeW = 0;
+  if (hasChildren) {
+    for (const c of childrenData) {
+      const leafCount = Math.max(1, c.grandchildren.length);
+      c.subtreeW = leafCount * cardW + (leafCount - 1) * hGap;
+    }
+    totalSubtreeW = childrenData.reduce((sum, c) => sum + c.subtreeW, 0) + Math.max(0, childrenData.length - 1) * (hGap + 10);
+  }
+
+  const focusRowW = isMarried ? (cardW * 2 + 70) : cardW;
+  const parentsRowW = parentMembers.length >= 2 ? (cardW * 2 + 70) : (parentMembers.length === 1 ? cardW : 0);
+  const contentW = Math.max(focusRowW, parentsRowW, totalSubtreeW, 920);
+  const width = Math.max(1200, contentW + 100);
+
+  // Vertical Positions
+  let curY = 85;
+  const parentsY = hasParents ? curY : null;
+  if (hasParents) curY += cardH + vGap;
+
+  const focusY = curY;
+  curY += cardH + vGap;
+
+  const childrenY = curY;
+  if (hasChildren) curY += cardH + (hasGrandchildren ? vGap : 0);
+  else curY += 85; // empty placeholder height
+
+  const grandchildrenY = hasGrandchildren ? curY : null;
+  if (hasGrandchildren) curY += cardH;
+
+  const height = Math.max(675, curY + 55);
+
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // Background Image
+  // Background Image (Cover scaling for dynamic canvas dimensions)
   const bgImg = await getAssetImage('family_tree');
   if (bgImg) {
-    ctx.drawImage(bgImg, 0, 0, width, height);
+    const scale = Math.max(width / bgImg.width, height / bgImg.height);
+    const drawW = bgImg.width * scale;
+    const drawH = bgImg.height * scale;
+    ctx.drawImage(bgImg, (width - drawW) / 2, (height - drawH) / 2, drawW, drawH);
   } else {
-    // Dark futuristic starry background fallback
     const grad = ctx.createLinearGradient(0, 0, width, height);
     grad.addColorStop(0, '#030712');
     grad.addColorStop(0.5, '#0f172a');
@@ -752,7 +834,7 @@ async function generateFamilyTreeBanner(focusMember, guild) {
 
   // Dark overlay
   ctx.save();
-  ctx.fillStyle = 'rgba(2, 6, 23, 0.45)';
+  ctx.fillStyle = 'rgba(2, 6, 23, 0.48)';
   ctx.fillRect(0, 0, width, height);
   ctx.restore();
 
@@ -767,80 +849,105 @@ async function generateFamilyTreeBanner(focusMember, guild) {
   ctx.fillStyle = '#ffffff';
   ctx.shadowColor = '#38bdf8';
   ctx.shadowBlur = 16;
-  ctx.fillText(fitText(ctx, familyTitle, 900), width / 2, 24);
+  ctx.fillText(fitText(ctx, familyTitle, width - 120), width / 2, 22);
   ctx.restore();
 
-  const focusId = focusMember.id;
-  const rel = getRelationshipRecord(focusId);
+  // 5. Draw Tier 1: Parents (if Focus User has Parents)
+  const focusCardCenterX = isMarried ? (width / 2 - cardW / 2 - 35) : (width / 2);
 
-  // Determine Parents (focus user + spouse if married)
-  const spouseMember = rel.spouseId ? (guild.members.cache.get(rel.spouseId) || null) : null;
-  const isMarried = Boolean(spouseMember);
+  if (hasParents) {
+    if (parentMembers.length === 1) {
+      const pX = (width - cardW) / 2;
+      await drawFamilyNodeCard(ctx, parentMembers[0], pX, parentsY, cardW, cardH, 'PARENT', '#a855f7', '#c084fc');
+    } else {
+      const p1X = width / 2 - cardW - 35;
+      const p2X = width / 2 + 35;
+      await drawFamilyNodeCard(ctx, parentMembers[0], p1X, parentsY, cardW, cardH, 'PARENT', '#a855f7', '#c084fc');
+      await drawFamilyNodeCard(ctx, parentMembers[1], p2X, parentsY, cardW, cardH, 'PARENT', '#a855f7', '#c084fc');
 
-  // Top Tier: Parents / Main Couple
-  const cardW = 220;
-  const cardH = 96;
-  const topY = 90;
+      const heartImg = await getAssetImage('heart');
+      if (heartImg) {
+        ctx.save();
+        ctx.shadowColor = '#a855f7';
+        ctx.shadowBlur = 12;
+        ctx.drawImage(heartImg, width / 2 - 16, parentsY + cardH / 2 - 16, 32, 32);
+        ctx.restore();
+      }
+    }
 
+    // Glowing Branch Line from Parents down to Focus Member
+    const pStartY = parentsY + cardH;
+    const pMidY = pStartY + vGap / 2;
+    ctx.save();
+    ctx.strokeStyle = '#a855f7';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#a855f7';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(width / 2, pStartY);
+    ctx.lineTo(width / 2, pMidY);
+    ctx.lineTo(focusCardCenterX, pMidY);
+    ctx.lineTo(focusCardCenterX, focusY);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 6. Draw Tier 2: Focus User (+ Spouse if Married)
   if (isMarried) {
-    // Parent 1 (Left)
     const p1X = width / 2 - cardW - 35;
-    await drawFamilyNodeCard(ctx, focusMember, p1X, topY, cardW, cardH, 'SPOUSE 1', '#ec4899', '#f472b6');
+    await drawFamilyNodeCard(ctx, focusMember, p1X, focusY, cardW, cardH, 'SPOUSE 1', '#ec4899', '#f472b6');
 
-    // Parent 2 (Right)
     const p2X = width / 2 + 35;
-    await drawFamilyNodeCard(ctx, spouseMember, p2X, topY, cardW, cardH, 'SPOUSE 2', '#ec4899', '#f472b6');
+    await drawFamilyNodeCard(ctx, spouseMember, p2X, focusY, cardW, cardH, 'SPOUSE 2', '#ec4899', '#f472b6');
 
-    // Heart between married couple
     const heartImg = await getAssetImage('heart');
     if (heartImg) {
       ctx.save();
       ctx.shadowColor = '#ec4899';
       ctx.shadowBlur = 14;
-      ctx.drawImage(heartImg, width / 2 - 20, topY + cardH / 2 - 20, 40, 40);
+      ctx.drawImage(heartImg, width / 2 - 18, focusY + cardH / 2 - 18, 36, 36);
       ctx.restore();
     }
   } else {
-    // Single User Card (Centered)
     const pX = (width - cardW) / 2;
-    await drawFamilyNodeCard(ctx, focusMember, pX, topY, cardW, cardH, 'HEAD OF FAMILY', '#38bdf8', '#38bdf8');
+    await drawFamilyNodeCard(ctx, focusMember, pX, focusY, cardW, cardH, 'HEAD OF FAMILY', '#38bdf8', '#38bdf8');
   }
 
-  // Connecting neon branch line dropping down to children
-  const lineStartY = topY + cardH;
-  const branchDropY = topY + cardH + 45;
-  const childRowY = topY + cardH + 105;
+  // Connecting vertical stem dropping from Focus Tier down toward Children
+  const lineStartY = focusY + cardH;
+  const branchDropY = focusY + cardH + Math.round(vGap * 0.48);
 
   ctx.save();
   ctx.strokeStyle = '#38bdf8';
   ctx.lineWidth = 3;
   ctx.shadowColor = '#38bdf8';
   ctx.shadowBlur = 14;
-
   ctx.beginPath();
   ctx.moveTo(width / 2, lineStartY);
   ctx.lineTo(width / 2, branchDropY);
   ctx.stroke();
   ctx.restore();
 
-  // Children Row
-  const childrenIds = rel.childrenIds || [];
-  const childrenMembers = [];
-  for (const cid of childrenIds) {
-    const m = guild.members.cache.get(cid);
-    if (m) childrenMembers.push(m);
-  }
-
-  if (childrenMembers.length === 0) {
-    // Empty state placeholder
+  // 7. Draw Tier 3 (All Children) & Tier 4 (Grandchildren)
+  if (!hasChildren) {
+    // Drop to empty state placeholder
     ctx.save();
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(width / 2, branchDropY);
+    ctx.lineTo(width / 2, childrenY + 12);
+    ctx.stroke();
+
     const emptyW = 340;
-    const emptyH = 70;
+    const emptyH = 68;
     const emptyX = (width - emptyW) / 2;
-    const emptyY = childRowY + 15;
+    const emptyY = childrenY + 12;
 
     drawRoundRect(ctx, emptyX, emptyY, emptyW, emptyH, 14);
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
     ctx.fill();
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
     ctx.lineWidth = 1.5;
@@ -853,41 +960,116 @@ async function generateFamilyTreeBanner(focusMember, guild) {
     ctx.fillText('No Adopted Children In This Family', width / 2, emptyY + emptyH / 2);
     ctx.restore();
   } else {
-    // Display up to 4 children in grid/row
-    const displayCount = Math.min(childrenMembers.length, 4);
-    const childCardW = 200;
-    const childCardH = 88;
-    const spacing = 30;
-    const totalRowW = displayCount * childCardW + (displayCount - 1) * spacing;
-    const startX = (width - totalRowW) / 2;
+    let curX = (width - totalSubtreeW) / 2;
+    const childCenters = [];
 
-    // Horizontal distributor branch bar
+    for (const c of childrenData) {
+      const childCenterX = curX + c.subtreeW / 2;
+      c.centerX = childCenterX;
+      c.cardX = childCenterX - cardW / 2;
+      c.subtreeStartX = curX;
+      childCenters.push(childCenterX);
+      curX += c.subtreeW + hGap + 10;
+    }
+
+    // Horizontal distributor bar across all children
+    const firstCX = childCenters[0];
+    const lastCX = childCenters[childCenters.length - 1];
+
     ctx.save();
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 2.5;
     ctx.shadowColor = '#38bdf8';
     ctx.shadowBlur = 12;
 
-    ctx.beginPath();
-    ctx.moveTo(startX + childCardW / 2, branchDropY);
-    ctx.lineTo(startX + totalRowW - childCardW / 2, branchDropY);
-    ctx.stroke();
+    if (childrenData.length > 1) {
+      ctx.beginPath();
+      ctx.moveTo(Math.min(firstCX, width / 2), branchDropY);
+      ctx.lineTo(Math.max(lastCX, width / 2), branchDropY);
+      ctx.stroke();
+    }
 
-    // Drop pins to each child
-    for (let i = 0; i < displayCount; i++) {
-      const cx = startX + i * (childCardW + spacing) + childCardW / 2;
+    // Drop pins from distributor bar to each Child
+    for (const cx of childCenters) {
       ctx.beginPath();
       ctx.moveTo(cx, branchDropY);
-      ctx.lineTo(cx, childRowY);
+      ctx.lineTo(cx, childrenY);
       ctx.stroke();
     }
     ctx.restore();
 
-    // Draw Child Node Cards
-    for (let i = 0; i < displayCount; i++) {
-      const childMember = childrenMembers[i];
-      const cx = startX + i * (childCardW + spacing);
-      await drawFamilyNodeCard(ctx, childMember, cx, childRowY, childCardW, childCardH, 'CHILD', '#84cc16', '#a3e635');
+    // Draw each Child card and their Grandchildren subtree
+    for (const c of childrenData) {
+      await drawFamilyNodeCard(ctx, c.member, c.cardX, childrenY, cardW, cardH, 'CHILD', '#84cc16', '#a3e635');
+
+      if (c.grandchildren.length > 0) {
+        const gcBarY = childrenY + cardH + Math.round(vGap * 0.48);
+
+        ctx.save();
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2.5;
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 12;
+
+        // Vertical stem from Child down to Grandchildren bar
+        ctx.beginPath();
+        ctx.moveTo(c.centerX, childrenY + cardH);
+        ctx.lineTo(c.centerX, gcBarY);
+        ctx.stroke();
+
+        if (c.grandchildren.length === 1) {
+          ctx.beginPath();
+          ctx.moveTo(c.centerX, gcBarY);
+          ctx.lineTo(c.centerX, grandchildrenY);
+          ctx.stroke();
+          ctx.restore();
+
+          await drawFamilyNodeCard(
+            ctx,
+            c.grandchildren[0],
+            c.centerX - cardW / 2,
+            grandchildrenY,
+            cardW,
+            cardH,
+            'GRANDCHILD',
+            '#f59e0b',
+            '#fbbf24'
+          );
+        } else {
+          const gcCenters = [];
+          for (let j = 0; j < c.grandchildren.length; j++) {
+            const gx = c.subtreeStartX + j * (cardW + hGap);
+            gcCenters.push({ x: gx, cx: gx + cardW / 2, member: c.grandchildren[j] });
+          }
+
+          ctx.beginPath();
+          ctx.moveTo(gcCenters[0].cx, gcBarY);
+          ctx.lineTo(gcCenters[gcCenters.length - 1].cx, gcBarY);
+          ctx.stroke();
+
+          for (const gc of gcCenters) {
+            ctx.beginPath();
+            ctx.moveTo(gc.cx, gcBarY);
+            ctx.lineTo(gc.cx, grandchildrenY);
+            ctx.stroke();
+          }
+          ctx.restore();
+
+          for (const gc of gcCenters) {
+            await drawFamilyNodeCard(
+              ctx,
+              gc.member,
+              gc.x,
+              grandchildrenY,
+              cardW,
+              cardH,
+              'GRANDCHILD',
+              '#f59e0b',
+              '#fbbf24'
+            );
+          }
+        }
+      }
     }
   }
 
@@ -1286,6 +1468,31 @@ async function handleAdoptCommand(message, client, sendContainer = null) {
   const parentRel = getRelationshipRecord(message.author.id);
   const childRel = getRelationshipRecord(targetMember.id);
 
+  // Prevent circular adoption (cannot adopt your own parent, grandparent, etc.)
+  const isAncestor = (potentialAncestorId, nodeId) => {
+    const visited = new Set();
+    const queue = [nodeId];
+    while (queue.length > 0) {
+      const curr = queue.shift();
+      if (visited.has(curr)) continue;
+      visited.add(curr);
+      const rec = getRelationshipRecord(curr);
+      for (const pid of (rec.parentIds || [])) {
+        if (pid === potentialAncestorId) return true;
+        queue.push(pid);
+      }
+    }
+    return false;
+  };
+
+  if (isAncestor(targetMember.id, message.author.id)) {
+    await sendRelContainer(message, {
+      description: `You cannot adopt <@${targetMember.id}> because they are already your parent or ancestor!`,
+      footer: 'AniPedia Sanctuary'
+    }, sendContainer);
+    return;
+  }
+
   if (parentRel.spouseId === targetMember.id) {
     await sendRelContainer(message, {
       description: 'You cannot adopt your own spouse.',
@@ -1337,8 +1544,9 @@ async function handleAdoptCommand(message, client, sendContainer = null) {
   // If message.author was the one who rejected targetMember in the past, proposing now clears any previous block
   rejectionCooldowns.delete(`${targetMember.id}_${message.author.id}_adopt`);
 
-  // Check active pending proposal limit (max 1 active proposal, 5m expiry)
-  const pendingProposal = activePendingProposals.get(`${message.author.id}_adopt`);
+  // Check active pending proposal limit for this target (5m expiry)
+  const adoptProposalKey = `${message.author.id}_${targetMember.id}_adopt`;
+  const pendingProposal = activePendingProposals.get(adoptProposalKey);
   if (pendingProposal) {
     if (now - pendingProposal.createdAt < PROPOSAL_EXPIRY_MS) {
       const waitMins = Math.ceil((PROPOSAL_EXPIRY_MS - (now - pendingProposal.createdAt)) / 60000);
@@ -1348,13 +1556,13 @@ async function handleAdoptCommand(message, client, sendContainer = null) {
       }, sendContainer);
       return;
     } else {
-      activePendingProposals.delete(`${message.author.id}_adopt`);
+      activePendingProposals.delete(adoptProposalKey);
     }
   }
 
   // Record rate limit and active pending proposal
   relCommandCooldowns.set(`${message.author.id}_adopt`, now);
-  activePendingProposals.set(`${message.author.id}_adopt`, {
+  activePendingProposals.set(adoptProposalKey, {
     targetId: targetMember.id,
     createdAt: now
   });
@@ -1781,7 +1989,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     // Check 5-minute proposal expiration
     if (createdAt && (Date.now() - createdAt > PROPOSAL_EXPIRY_MS)) {
       await interaction.deferUpdate().catch(() => {});
-      activePendingProposals.delete(`${parentId}_adopt`);
+      activePendingProposals.delete(`${parentId}_${childId}_adopt`);
       await sendRelContainer(interaction, {
         description: 'This adoption proposal has expired. Please send a new proposal.',
         footer: 'AniPedia Sanctuary',
@@ -1793,9 +2001,20 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     await interaction.deferUpdate().catch(() => {});
 
     // Clear pending proposal and rejection cooldowns between these two
-    activePendingProposals.delete(`${parentId}_adopt`);
+    activePendingProposals.delete(`${parentId}_${childId}_adopt`);
     rejectionCooldowns.delete(`${parentId}_${childId}_adopt`);
     rejectionCooldowns.delete(`${childId}_${parentId}_adopt`);
+
+    // Safety guard: ensure child wasn't already adopted while proposal was pending
+    const existingChildRec = getRelationshipRecord(childId);
+    if (existingChildRec.parentIds && existingChildRec.parentIds.length > 0) {
+      await sendRelContainer(interaction, {
+        description: `<@${childId}> is already adopted in a family. They must leave their family first.`,
+        footer: 'AniPedia Sanctuary',
+        components: []
+      }, sendContainer);
+      return true;
+    }
 
     const now = new Date();
     const parentRec = getRelationshipRecord(parentId);
@@ -1918,7 +2137,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     // Check 5-minute proposal expiration
     if (createdAt && (Date.now() - createdAt > PROPOSAL_EXPIRY_MS)) {
       await interaction.deferUpdate().catch(() => {});
-      activePendingProposals.delete(`${parentId}_adopt`);
+      activePendingProposals.delete(`${parentId}_${childId}_adopt`);
       await sendRelContainer(interaction, {
         description: 'This adoption proposal has expired.',
         footer: 'AniPedia Sanctuary',
@@ -1930,7 +2149,7 @@ async function handleRelationshipButton(interaction, client, db, sendContainer =
     await interaction.deferUpdate().catch(() => {});
 
     // Free pending proposal slot & set 15-minute rejection cooldown for parent proposing to child
-    activePendingProposals.delete(`${parentId}_adopt`);
+    activePendingProposals.delete(`${parentId}_${childId}_adopt`);
     rejectionCooldowns.set(`${parentId}_${childId}_adopt`, Date.now() + REJECTION_COOLDOWN_MS);
 
     await sendRelContainer(interaction, {
