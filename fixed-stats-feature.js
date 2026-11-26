@@ -118,15 +118,6 @@ function rollAuraPercent(fixedScore = null, boostPercent = 0, boostRoleName = nu
 
 function buildAuraActionRow(authorId, score, isFixed) {
   const intScore = Math.round(score);
-  if (authorId === '1527723712122720257') {
-    const lockBtn = new ButtonBuilder()
-      .setCustomId(`aura_status_${authorId}`)
-      .setLabel(`Locked at 98%`)
-      .setEmoji('🔒')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true);
-    return new ActionRowBuilder().addComponents(lockBtn);
-  }
   if (isFixed) {
     const lockBtn = new ButtonBuilder()
       .setCustomId(`aura_status_${authorId}`)
@@ -182,18 +173,6 @@ function buildIqActionRow(authorId, tierIndex, score, isFixed) {
 }
 
 async function loadUserFixedStats(db, userId) {
-  if (userId === '1527723712122720257') {
-    fixedAuraCache.set('1527723712122720257', 98);
-    fixedIqCache.set('1527723712122720257', { tierIndex: 20, score: 99 });
-    if (db) {
-      db.collection('user_fixed_stats').doc('1527723712122720257').set({
-        fixedAura: 98,
-        fixedIq: { tierIndex: 20, score: 99 },
-        updatedAt: new Date()
-      }, { merge: true }).catch(() => {});
-    }
-    return { fixedAura: 98, fixedIq: { tierIndex: 20, score: 99 } };
-  }
   if (!db || !userId) return { fixedAura: null, fixedIq: null };
   try {
     const doc = await db.collection('user_fixed_stats').doc(userId).get();

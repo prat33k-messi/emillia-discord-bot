@@ -663,7 +663,16 @@ client.once('ready', async () => {
         }
       });
       console.log(`Preloaded warn records for ${inMemoryWarnRecords.size} users from Firestore.`);
-      await db.collection('user_fixed_stats').doc('1527723712122720257').set({ fixedAura: 98, updatedAt: new Date() }, { merge: true }).catch(() => {});
+      const customResetRef = db.collection('server_settings').doc('custom_stats_removed_v1');
+      const customResetSnap = await customResetRef.get().catch(() => null);
+      if (!customResetSnap || !customResetSnap.exists) {
+        await resetFixedAura(db, '1527723712122720257').catch(() => {});
+        await resetFixedIq(db, '1527723712122720257').catch(() => {});
+        await resetFixedAura(db, '855013222787842058').catch(() => {});
+        await resetFixedIq(db, '855013222787842058').catch(() => {});
+        await customResetRef.set({ clearedAt: new Date() }).catch(() => {});
+        console.log('[FixedStats] Cleared legacy custom Aura/IQ for special users.');
+      }
     } catch (err) {
       console.error("Error preloading warn records from Firestore:", err);
     }
@@ -1229,8 +1238,76 @@ function makeReplyFn(target) {
 }
 
 const AIKO_COMMAND_CHANNEL_ID = '1568586444979703818';
+const RESTRICTED_GENERAL_CHANNEL_ID = '1517882822126338050';
 const VERIFICATION_CHANNEL_ID = '1572692755858333737';
 const VERIFIED_ROLE_ID = '1572669219596804186';
+
+const DAILY_FEATURE_LIMIT = 10;
+const dailyFeatureUsageCache = new Map();
+
+function getTodayDateKeyIST() {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function checkDailyFeatureLimit(target, userId, feature) {
+  if (userId === MASTER_USER_ID) return true;
+
+  const todayKey = getTodayDateKeyIST();
+  const cacheKey = `${userId}_${feature}`;
+  let entry = dailyFeatureUsageCache.get(cacheKey);
+
+  if (!entry && db) {
+    try {
+      const doc = await db.collection('daily_feature_usage').doc(userId).get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (data && data[feature]) {
+          entry = data[feature];
+        }
+      }
+    } catch (err) {
+      console.error(`[DailyLimit] Error loading ${feature} usage for ${userId}:`, err.message);
+    }
+  }
+
+  if (!entry || entry.date !== todayKey) {
+    entry = { date: todayKey, count: 0 };
+  }
+
+  if (entry.count >= DAILY_FEATURE_LIMIT) {
+    dailyFeatureUsageCache.set(cacheKey, entry);
+    const featureLabel = feature.toUpperCase();
+    const limitMsg = `<@${userId}> • You have reached your daily limit of **${DAILY_FEATURE_LIMIT}/${DAILY_FEATURE_LIMIT}** \`${featureLabel}\` uses for today! Please try again tomorrow.`;
+    try {
+      if (target.isRepliable && target.isRepliable()) {
+        if (!target.replied && !target.deferred) {
+          await sendContainer(target, limitMsg, { ephemeral: true });
+          setTimeout(() => target.deleteReply().catch(() => {}), 5000);
+        }
+      } else if (target.reply && target.channel) {
+        const sentMsg = await replyContainer(target, limitMsg);
+        if (sentMsg && typeof sentMsg.delete === 'function') {
+          setTimeout(() => sentMsg.delete().catch(() => {}), 5000);
+        }
+      }
+    } catch (err) {
+      console.error('[DailyLimit] Error sending limit message:', err.message);
+    }
+    return false;
+  }
+
+  entry.count += 1;
+  dailyFeatureUsageCache.set(cacheKey, entry);
+
+  if (db) {
+    db.collection('daily_feature_usage').doc(userId).set({
+      [feature]: entry,
+      updatedAt: new Date()
+    }, { merge: true }).catch(err => console.error(`[DailyLimit] Error saving ${feature} usage:`, err.message));
+  }
+
+  return true;
+}
 
 const AIKO_BYPASS_ROLE_IDS = new Set([
   '1517887565431046267', // Shogun
@@ -3672,12 +3749,12 @@ const IQ_TIERS = [
 ];
 
 const IQ_WEIGHTS = {
-  1: 7100, 2: 7100, 3: 7100, 4: 7100, 5: 7100, 6: 7100,
-  7: 7500, 8: 7500, 9: 7500, 10: 7500, 11: 7500, 12: 7500,
-  13: 2500, 14: 2500, 15: 2500, 16: 2500,
-  17: 900, 18: 900,
-  19: 400,
-  20: 200
+  1: 7000, 2: 7000, 3: 7000, 4: 7000, 5: 7000, 6: 7000,     // 0-30 IQ (42.0%)
+  7: 6500, 8: 6500, 9: 6500, 10: 6500, 11: 6500, 12: 6500,   // 31-60 IQ (39.0%)
+  13: 3000, 14: 3000, 15: 3000, 16: 3000,                    // 61-80 IQ (12.0%)
+  17: 2000, 18: 2000,                                        // 81-90 IQ (4.0%)
+  19: 2000,                                                  // 91-95 IQ (2.0% = 1 in 50)
+  20: 1000                                                   // 96-100 IQ (1.0% = 1 in 100)
 };
 
 function rollIqScore(fixedData = null) {
@@ -3953,67 +4030,6 @@ function oldIqRenderUnused() { /*
 */ }
 
 async function buildIqPayload(targetMember, guild, authorId = null) {
-  if (targetMember.id === '855013222787842058') {
-    const specialSourcePath = 'C:/Users/Pradeep/.gemini/antigravity/brain/ecdc0373-4ef7-4871-8390-9440773aa398/.user_uploaded/media_1794230637766_9c17016b.jpg';
-    const specialDestPath = path.join(__dirname, 'assets', 'iq', 'lost_from_light.jpg');
-    let customImgPath = specialDestPath;
-    if (!fs.existsSync(specialDestPath) && fs.existsSync(specialSourcePath)) {
-      try {
-        fs.mkdirSync(path.dirname(specialDestPath), { recursive: true });
-        fs.copyFileSync(specialSourcePath, specialDestPath);
-      } catch (e) {
-        customImgPath = specialSourcePath;
-      }
-    }
-
-    const candidatePaths = [
-      specialDestPath,
-      'C:/projects/emillia/assets/iq/lost_from_light.jpg',
-      specialSourcePath
-    ];
-    let customImgBuffer = null;
-    for (const p of candidatePaths) {
-      try {
-        if (fs.existsSync(p)) {
-          customImgBuffer = fs.readFileSync(p);
-          break;
-        }
-      } catch (e) {}
-    }
-
-    const targetAvatarUrl = targetMember?.user?.displayAvatarURL
-      ? targetMember.user.displayAvatarURL({ extension: 'png', size: 512 })
-      : (targetMember?.displayAvatarURL ? targetMember.displayAvatarURL({ extension: 'png', size: 512 }) : null);
-    const displayName = targetMember?.displayName || targetMember?.username || targetMember?.user?.username || 'User';
-    const formattedName = `@${displayName}`;
-
-    const customQuote = `<@${targetMember.id}> being hated by idiots is the price you pay for not being one of them`;
-
-    const buffer = await generateIqCard(targetAvatarUrl, formattedName, { image: 'lost_from_light.jpg' }, 0, customQuote, {
-      badgeText: '???',
-      charImagePath: customImgBuffer || (fs.existsSync(customImgPath) ? customImgPath : specialSourcePath),
-      theme: 'black_neon'
-    });
-
-    const attachment = new AttachmentBuilder(buffer, { name: 'iq.png' });
-    const embed = new EmbedBuilder()
-      .setColor(0x0a0a0a)
-      .setDescription(customQuote)
-      .setFooter({ text: `${toSmallCaps('AniPedia IQ Assessment')} • ???` })
-      .setImage('attachment://iq.png');
-
-    const payload = { embeds: [embed], files: [attachment] };
-
-    const disabledBtn = new ButtonBuilder()
-      .setCustomId(`iq_special_locked_${targetMember.id}`)
-      .setLabel('Locked (???)')
-      .setEmoji('🔒')
-      .setStyle(ButtonStyle.Secondary)
-      .setDisabled(true);
-    payload.components = [new ActionRowBuilder().addComponents(disabledBtn)];
-
-    return payload;
-  }
   let fixedData = null;
   const isSelf = !authorId || targetMember.id === authorId;
 
@@ -5808,6 +5824,23 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
+  // Restrict non-moderation Aiko prefix commands from being used in #general-chat (1517882822126338050)
+  const MODERATION_COMMANDS = new Set([
+    'warn', 'unwarn', 'warns', 'warnings', 'clearwarntemp', 'clearwarnperm',
+    'leaderboard', 'warnsleaderboard', 'warnleaderboard', 'warningleaderboard', 'warningsleaderboard',
+    'timeout', 'mute', 'untimeout', 'unmute',
+    'jail', 'unjail',
+    'kick', 'ban', 'unban',
+    'purge', 'clean',
+    'inviteinfo', 'checkinvites', 'revokeinvites', 'deleteinvites',
+    'alt', 'alts', 'ip', 'verification', 'enforceverify', 'auditverify', 'verifyaudit', 'checkverify',
+    'unverified', 'unverifiedkick', 'reset', 'adminhelp'
+  ]);
+  const firstCmdWord = startsWithPrefix ? (trimmedContent.replace(/^[<-]/, '').trim().split(/\s+/)[0] || '').toLowerCase() : '';
+  if (startsWithPrefix && message.channel.id === RESTRICTED_GENERAL_CHANNEL_ID && !MODERATION_COMMANDS.has(firstCmdWord)) {
+    if (!(await enforceAikoChannel(message, message.author.id))) return;
+  }
+
   try {
     const username = message.author.username;
     const nickname = message.member?.displayName || message.author.displayName || username;
@@ -6630,8 +6663,10 @@ client.on('messageCreate', async (message) => {
     if (isAuraCmd) {
       if (!await enforceAikoChannel(message, message.author.id)) return;
       const allowed = await handleFeatureCooldown(message, message.author.id, 'aura');
-      message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
+      const withinDailyLimit = await checkDailyFeatureLimit(message, message.author.id, 'aura');
+      if (!withinDailyLimit) return;
+      message.channel.sendTyping().catch(() => {});
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
       if (!targetMember) {
@@ -6700,8 +6735,10 @@ client.on('messageCreate', async (message) => {
     if (isIqCmd) {
       if (!await enforceAikoChannel(message, message.author.id)) return;
       const allowed = await handleFeatureCooldown(message, message.author.id, 'iq');
-      message.channel.sendTyping().catch(() => {});
       if (!allowed) return;
+      const withinDailyLimit = await checkDailyFeatureLimit(message, message.author.id, 'iq');
+      if (!withinDailyLimit) return;
+      message.channel.sendTyping().catch(() => {});
 
       let targetMember = message.mentions.members.filter(m => m.id !== client.user.id).first();
 
@@ -8384,6 +8421,15 @@ client.on('interactionCreate', async (interaction) => {
     return;
   }
 
+  const SLASH_MODERATION_COMMANDS = new Set([
+    'warn', 'warns', 'clearwarntemp', 'clearwarnperm', 'leaderboard',
+    'timeout', 'untimeout', 'jail', 'unjail', 'kick', 'ban', 'unban',
+    'purge', 'inviteinfo', 'adminhelp'
+  ]);
+  if (channel?.id === RESTRICTED_GENERAL_CHANNEL_ID && !SLASH_MODERATION_COMMANDS.has(commandName)) {
+    if (!(await enforceAikoChannel(interaction, user.id))) return;
+  }
+
   const { verify, dot } = await getModEmojis(guild);
   const { aiko1, aiko2, aiko3, url1, url2, url3 } = await getAikoEmojis(guild);
   const modTier = getMemberTier(member);
@@ -9060,6 +9106,8 @@ client.on('interactionCreate', async (interaction) => {
       if (!await enforceAikoChannel(interaction, interaction.user.id)) return;
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'aura');
       if (!allowed) return;
+      const withinDailyLimit = await checkDailyFeatureLimit(interaction, interaction.user.id, 'aura');
+      if (!withinDailyLimit) return;
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const auraPayload = await buildAuraPayload(targetMember, guild, user.id);
@@ -9096,6 +9144,8 @@ client.on('interactionCreate', async (interaction) => {
       if (!await enforceAikoChannel(interaction, interaction.user.id)) return;
       const allowed = await handleFeatureCooldown(interaction, interaction.user.id, 'iq');
       if (!allowed) return;
+      const withinDailyLimit = await checkDailyFeatureLimit(interaction, interaction.user.id, 'iq');
+      if (!withinDailyLimit) return;
       const targetMember = options.getMember('user') || member;
       await interaction.deferReply();
       const iqPayload = await buildIqPayload(targetMember, guild, user.id);
