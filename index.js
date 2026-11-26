@@ -1243,16 +1243,13 @@ const VERIFICATION_CHANNEL_ID = '1572692755858333737';
 const VERIFIED_ROLE_ID = '1572669219596804186';
 
 const DAILY_FEATURE_LIMIT = 10;
+const FEATURE_LIMIT_WINDOW_MS = 10 * 60 * 60 * 1000; // 10 hours
 const dailyFeatureUsageCache = new Map();
-
-function getTodayDateKeyIST() {
-  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
 
 async function checkDailyFeatureLimit(target, userId, feature) {
   if (userId === MASTER_USER_ID) return true;
 
-  const todayKey = getTodayDateKeyIST();
+  const now = Date.now();
   const cacheKey = `${userId}_${feature}`;
   let entry = dailyFeatureUsageCache.get(cacheKey);
 
@@ -1266,18 +1263,19 @@ async function checkDailyFeatureLimit(target, userId, feature) {
         }
       }
     } catch (err) {
-      console.error(`[DailyLimit] Error loading ${feature} usage for ${userId}:`, err.message);
+      console.error(`[UsageLimit] Error loading ${feature} usage for ${userId}:`, err.message);
     }
   }
 
-  if (!entry || entry.date !== todayKey) {
-    entry = { date: todayKey, count: 0 };
+  if (!entry || typeof entry.windowStart !== 'number' || (now - entry.windowStart >= FEATURE_LIMIT_WINDOW_MS)) {
+    entry = { windowStart: now, count: 0 };
   }
 
   if (entry.count >= DAILY_FEATURE_LIMIT) {
     dailyFeatureUsageCache.set(cacheKey, entry);
     const featureLabel = feature.toUpperCase();
-    const limitMsg = `<@${userId}> • You have reached your daily limit of **${DAILY_FEATURE_LIMIT}/${DAILY_FEATURE_LIMIT}** \`${featureLabel}\` uses for today! Please try again tomorrow.`;
+    const resetUnix = Math.floor((entry.windowStart + FEATURE_LIMIT_WINDOW_MS) / 1000);
+    const limitMsg = `<@${userId}> • You have reached your limit of **${DAILY_FEATURE_LIMIT}/${DAILY_FEATURE_LIMIT}** \`${featureLabel}\` uses per **10 hours**! Your uses reset <t:${resetUnix}:R>.`;
     try {
       if (target.isRepliable && target.isRepliable()) {
         if (!target.replied && !target.deferred) {
@@ -1291,7 +1289,7 @@ async function checkDailyFeatureLimit(target, userId, feature) {
         }
       }
     } catch (err) {
-      console.error('[DailyLimit] Error sending limit message:', err.message);
+      console.error('[UsageLimit] Error sending limit message:', err.message);
     }
     return false;
   }
@@ -1303,7 +1301,7 @@ async function checkDailyFeatureLimit(target, userId, feature) {
     db.collection('daily_feature_usage').doc(userId).set({
       [feature]: entry,
       updatedAt: new Date()
-    }, { merge: true }).catch(err => console.error(`[DailyLimit] Error saving ${feature} usage:`, err.message));
+    }, { merge: true }).catch(err => console.error(`[UsageLimit] Error saving ${feature} usage:`, err.message));
   }
 
   return true;
