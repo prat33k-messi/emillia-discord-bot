@@ -5813,6 +5813,18 @@ client.on('messageCreate', async (message) => {
 
   if (!startsWithPrefix && !isMentioned) return;
 
+  const firstCmdWord = startsWithPrefix ? (trimmedContent.replace(/^[<-]/, '').trim().split(/\s+/)[0] || '').toLowerCase() : '';
+
+  // Ignore HAD / external music bot commands silently (no "Music playback is temporarily paused" reply)
+  const MUSIC_BOT_COMMANDS = new Set([
+    'p', 'play', 'pause', 'resume', 'skip', 'stop', 'queue',
+    'volume', 'ost', 'radio', 'bitrate', 'lockupcoming', 'unlockupcoming',
+    'music', 'musichelp', 'aikomusic'
+  ]);
+  if (startsWithPrefix && MUSIC_BOT_COMMANDS.has(firstCmdWord)) {
+    return;
+  }
+
   if (!isVerifiedMember(message.member)) {
     const unverifiedAlert = `<@${message.author.id}> • You need the **Verified** role to use Aiko features! Please get verified in <#${VERIFICATION_CHANNEL_ID}>.`;
     const alertMsg = await sendContainer(message.channel, unverifiedAlert).catch(() => {});
@@ -5836,7 +5848,6 @@ client.on('messageCreate', async (message) => {
     'alt', 'alts', 'ip', 'verification', 'enforceverify', 'auditverify', 'verifyaudit', 'checkverify',
     'unverified', 'unverifiedkick', 'reset', 'adminhelp'
   ]);
-  const firstCmdWord = startsWithPrefix ? (trimmedContent.replace(/^[<-]/, '').trim().split(/\s+/)[0] || '').toLowerCase() : '';
   if (startsWithPrefix && message.channel.id === RESTRICTED_GENERAL_CHANNEL_ID && !MODERATION_COMMANDS.has(firstCmdWord)) {
     if (!(await enforceAikoChannel(message, message.author.id))) return;
   }
@@ -5874,27 +5885,6 @@ client.on('messageCreate', async (message) => {
     if (startsWithPrefix && (lowerQuery === 'bump' || lowerQuery === 'bumpcheck' || lowerQuery === 'bumptime')) {
       await handleBumpCheckCommand(message, sendContainer);
       return;
-    }
-
-    if (startsWithPrefix) {
-      const musicFirstWord = (cleanQuery.split(/\s+/)[0] || '').toLowerCase();
-      const musicArgs = cleanQuery.split(/\s+/).slice(1);
-      const musicQuery = cleanQuery.slice(musicFirstWord.length).trim();
-
-      if (musicFirstWord === 'aikomusic' || musicFirstWord === 'musichelp' || musicFirstWord === 'music') {
-        await sendContainer(message, `<@${message.author.id}> • 🎵 Music services are temporarily paused.`);
-        return;
-      }
-
-      if (musicFirstWord === 'play' || musicFirstWord === 'p') {
-        await sendContainer(message, `<@${message.author.id}> • 🎵 Music playback is temporarily paused.`);
-        return;
-      }
-
-      if (['pause', 'resume', 'skip', 'stop', 'queue', 'volume', 'ost', 'radio', 'bitrate', 'lockupcoming', 'unlockupcoming'].includes(musicFirstWord)) {
-        await sendContainer(message, `<@${message.author.id}> • 🎵 Music services are temporarily paused.`);
-        return;
-      }
     }
 
     const isVerificationCmd = startsWithPrefix && (
