@@ -803,87 +803,169 @@ async function fetchGuildMemberSafe(guild, userId) {
 }
 
 /**
- * 4. Generates the Multi-Generation Family Tree Canvas Card
- *    - Displays Parents on top (if adopted)
- *    - Focus User & Spouse in the middle
- *    - Unlimited Children below
- *    - Grandchildren (children's adopted children) at the bottom with exact parent-child links
+ * 4. Generates the Unified Connected Multi-Generation Family Tree Canvas Card
+ *    - Climbs to the top-most Root Ancestor (checking both parentIds and spouse's parentIds)
+ *    - Renders the entire connected family (grandparents, parents, aunts/uncles, siblings, spouses, children, nieces/nephews, grandchildren)
+ *    - Prioritizes Spouse placement and deduplicates members so no one appears twice
+ *    - Highlights the requested focusMember in the tree
  */
 async function generateFamilyTreeBanner(focusMember, guild) {
   const focusId = focusMember.id;
-  const rel = getRelationshipRecord(focusId);
 
-  // 1. Gather Parents
-  const parentMembers = [];
-  for (const pid of (rel.parentIds || [])) {
-    const pm = await fetchGuildMemberSafe(guild, pid);
-    if (pm) parentMembers.push(pm);
-  }
+  // 1. Climb to the Root Ancestor of the connected family
+  function findRootAncestorId(startId) {
+    let currId = startId;
+    const visited = new Set();
 
-  // 2. Gather Spouse
-  const spouseMember = rel.spouseId ? await fetchGuildMemberSafe(guild, rel.spouseId) : null;
-  const isMarried = Boolean(spouseMember);
-
-  // 3. Gather ALL Children + their Children (Grandchildren)
-  const childrenData = [];
-  for (const cid of (rel.childrenIds || [])) {
-    const childMember = await fetchGuildMemberSafe(guild, cid);
-    if (!childMember) continue;
-
-    const childRel = getRelationshipRecord(cid);
-    const grandchildren = [];
-    for (const gcid of (childRel.childrenIds || [])) {
-      const gcMember = await fetchGuildMemberSafe(guild, gcid);
-      if (gcMember) grandchildren.push(gcMember);
+    while (currId && !visited.has(currId)) {
+      visited.add(currId);
+      const rec = getRelationshipRecord(currId);
+      if (rec.parentIds && rec.parentIds.length > 0) {
+        currId = rec.parentIds[0];
+        continue;
+      }
+      // If current user has no parents, check if their spouse has parents (connects in-laws like coo -> Enzesty -> Zoey's Wife)
+      if (rec.spouseId && !visited.has(rec.spouseId)) {
+        const spRec = getRelationshipRecord(rec.spouseId);
+        if (spRec.parentIds && spRec.parentIds.length > 0) {
+          currId = spRec.parentIds[0];
+          continue;
+        }
+      }
+      break;
     }
-    childrenData.push({ member: childMember, grandchildren });
+    return currId;
   }
 
-  // 4. Compute Dynamic Dimensions & Subtree Layout
-  const cardW = 210;
-  const cardH = 86;
+  const rootId = findRootAncestorId(focusId);
+
+  // 2. Build recursive tree top-down with Spouse Priority & Deduplication
+  const placedIds = new Set();
+  const MAX_DEPTH = 6;
+
+  async function buildTreeNode(memberId, depth) {
+    if (!memberId || placedIds.has(memberId) || depth > MAX_DEPTH) return null;
+
+    const member = await fetchGuildMemberSafe(guild, memberId);
+    if (!member) return null;
+
+    placedIds.add(memberId);
+
+    const rec = getRelationshipRecord(memberId);
+    let spouseMember = null;
+    let spouseRec = null;
+
+    if (rec.spouseId && !placedIds.has(rec.spouseId)) {
+      const sp = await fetchGuildMemberSafe(guild, rec.spouseId);
+      if (sp) {
+        spouseMember = sp;
+        spouseRec = getRelationshipRecord(rec.spouseId);
+        placedIds.add(rec.spouseId);
+      }
+    }
+
+    // Merge children of both spouses (deduplicated)
+    const rawChildIds = new Set([
+      ...(rec.childrenIds || []),
+      ...(spouseRec?.childrenIds || [])
+    ]);
+
+    const children = [];
+    for (const cid of rawChildIds) {
+      if (placedIds.has(cid)) continue;
+      // Spouse priority: if this child is married to someone already placed higher up, skip duplicate
+      const cRec = getRelationshipRecord(cid);
+      if (cRec.spouseId && placedIds.has(cRec.spouseId)) {
+        continue;
+      }
+      const childNode = await buildTreeNode(cid, depth + 1);
+      if (childNode) children.push(childNode);
+    }
+
+    return {
+      id: memberId,
+      member,
+      spouse: spouseMember,
+      depth,
+      children
+    };
+  }
+
+  const rootNode = await buildTreeNode(rootId, 0);
+
+  // Fallback if root somehow failed to load
+  const treeRoot = rootNode || {
+    id: focusId,
+    member: focusMember,
+    spouse: null,
+    depth: 0,
+    children: []
+  };
+
+  // 3. Measure Subtree Widths & Max Depth
+  const cardW = 205;
+  const cardH = 84;
+  const coupleGap = 48; // space for heart between spouses
   const hGap = 24;
   const vGap = 54;
 
-  const hasParents = parentMembers.length > 0;
-  const hasChildren = childrenData.length > 0;
-  const hasGrandchildren = childrenData.some(c => c.grandchildren.length > 0);
+  let maxDepth = 0;
 
-  let totalSubtreeW = 0;
-  if (hasChildren) {
-    for (const c of childrenData) {
-      const leafCount = Math.max(1, c.grandchildren.length);
-      c.subtreeW = leafCount * cardW + (leafCount - 1) * hGap;
+  function measureSubtree(node) {
+    if (node.depth > maxDepth) maxDepth = node.depth;
+    node.unitW = node.spouse ? (cardW * 2 + coupleGap) : cardW;
+
+    if (node.children.length === 0) {
+      node.subtreeW = node.unitW;
+    } else {
+      let childrenTotalW = 0;
+      for (let i = 0; i < node.children.length; i++) {
+        measureSubtree(node.children[i]);
+        childrenTotalW += node.children[i].subtreeW;
+        if (i < node.children.length - 1) childrenTotalW += hGap;
+      }
+      node.subtreeW = Math.max(node.unitW, childrenTotalW);
     }
-    totalSubtreeW = childrenData.reduce((sum, c) => sum + c.subtreeW, 0) + Math.max(0, childrenData.length - 1) * (hGap + 10);
   }
 
-  const focusRowW = isMarried ? (cardW * 2 + 70) : cardW;
-  const parentsRowW = parentMembers.length >= 2 ? (cardW * 2 + 70) : (parentMembers.length === 1 ? cardW : 0);
-  const contentW = Math.max(focusRowW, parentsRowW, totalSubtreeW, 920);
-  const width = Math.max(1200, contentW + 100);
+  measureSubtree(treeRoot);
 
-  // Vertical Positions
-  let curY = 85;
-  const parentsY = hasParents ? curY : null;
-  if (hasParents) curY += cardH + vGap;
+  // 4. Compute Dynamic Canvas Dimensions
+  const hasAnyChildren = treeRoot.children.length > 0;
+  const width = Math.max(1200, treeRoot.subtreeW + 100);
+  const topStartY = 85;
+  const depthRows = hasAnyChildren ? (maxDepth + 1) : 2;
+  const neededH = topStartY + depthRows * cardH + Math.max(1, depthRows - 1) * vGap + 55;
+  const height = Math.max(675, neededH);
 
-  const focusY = curY;
-  curY += cardH + vGap;
+  // 5. Assign X/Y Positions Recursively
+  function assignPositions(node, leftX, topY) {
+    node.centerX = leftX + node.subtreeW / 2;
+    node.unitX = node.centerX - node.unitW / 2;
+    node.y = topY;
 
-  const childrenY = curY;
-  if (hasChildren) curY += cardH + (hasGrandchildren ? vGap : 0);
-  else curY += 85; // empty placeholder height
+    if (node.children.length > 0) {
+      let childrenTotalW = 0;
+      for (let i = 0; i < node.children.length; i++) {
+        childrenTotalW += node.children[i].subtreeW;
+        if (i < node.children.length - 1) childrenTotalW += hGap;
+      }
+      let childLeftX = node.centerX - childrenTotalW / 2;
+      const childTopY = topY + cardH + vGap;
 
-  const grandchildrenY = hasGrandchildren ? curY : null;
-  if (hasGrandchildren) curY += cardH;
+      for (const child of node.children) {
+        assignPositions(child, childLeftX, childTopY);
+        childLeftX += child.subtreeW + hGap;
+      }
+    }
+  }
 
-  const height = Math.max(675, curY + 55);
+  assignPositions(treeRoot, (width - treeRoot.subtreeW) / 2, topStartY);
 
+  // 6. Setup Canvas & Draw Background
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
-  // Background Image (Cover scaling for dynamic canvas dimensions)
   const bgImg = await getAssetImage('family_tree');
   if (bgImg) {
     const scale = Math.max(width / bgImg.width, height / bgImg.height);
@@ -908,7 +990,6 @@ async function generateFamilyTreeBanner(focusMember, guild) {
   const focusDisp = focusMember.displayName || focusMember.user?.username || 'User';
   const familyTitle = `${focusDisp}'s Family Tree`;
 
-  // Top Title
   ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
@@ -919,99 +1000,119 @@ async function generateFamilyTreeBanner(focusMember, guild) {
   ctx.fillText(fitText(ctx, familyTitle, width - 120), width / 2, 22);
   ctx.restore();
 
-  // 5. Draw Tier 1: Parents (if Focus User has Parents)
-  const focusCardCenterX = isMarried ? (width / 2 - cardW / 2 - 35) : (width / 2);
+  const tierColors = [
+    { stroke: '#a855f7', glow: '#c084fc', label: 'ROOT' },
+    { stroke: '#38bdf8', glow: '#7dd3fc', label: 'GEN 2' },
+    { stroke: '#84cc16', glow: '#a3e635', label: 'GEN 3' },
+    { stroke: '#f59e0b', glow: '#fbbf24', label: 'GEN 4' },
+    { stroke: '#14b8a6', glow: '#2dd4bf', label: 'GEN 5' },
+    { stroke: '#f472b6', glow: '#f9a8d4', label: 'GEN 6' }
+  ];
 
-  if (hasParents) {
-    if (parentMembers.length === 1) {
-      const pX = (width - cardW) / 2;
-      await drawFamilyNodeCard(ctx, parentMembers[0], pX, parentsY, cardW, cardH, 'PARENT', '#a855f7', '#c084fc');
-    } else {
-      const p1X = width / 2 - cardW - 35;
-      const p2X = width / 2 + 35;
-      await drawFamilyNodeCard(ctx, parentMembers[0], p1X, parentsY, cardW, cardH, 'PARENT', '#a855f7', '#c084fc');
-      await drawFamilyNodeCard(ctx, parentMembers[1], p2X, parentsY, cardW, cardH, 'PARENT', '#a855f7', '#c084fc');
+  const heartImg = await getAssetImage('heart');
 
-      const heartImg = await getAssetImage('heart');
-      if (heartImg) {
-        ctx.save();
-        ctx.shadowColor = '#a855f7';
-        ctx.shadowBlur = 12;
-        ctx.drawImage(heartImg, width / 2 - 16, parentsY + cardH / 2 - 16, 32, 32);
-        ctx.restore();
-      }
-    }
+  // 7. Draw Nodes & Connecting Lines Recursively
+  async function renderNode(node) {
+    const palette = tierColors[Math.min(node.depth, tierColors.length - 1)];
 
-    // Glowing Branch Line from Parents down to Focus Member
-    const pStartY = parentsY + cardH;
-    const pMidY = pStartY + vGap / 2;
-    ctx.save();
-    ctx.strokeStyle = '#a855f7';
-    ctx.lineWidth = 3;
-    ctx.shadowColor = '#a855f7';
-    ctx.shadowBlur = 14;
-    ctx.beginPath();
-    ctx.moveTo(width / 2, pStartY);
-    ctx.lineTo(width / 2, pMidY);
-    ctx.lineTo(focusCardCenterX, pMidY);
-    ctx.lineTo(focusCardCenterX, focusY);
-    ctx.stroke();
-    ctx.restore();
-  }
+    // Draw lines to children first
+    if (node.children.length > 0) {
+      const stemStartY = node.y + cardH;
+      const barY = stemStartY + Math.round(vGap * 0.48);
+      const childTopY = node.children[0].y;
 
-  // 6. Draw Tier 2: Focus User (+ Spouse if Married)
-  if (isMarried) {
-    const p1X = width / 2 - cardW - 35;
-    await drawFamilyNodeCard(ctx, focusMember, p1X, focusY, cardW, cardH, 'SPOUSE 1', '#ec4899', '#f472b6');
-
-    const p2X = width / 2 + 35;
-    await drawFamilyNodeCard(ctx, spouseMember, p2X, focusY, cardW, cardH, 'SPOUSE 2', '#ec4899', '#f472b6');
-
-    const heartImg = await getAssetImage('heart');
-    if (heartImg) {
       ctx.save();
-      ctx.shadowColor = '#ec4899';
-      ctx.shadowBlur = 14;
-      ctx.drawImage(heartImg, width / 2 - 18, focusY + cardH / 2 - 18, 36, 36);
+      ctx.strokeStyle = palette.stroke;
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = palette.glow;
+      ctx.shadowBlur = 12;
+
+      ctx.beginPath();
+      ctx.moveTo(node.centerX, stemStartY);
+      ctx.lineTo(node.centerX, barY);
+      ctx.stroke();
+
+      if (node.children.length === 1) {
+        ctx.beginPath();
+        ctx.moveTo(node.centerX, barY);
+        ctx.lineTo(node.children[0].centerX, barY);
+        ctx.lineTo(node.children[0].centerX, childTopY);
+        ctx.stroke();
+      } else {
+        const firstCX = node.children[0].centerX;
+        const lastCX = node.children[node.children.length - 1].centerX;
+        ctx.beginPath();
+        ctx.moveTo(Math.min(firstCX, node.centerX), barY);
+        ctx.lineTo(Math.max(lastCX, node.centerX), barY);
+        ctx.stroke();
+
+        for (const child of node.children) {
+          ctx.beginPath();
+          ctx.moveTo(child.centerX, barY);
+          ctx.lineTo(child.centerX, childTopY);
+          ctx.stroke();
+        }
+      }
       ctx.restore();
     }
-  } else {
-    const pX = (width - cardW) / 2;
-    await drawFamilyNodeCard(ctx, focusMember, pX, focusY, cardW, cardH, 'HEAD OF FAMILY', '#38bdf8', '#38bdf8');
+
+    // Draw member card (and spouse card if married)
+    const isMainFocus = node.member.id === focusId;
+    const isSpouseFocus = node.spouse && node.spouse.id === focusId;
+
+    if (node.spouse) {
+      const m1Stroke = isMainFocus ? '#38bdf8' : '#ec4899';
+      const m1Glow = isMainFocus ? '#7dd3fc' : '#f472b6';
+      const m1Badge = isMainFocus ? '★ YOU • SPOUSE' : (node.depth === 0 ? 'HEAD • SPOUSE 1' : 'SPOUSE 1');
+
+      const m2Stroke = isSpouseFocus ? '#38bdf8' : '#ec4899';
+      const m2Glow = isSpouseFocus ? '#7dd3fc' : '#f472b6';
+      const m2Badge = isSpouseFocus ? '★ YOU • SPOUSE' : 'SPOUSE 2';
+
+      await drawFamilyNodeCard(ctx, node.member, node.unitX, node.y, cardW, cardH, m1Badge, m1Stroke, m1Glow);
+      await drawFamilyNodeCard(ctx, node.spouse, node.unitX + cardW + coupleGap, node.y, cardW, cardH, m2Badge, m2Stroke, m2Glow);
+
+      if (heartImg) {
+        ctx.save();
+        ctx.shadowColor = '#ec4899';
+        ctx.shadowBlur = 14;
+        ctx.drawImage(heartImg, node.centerX - 16, node.y + cardH / 2 - 16, 32, 32);
+        ctx.restore();
+      }
+    } else {
+      const mStroke = isMainFocus ? '#38bdf8' : palette.stroke;
+      const mGlow = isMainFocus ? '#7dd3fc' : palette.glow;
+      const mBadge = isMainFocus ? '★ YOU' : (node.depth === 0 ? 'HEAD OF FAMILY' : palette.label);
+      await drawFamilyNodeCard(ctx, node.member, node.unitX, node.y, cardW, cardH, mBadge, mStroke, mGlow);
+    }
+
+    // Render children recursively
+    for (const child of node.children) {
+      await renderNode(child);
+    }
   }
 
-  // Connecting vertical stem dropping from Focus Tier down toward Children
-  const lineStartY = focusY + cardH;
-  const branchDropY = focusY + cardH + Math.round(vGap * 0.48);
+  await renderNode(treeRoot);
 
-  ctx.save();
-  ctx.strokeStyle = '#38bdf8';
-  ctx.lineWidth = 3;
-  ctx.shadowColor = '#38bdf8';
-  ctx.shadowBlur = 14;
-  ctx.beginPath();
-  ctx.moveTo(width / 2, lineStartY);
-  ctx.lineTo(width / 2, branchDropY);
-  ctx.stroke();
-  ctx.restore();
+  // If root has no children at all, show clean empty state below
+  if (!hasAnyChildren) {
+    const branchDropY = treeRoot.y + cardH + Math.round(vGap * 0.48);
+    const emptyY = treeRoot.y + cardH + vGap + 10;
 
-  // 7. Draw Tier 3 (All Children) & Tier 4 (Grandchildren)
-  if (!hasChildren) {
-    // Drop to empty state placeholder
     ctx.save();
     ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 3;
     ctx.shadowColor = '#38bdf8';
     ctx.shadowBlur = 14;
     ctx.beginPath();
-    ctx.moveTo(width / 2, branchDropY);
-    ctx.lineTo(width / 2, childrenY + 12);
+    ctx.moveTo(treeRoot.centerX, treeRoot.y + cardH);
+    ctx.lineTo(treeRoot.centerX, branchDropY);
+    ctx.lineTo(treeRoot.centerX, emptyY);
     ctx.stroke();
 
     const emptyW = 340;
     const emptyH = 68;
     const emptyX = (width - emptyW) / 2;
-    const emptyY = childrenY + 12;
 
     drawRoundRect(ctx, emptyX, emptyY, emptyW, emptyH, 14);
     ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
@@ -1026,118 +1127,6 @@ async function generateFamilyTreeBanner(focusMember, guild) {
     ctx.fillStyle = '#94a3b8';
     ctx.fillText('No Adopted Children In This Family', width / 2, emptyY + emptyH / 2);
     ctx.restore();
-  } else {
-    let curX = (width - totalSubtreeW) / 2;
-    const childCenters = [];
-
-    for (const c of childrenData) {
-      const childCenterX = curX + c.subtreeW / 2;
-      c.centerX = childCenterX;
-      c.cardX = childCenterX - cardW / 2;
-      c.subtreeStartX = curX;
-      childCenters.push(childCenterX);
-      curX += c.subtreeW + hGap + 10;
-    }
-
-    // Horizontal distributor bar across all children
-    const firstCX = childCenters[0];
-    const lastCX = childCenters[childCenters.length - 1];
-
-    ctx.save();
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 12;
-
-    if (childrenData.length > 1) {
-      ctx.beginPath();
-      ctx.moveTo(Math.min(firstCX, width / 2), branchDropY);
-      ctx.lineTo(Math.max(lastCX, width / 2), branchDropY);
-      ctx.stroke();
-    }
-
-    // Drop pins from distributor bar to each Child
-    for (const cx of childCenters) {
-      ctx.beginPath();
-      ctx.moveTo(cx, branchDropY);
-      ctx.lineTo(cx, childrenY);
-      ctx.stroke();
-    }
-    ctx.restore();
-
-    // Draw each Child card and their Grandchildren subtree
-    for (const c of childrenData) {
-      await drawFamilyNodeCard(ctx, c.member, c.cardX, childrenY, cardW, cardH, 'CHILD', '#84cc16', '#a3e635');
-
-      if (c.grandchildren.length > 0) {
-        const gcBarY = childrenY + cardH + Math.round(vGap * 0.48);
-
-        ctx.save();
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 2.5;
-        ctx.shadowColor = '#f59e0b';
-        ctx.shadowBlur = 12;
-
-        // Vertical stem from Child down to Grandchildren bar
-        ctx.beginPath();
-        ctx.moveTo(c.centerX, childrenY + cardH);
-        ctx.lineTo(c.centerX, gcBarY);
-        ctx.stroke();
-
-        if (c.grandchildren.length === 1) {
-          ctx.beginPath();
-          ctx.moveTo(c.centerX, gcBarY);
-          ctx.lineTo(c.centerX, grandchildrenY);
-          ctx.stroke();
-          ctx.restore();
-
-          await drawFamilyNodeCard(
-            ctx,
-            c.grandchildren[0],
-            c.centerX - cardW / 2,
-            grandchildrenY,
-            cardW,
-            cardH,
-            'GRANDCHILD',
-            '#f59e0b',
-            '#fbbf24'
-          );
-        } else {
-          const gcCenters = [];
-          for (let j = 0; j < c.grandchildren.length; j++) {
-            const gx = c.subtreeStartX + j * (cardW + hGap);
-            gcCenters.push({ x: gx, cx: gx + cardW / 2, member: c.grandchildren[j] });
-          }
-
-          ctx.beginPath();
-          ctx.moveTo(gcCenters[0].cx, gcBarY);
-          ctx.lineTo(gcCenters[gcCenters.length - 1].cx, gcBarY);
-          ctx.stroke();
-
-          for (const gc of gcCenters) {
-            ctx.beginPath();
-            ctx.moveTo(gc.cx, gcBarY);
-            ctx.lineTo(gc.cx, grandchildrenY);
-            ctx.stroke();
-          }
-          ctx.restore();
-
-          for (const gc of gcCenters) {
-            await drawFamilyNodeCard(
-              ctx,
-              gc.member,
-              gc.x,
-              grandchildrenY,
-              cardW,
-              cardH,
-              'GRANDCHILD',
-              '#f59e0b',
-              '#fbbf24'
-            );
-          }
-        }
-      }
-    }
   }
 
   // Footer
